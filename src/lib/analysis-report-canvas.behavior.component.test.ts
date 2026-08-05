@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { tick, type ComponentProps } from "svelte";
 import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";
@@ -181,6 +181,32 @@ vi.mock("$lib/api/sources", () => ({
 }));
 
 type ReportCanvasProps = ComponentProps<typeof ReportCanvas>;
+const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+
+beforeAll(() => {
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    value: () => {
+      const animation = {
+        cancel: () => {},
+        currentTime: 0,
+        effect: null,
+        onfinish: null,
+        playState: "finished",
+      } as unknown as Animation;
+      setTimeout(() => animation.onfinish?.(new Event("finish") as AnimationPlaybackEvent), 0);
+      return animation;
+    },
+  });
+});
+
+afterAll(() => {
+  if (originalAnimate) {
+    Object.defineProperty(Element.prototype, "animate", originalAnimate);
+  } else {
+    delete (Element.prototype as Partial<Element>).animate;
+  }
+});
 
 function source(overrides: Partial<Source> = {}): Source {
   return {
@@ -526,6 +552,15 @@ function renderReportCanvas(overrides: Partial<ReportCanvasProps> = {}) {
   return render(ReportCanvas, { props: reportCanvasProps(overrides) });
 }
 
+function exportForm(
+  overrides: Partial<ReportCanvasProps["notebookLmExportForm"]> = {},
+): ReportCanvasProps["notebookLmExportForm"] {
+  return {
+    ...reportCanvasProps().notebookLmExportForm,
+    ...overrides,
+  };
+}
+
 function expectBefore(first: Element, second: Element) {
   expect(
     first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -566,7 +601,7 @@ describe("report canvas render smoke", () => {
 describe("report canvas component contract", () => {
   it("owns the central Report and Source modes", async () => {
     const onChangeCanvasMode = vi.fn();
-    renderReportCanvas({ onChangeCanvasMode });
+    const view = renderReportCanvas({ onChangeCanvasMode });
 
     const tablist = screen.getByRole("tablist", { name: "Report canvas mode" });
     const reportTab = within(tablist).getByRole("tab", { name: "Report" });
@@ -574,18 +609,59 @@ describe("report canvas component contract", () => {
 
     expect(reportTab.getAttribute("aria-selected")).toBe("true");
     expect(sourceTab.getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("region", { name: "Report setup" })).toBeTruthy();
+    expect(screen.queryByRole("tablist", { name: "Run companion tabs" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Follow-up chat" })).toBeNull();
     await fireEvent.click(sourceTab);
     await fireEvent.click(reportTab);
 
     expect(onChangeCanvasMode).toHaveBeenNthCalledWith(1, "source");
     expect(onChangeCanvasMode).toHaveBeenNthCalledWith(2, "report");
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      onChangeCanvasMode,
+    }));
+    expect(screen.getByRole("navigation", { name: "Source browser tabs" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Report setup" })).toBeNull();
+    expect(screen.queryByRole("tablist", { name: "Run companion tabs" })).toBeNull();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "report",
+      currentRun: run(),
+      onChangeCanvasMode,
+    }));
+    expect(screen.getByRole("region", { name: "Opened run metadata" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Report output" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Source browser tabs" })).toBeNull();
+    expect(screen.queryByRole("tablist", { name: "Run companion tabs" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Follow-up chat" })).toBeNull();
   });
 
   it("shows setup only when no run is open and report mode is selected", async () => {
     const view = renderReportCanvas();
 
-    expect(screen.getByRole("region", { name: "Report setup" })).toBeTruthy();
+    const setup = screen.getByRole("region", { name: "Report setup" });
+    expect(setup).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Opened run metadata" })).toBeNull();
+    expect(screen.queryByRole("tablist", { name: "Run companion tabs" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Follow-up chat" })).toBeNull();
+    expect(within(setup).queryByRole("heading", { name: "Prompt Template" })).toBeNull();
+    expect(within(setup).queryByRole("heading", { name: "Source Groups" })).toBeNull();
+    expect(screen.queryByLabelText("Template editor drawer")).toBeNull();
+    expect(screen.queryByLabelText("Source group editor drawer")).toBeNull();
+
+    const disabledReason = "Choose source material before running a report.";
+    const launch = within(setup).getByRole("button", { name: "Run report" });
+    expect((launch as HTMLButtonElement).disabled).toBe(true);
+    expect(launch.getAttribute("title")).toBe(disabledReason);
+    expect(screen.getByRole("alert").textContent).toContain(disabledReason);
+
+    await view.rerender(reportCanvasProps({ reportLaunchDisabledReason: null }));
+    expect((screen.getByRole("button", { name: "Run report" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
 
     await view.rerender(reportCanvasProps({ currentRun: run() }));
     expect(screen.queryByRole("region", { name: "Report setup" })).toBeNull();
@@ -641,6 +717,13 @@ describe("report canvas component contract", () => {
     expect(within(header).getByText("time:1700000100")).toBeTruthy();
     expect(within(header).getByText("Default")).toBeTruthy();
     expect(within(header).getByText("2026-08-03T10:00:00Z")).toBeTruthy();
+    expect(within(header).getByText(
+      "Browsing live source data while the opened run remains bound to its saved report context.",
+    )).toBeTruthy();
+    expect(within(header).getByText("Snapshot available")).toBeTruthy();
+    expect(within(header).getByText(
+      "Frozen source material captured for this run is available.",
+    )).toBeTruthy();
     expect(within(header).getByText("Transcript")).toBeTruthy();
     expect(within(header).getByText("finalizing")).toBeTruthy();
     expect(within(header).getByText("9/10")).toBeTruthy();
@@ -656,6 +739,13 @@ describe("report canvas component contract", () => {
       runTargetLabel: () => "Saved research scope",
     }));
     const failedHeader = screen.getByRole("region", { name: "Opened run metadata" });
+    expect(within(failedHeader).getByText(
+      "Saved report is readable, but Extractum could not save the frozen source context for this run.",
+    )).toBeTruthy();
+    expect(within(failedHeader).getByText("Snapshot capture failed")).toBeTruthy();
+    expect(within(failedHeader).getByText(
+      "Extractum could not save the frozen source context for this run. Exact source browsing, evidence source resolution, and follow-up chat stay unavailable.",
+    )).toBeTruthy();
     expect(within(failedHeader).getByText("Snapshot error", { selector: "span" })).toBeTruthy();
     expect(within(failedHeader).getByText("snapshot disk full")).toBeTruthy();
   });
@@ -729,9 +819,48 @@ describe("report canvas component contract", () => {
       currentSource: source(),
       currentRun: run({
         ...openedRun,
+        status: "running",
+        snapshot_state: null,
+        snapshot_captured_at: null,
+        completed_at: null,
+        result_markdown: null,
+      }),
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "capturing",
+      snapshotProbeState: "unknown",
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    }));
+    const pendingHeader = screen.getByLabelText("Snapshot pending");
+    expect(within(pendingHeader).getByText("Snapshot pending")).toBeTruthy();
+    expect(screen.getAllByText("Snapshot capture is still pending for this active run.")).toHaveLength(2);
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: openedRun,
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "unknown",
+      snapshotProbeState: "unknown",
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    }));
+    const checkingHeader = screen.getByLabelText("Checking saved snapshot");
+    expect(within(checkingHeader).getByText("Checking snapshot")).toBeTruthy();
+    expect(screen.getAllByText(
+      "Extractum is checking whether frozen source material is available for this run.",
+    )).toHaveLength(2);
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: run({
+        ...openedRun,
         snapshot_state: "capture_failed",
         snapshot_captured_at: null,
-        snapshot_error: "snapshot failed",
+        snapshot_error: "  snapshot   failed  ",
       }),
       sourceViewBasis: "run_snapshot",
       runSnapshotAvailability: "unavailable",
@@ -740,6 +869,7 @@ describe("report canvas component contract", () => {
       onBackToRunSnapshot,
     }));
     expect(screen.getByLabelText("Snapshot capture failed")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toBe("snapshot failed");
     expect(screen.getByText(/This is live data, not the saved run snapshot/)).toBeTruthy();
   });
 
@@ -822,6 +952,7 @@ describe("report canvas component contract", () => {
 
   it("keeps run snapshot reading bounded and snapshot-only", async () => {
     const onLoadMoreRunSnapshotMessages = vi.fn();
+    api.listSourceItems.mockClear();
     renderReportCanvas({
       canvasMode: "source",
       workspaceSelection: { kind: "source", sourceId: 1 },
@@ -842,6 +973,7 @@ describe("report canvas component contract", () => {
       sourceItems: [sourceItem()],
       onLoadMoreRunSnapshotMessages,
     });
+    await tick();
 
     expect(screen.getByRole("region", { name: "Run snapshot items" })).toBeTruthy();
     expect(screen.getByText("Frozen snapshot row")).toBeTruthy();
@@ -850,6 +982,7 @@ describe("report canvas component contract", () => {
     expect(screen.getByText(/Snapshot items are limited to frozen rows loaded for this run/)).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "Load older snapshot messages" }));
     expect(onLoadMoreRunSnapshotMessages).toHaveBeenCalledOnce();
+    expect(api.listSourceItems).not.toHaveBeenCalled();
   });
 
   it("keeps source-group run snapshots pageable through the snapshot browser", async () => {
@@ -958,27 +1091,50 @@ describe("report canvas component contract", () => {
     const view = renderReportCanvas({
       workspaceSelection: { kind: "source", sourceId: 1 },
       currentSource: source(),
+      exportDialogOpen: true,
+      notebookLmExportForm: exportForm({ outputDir: "C:\\NotebookLM" }),
+      canIncludeMigratedHistory: true,
       onOpenNotebookLmExport,
     });
 
     const sourceExport = screen.getByRole("button", { name: "Export for NotebookLM" });
     expect((sourceExport as HTMLButtonElement).disabled).toBe(false);
+    const sourceDialog = screen.getByRole("dialog", { name: "Export for NotebookLM" });
+    expect(within(sourceDialog).getByText(
+      "Prepare Markdown files for Research channel.",
+    )).toBeTruthy();
+    expect((within(sourceDialog).getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(within(sourceDialog).getByRole("checkbox", {
+      name: /Include migrated historical scope/,
+    })).toBeTruthy();
     await fireEvent.click(sourceExport);
     expect(onOpenNotebookLmExport).toHaveBeenCalledTimes(1);
 
     await view.rerender(reportCanvasProps({
       workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
       currentGroup: group({ source_type: "telegram" }),
+      exportDialogOpen: true,
+      notebookLmExportForm: exportForm({ outputDir: "C:\\NotebookLM" }),
+      canIncludeMigratedHistory: false,
       onOpenNotebookLmExport,
     }));
     const telegramGroupExport = screen.getByRole("button", { name: "Export for NotebookLM" });
     expect((telegramGroupExport as HTMLButtonElement).disabled).toBe(false);
+    const groupDialog = screen.getByRole("dialog", { name: "Export for NotebookLM" });
+    expect(within(groupDialog).getByText(
+      "Prepare Markdown files for Research group (2 sources).",
+    )).toBeTruthy();
+    expect((within(groupDialog).getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(within(groupDialog).queryByRole("checkbox", {
+      name: /Include migrated historical scope/,
+    })).toBeNull();
     await fireEvent.click(telegramGroupExport);
     expect(onOpenNotebookLmExport).toHaveBeenCalledTimes(2);
 
     await view.rerender(reportCanvasProps({
       workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
       currentGroup: group({ source_type: "youtube" }),
+      exportDialogOpen: false,
       onOpenNotebookLmExport,
     }));
     const youtubeGroupExport = screen.getByRole("button", { name: "Export for NotebookLM" });
