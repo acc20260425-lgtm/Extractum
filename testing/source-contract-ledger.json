@@ -2900,7 +2900,7 @@
       "invariant": "Owns the central Report and Source modes.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > owns the central Report and Source modes"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > owns the central Report and Source modes"
       ]
     },
     {
@@ -2914,7 +2914,7 @@
       "invariant": "Shows setup only when no run is open and report mode is selected.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > shows setup only when no run is open and report mode is selected"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > shows setup only when no run is open and report mode is selected"
       ]
     },
     {
@@ -2928,7 +2928,7 @@
       "invariant": "Renders required opened-run header metadata.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > renders required opened-run header metadata"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > renders required opened-run header metadata"
       ]
     },
     {
@@ -2942,7 +2942,7 @@
       "invariant": "Keeps report setup copy aware of existing saved runs.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > keeps report setup copy aware of existing saved runs"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps report setup copy aware of existing saved runs"
       ]
     },
     {
@@ -2956,7 +2956,7 @@
       "invariant": "Keeps snapshot and live source basis explicit.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > keeps snapshot and live source basis explicit"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps snapshot and live source basis explicit"
       ]
     },
     {
@@ -2970,7 +2970,7 @@
       "invariant": "Passes YouTube comments and source activity callbacks through the report canvas.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes YouTube comments and source activity callbacks through the report canvas"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes YouTube comments and source activity callbacks through the report canvas"
       ]
     },
     {
@@ -2984,7 +2984,7 @@
       "invariant": "Passes Telegram topic state into the source surface.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes Telegram topic state into the source surface"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes Telegram topic state into the source surface"
       ]
     },
     {
@@ -2998,7 +2998,7 @@
       "invariant": "Labels source surfaces without repeating the selected workspace title.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > labels source surfaces without repeating the selected workspace title"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > labels source surfaces without repeating the selected workspace title"
       ]
     },
     {
@@ -3012,7 +3012,7 @@
       "invariant": "Keeps run snapshot reading bounded and snapshot-only.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > keeps run snapshot reading bounded and snapshot-only"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps run snapshot reading bounded and snapshot-only"
       ]
     },
     {
@@ -3026,7 +3026,7 @@
       "invariant": "Keeps source-group run snapshots pageable through the snapshot browser.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > keeps source-group run snapshots pageable through the snapshot browser"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps source-group run snapshots pageable through the snapshot browser"
       ]
     },
     {
@@ -3040,7 +3040,7 @@
       "invariant": "Uses real chat availability in the report toolbar.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > uses real chat availability in the report toolbar"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > uses real chat availability in the report toolbar"
       ]
     },
     {
@@ -3054,7 +3054,7 @@
       "invariant": "Keeps workspace tools reachable before setup report and source bodies.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > keeps workspace tools reachable before setup report and source bodies"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps workspace tools reachable before setup report and source bodies"
       ]
     },
     {
@@ -3068,7 +3068,7 @@
       "invariant": "Derives NotebookLM export availability from live canvas source or Telegram group.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > derives NotebookLM export availability from live canvas source or Telegram group"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > derives NotebookLM export availability from live canvas source or Telegram group"
       ]
     },
     {
@@ -3082,7 +3082,7 @@
       "invariant": "Submits NotebookLM export for either current source or current source group.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > submits NotebookLM export for either current source or current source group"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > submits NotebookLM export for either current source or current source group"
       ]
     },
     {
@@ -3096,7 +3096,7 @@
       "invariant": "Opens NotebookLM export for Telegram source groups without the old single-source guard.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > opens NotebookLM export for Telegram source groups without the old single-source guard"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > opens NotebookLM export for Telegram source groups without the old single-source guard"
       ]
     },
     {
@@ -3110,7 +3110,7 @@
       "invariant": "Passes transient evidence highlight tokens from route to source surfaces.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces"
       ]
     },
     {
@@ -3124,7 +3124,7 @@
       "invariant": "Passes focused group transcript segments from route to source surfaces.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces"
       ]
     },
     {
@@ -3138,7 +3138,7 @@
       "invariant": "Renders the scoped evidence return affordance above source reader headers.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > renders the scoped evidence return affordance above source reader headers"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > renders the scoped evidence return affordance above source reader headers"
       ]
     },
     {
@@ -3152,7 +3152,7 @@
       "invariant": "Passes evidence return context and callback through the report canvas.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes evidence return context and callback through the report canvas"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes evidence return context and callback through the report canvas"
       ]
     },
     {
@@ -3166,7 +3166,7 @@
       "invariant": "Passes bounded source browser mode only for live source canvas review.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.test.ts#report canvas component contract > passes bounded source browser mode only for live source canvas review"
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes bounded source browser mode only for live source canvas review"
       ]
     },
     {
