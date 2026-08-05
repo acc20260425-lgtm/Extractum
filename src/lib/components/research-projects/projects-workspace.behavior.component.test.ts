@@ -813,7 +813,6 @@ it("passes project add-source workflow callbacks from both current project route
     expect(api.addProjectSources).toHaveBeenCalledOnce();
     view.unmount();
     await tick();
-    cleanup();
   }
 });
 
