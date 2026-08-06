@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Work only in `G:/Develop/Extractum/.worktrees/codex-slice-3` on `codex/testing-redesign-slice-3`; the review base is commit `a54507d6`.
+- Work only in `G:/Develop/Extractum/.worktrees/codex-slice-3` on `codex/testing-redesign-slice-3`; the review base is the full commit `a54507d63420bb870c3870c91d7e22b050abae3e`.
 - The scope is exactly the 436 rows reported open at the review base. SC-000355, SC-000366, and the other 233 closed rows are outside the review; all 235 closed rows remain byte-equivalent.
 - Change ledger resolution decisions only. Do not remove or rewrite tests, change product code, Vitest projects, RepositoryIndex, repository rules, public npm commands, verify scheduling, completed 3A/3B evidence, or the program index `Current Detailed Plan`.
 - Keep every open row's identity, path, title/manual metadata, `sourceHash`, `authorityHash`, `assertionCount`, lineage, and invariant text unchanged. A factual invariant correction requires another approved specification amendment and is not part of this plan.
@@ -19,10 +19,11 @@
 - P0 contains at least SC-000555--SC-000560, SC-000511--SC-000515, and SC-000420. Add a row only with an exact citation to `AGENTS.md` section 2, 6, or 7, or an approved program-specification section.
 - P0 membership and normative criticality are separate. B3 requires an exact normative `criticalityRef`; a P0 row with no A1/T1/B1/B2 owner terminates at B3.
 - D1--D5 reasons begin with the full class name and continue with row-specific text. D5 additionally enumerates all intentionally lost behavior and exact assertion ordinals.
+- Independent classification uses a separate reviewer subagent spawned with `fork_turns: "none"`. Its prompt contains only the approved class catalog, normative-source catalog, source declaration/invariant/ordinals, and candidate-owner inventory; it must not contain the author's proposed class, reason, artifact decision, conversation history, or diff.
 - A mixed decision removes top-level resolution fields and writes at least two subgroups whose ordinals exactly and non-overlappingly partition `1..assertionCount`; every subgroup has its own invariant and resolution.
 - The committed carrier remains outside `verify`. Its `check` command is mandatory checkpoint evidence; the existing transition validator remains unchanged.
 - Run timing observations and the complete `verify` unsandboxed. Use one unretained warm-up plus three retained runs per component mechanism. Use `npm.cmd` for repository scripts and canonical `src-tauri/target`.
-- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The 3C+ jsdom scalable forecast must fit one measured Slice 3B increment or the checkpoint requires a separate program amendment.
+- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The 3C+ net expensive-replacement forecast, after subtracting the measured removable legacy owner, must fit one measured Slice 3B increment or the checkpoint requires a separate program amendment.
 - Do not add Nx, Nx Cloud, GitHub Actions, branch protection, git hooks, remote cache, or an external reporting service.
 
 ---
@@ -79,23 +80,27 @@ type Decision = {
 
 type ReviewArtifact = {
   schemaVersion: 1;
-  reviewBaseCommit: "a54507d6";
+  reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e";
   ledgerFrozenAtCommit: string;
   scope: { openRows: 436; closedRows: 235; closedRowsDigest: string };
   reasonClasses: Array<{ id: Exclude<ReasonClass, "UNCLASSIFIED">; rule: string }>;
   protectedRows: Array<{ id: string; criticalityRef: string }>;
+  protectedRowsDigest: string;
   criticalitySources: Array<{ id: string; citation: string }>;
   mechanisms: {
     componentReplacement: { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
     componentStartup: { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
+    legacyOwner: { command: "npm.cmd run test:legacy-contract"; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number; baseFiles: string[] };
+    browserOwner: null | { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
     verify: { command: "npm.cmd run verify"; seconds: number; exitCode: 0; historicalSeconds: [208.1, 321.3, 383.4] };
   };
   decisions: Decision[];
   independentReview: {
-    reviewer: string;
+    reviewer: { agentTaskId: string; contextPolicy: "blind-no-proposed-class-or-reason" };
+    blindResults: Array<{ id: string; class: Exclude<ReasonClass, "UNCLASSIFIED">; reason: string; ownerEvidence?: string[]; criticalityRef?: string }>;
     calibrations: Array<{ class: Exclude<ReasonClass, "UNCLASSIFIED">; rowIds: string[]; adjacentClass: string; result: "agree" | "rule_changed" | "no_match" }>;
-    mandatoryCohorts: Array<{ name: string; rowIds: string[]; result: "agree" | "rule_changed" }>;
-    deterministicSample: { algorithm: "sha256-id-lowest-10-percent"; population: string[]; rowIds: string[]; result: "agree" | "rule_changed" };
+    mandatoryCohorts: Array<{ name: string; rowIds: string[]; comparison: "agree" | "rule_changed" }>;
+    deterministicSample: { algorithm: "sha256-id-lowest-10-percent"; population: string[]; rowIds: string[]; comparison: "agree" | "rule_changed" };
     disagreements: Array<{ rowIds: string[]; oldClass: string; newClass: string; groupRuleChange: string }>;
   };
   forecast: {
@@ -104,11 +109,20 @@ type ReviewArtifact = {
     futureOwnersByMechanism: Record<string, { rows: number; assertionOrdinals: number }>;
     proposedNewJsdomRows: number;
     proposedNewJsdomOrdinals: number;
+    proposedNewBrowserRows: number;
+    proposedNewBrowserOrdinals: number;
+    proposedNewBrowserOwnerFiles: number;
+    removableLegacyFiles: number;
+    removableLegacySeconds: number;
     upperBoundPerRow: number;
     scalablePerRow: number;
     upperForecastSeconds: number;
     scalableForecastSeconds: number;
+    browserUpperForecastSeconds: number;
+    grossAddedForecastSeconds: number;
+    netGateForecastSeconds: number;
     scalableForecastPercent: number;
+    netGateForecastPercent: number;
     ceilingSeconds: number;
     ceilingPercent: number;
   };
@@ -131,7 +145,7 @@ export async function loadBaseLedger({ repoRoot, commit }) {}
 
 ## Rollback Boundary
 
-Tasks 1 and 2 add only the carrier and a draft artifact; neither changes the ledger. Tasks 3 and 4 refine the review artifact while `apply` remains blocked until every mandatory review and timing field is complete. Task 5 is the single atomic ledger cutover and can be reverted without reverting the review carrier. Task 6 adds evidence only. Never carry a partially written ledger across commits; regenerate it with `apply` or revert the whole Task 5 commit.
+Tasks 1 and 2 add only the carrier and a draft artifact; neither changes the ledger. Tasks 3 and 4 refine the review artifact while `apply` remains blocked until every mandatory review and timing field is complete. Task 5 first normalizes ledger formatting in a semantic-no-op commit, then makes the single atomic resolution cutover in a second commit; either boundary can be reverted independently. Task 6 adds evidence only. Never carry a partially written ledger across commits; regenerate it with `apply` or revert the cutover commit.
 
 ---
 
@@ -148,7 +162,7 @@ Tasks 1 and 2 add only the carrier and a draft artifact; neither changes the led
 
 - Consumes the `ReviewArtifact` and exported functions defined above.
 - Produces `check` and `apply` CLI modes plus pure helpers used by all later tasks.
-- `check` reads `testing/source-contract-redisposition-review.json`, obtains the base ledger with `git show <reviewBaseCommit>:testing/source-contract-ledger.json`, validates current and simulated output, prints a compact summary, and exits 0 only with no issues.
+- `check` reads `testing/source-contract-redisposition-review.json`, obtains the base ledger with `git show <reviewBaseCommit>:testing/source-contract-ledger.json`, validates current and simulated output, prints decisions grouped by reason class and legacy path plus the exact changed-JSON-path allowlist, and exits 0 only with no issues.
 - `apply` runs the same validation, writes canonical JSON plus one trailing newline to `testing/source-contract-ledger.json`, reapplies in memory, and refuses to write unless the second output is byte-identical.
 
 - [ ] **Step 1: Write RED tests for base pinning and exact scope**
@@ -175,7 +189,7 @@ Closed-row bytes are `canonicalJson(baseLedger.rows.filter(row => !baseOpenIds.h
 
 - [ ] **Step 4: Write RED tests for the resolution allowlist and class ladder**
 
-Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, and any changed envelope field or `sourceReaderExceptions`.
+Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, a reviewer result copied from or exposed to the author decision packet, and mechanically incorrect author/blind comparisons.
 
 ```ts
 expect(validateReview({ artifact: withDecision("SC-000001", {
@@ -187,7 +201,7 @@ expect(validateReview({ artifact: withDecision("SC-000001", {
 
 - [ ] **Step 5: Implement class, P0, criticality, owner, and D5 checks**
 
-Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact existing test/rule/tool owner, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. Validate D5 `lostBehavior` as a non-empty exact ordinal coverage of the decision's delete resolution.
+Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact existing test/rule/tool owner, while B2/B3 may name unresolved future `test:vitest:`, `test:playwright:`, or `test:cargo:` IDs. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
 
 - [ ] **Step 6: Write RED tests for mixed rows and idempotent apply**
 
@@ -237,8 +251,8 @@ Run: `git commit -m "test: add source-contract redisposition carrier"`
 
 **Interfaces:**
 
-- Consumes the carrier schema from Task 1 and the review base `a54507d6`.
-- Produces a draft with all 436 exact `id + sourceHash` decisions initially marked `UNCLASSIFIED`, immutable catalogs, retained timing observations, and the fresh complete-gate observation.
+- Consumes the carrier schema from Task 1 and the review base `a54507d63420bb870c3870c91d7e22b050abae3e`.
+- Produces a draft with all 436 exact `id + sourceHash` decisions initially marked `UNCLASSIFIED`, immutable catalogs, retained component/legacy timing observations, the base legacy file listing, and the fresh complete-gate observation.
 - The draft is expected to fail `check` only for classification/review completeness; any scope, hash, timing, or schema issue is a task failure.
 
 - [ ] **Step 1: Add a RED integration test for the real artifact envelope**
@@ -251,7 +265,7 @@ Expected: FAIL because the artifact does not exist.
 
 - [ ] **Step 2: Create the deterministic draft artifact**
 
-Populate `reviewBaseCommit: "a54507d6"`, copy the ledger's exact `frozenAtCommit`, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash`, uses `class: "UNCLASSIFIED"`, and contains no fabricated resolution.
+Populate `reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e"`, copy the ledger's exact `frozenAtCommit`, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash`, uses `class: "UNCLASSIFIED"`, and contains no fabricated resolution.
 
 Run the focused integration test again.
 
@@ -279,6 +293,15 @@ Store the exact command and observations as `mechanisms.componentStartup`. Do no
 
 - [ ] **Step 5: Measure one fresh complete gate**
 
+Before the complete gate, measure the removable legacy owner with the same one-warm-up/three-retained protocol:
+
+`npm.cmd run test:legacy-contract`
+
+Store its three retained times and median as `mechanisms.legacyOwner`. Also run
+`node scripts/run-vitest.mjs list --project legacy-contract --filesOnly`, normalize the output to sorted repository-relative paths, and store the exact base listing as `mechanisms.legacyOwner.baseFiles`. This is the baseline later used to prove unchanged owner membership.
+
+Then measure the complete gate:
+
 Preflight that no repository-owned Vitest, Playwright, Cargo, or Rust process is active. Run exactly once, unsandboxed, with a PowerShell stopwatch:
 
 `npm.cmd run verify`
@@ -294,11 +317,15 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
+browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
+grossAddedForecast = scalableForecast + browserUpperForecast
+netGateForecast = max(0, grossAddedForecast - Tlegacy)
 ceilingSeconds = max(0, T3B - Tstartup)
 ceilingPercent = ceilingSeconds / freshVerifySeconds * 100
+netGateForecastPercent = netGateForecast / freshVerifySeconds * 100
 ```
 
-Add tests that perturb every derived number and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts.
+When no browser owner is proposed, require `browserOwner: null`, zero browser counts, and zero browser forecast. When at least one `test:playwright:` owner is proposed, require a measured browser owner and charge its full direct-file median once per distinct proposed owner file. Add tests that perturb every derived number, the legacy baseline listing, and the jsdom/browser owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
 
 - [ ] **Step 7: Commit the measured draft**
 
@@ -332,7 +359,7 @@ Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 
 For each class, record two or three rows closest to an adjacent-class boundary. Include D1/D2, D3/D5, D4/A1, A1/T1, B1/B2, B2/B3, and B3/D5. For every selected row inspect the complete frozen declaration, its invariant and ordinals, candidate owner implementation, and normative source if claimed.
 
-Write each result to `independentReview.calibrations` with the adjacent class and reviewer result. If no truthful example exists for a class, retain the class catalog but record an empty calibration with `result: "no_match"`; do not manufacture a row.
+The author records proposed calibration decisions first. Then dispatch a separate reviewer agent with a clean context containing only each declaration, invariant, ordinals, candidate-owner inventory, class catalog, and normative sources. Do not provide the author's proposed class, reason, artifact decision, discussion, or diff. Store the reviewer's independently written class/reason under `blindResults`; only then calculate each calibration comparison. If no truthful example exists for a class, retain the class catalog but record an empty calibration with `result: "no_match"`; do not manufacture a row.
 
 - [ ] **Step 2: Classify the exact protected and normative-critical cohorts**
 
@@ -340,23 +367,25 @@ Review SC-000555--SC-000560, SC-000511--SC-000515, and SC-000420 first. Then sea
 
 Record security, import-boundary, and process-lifecycle row IDs as explicit mandatory cohorts even when they overlap P0 or manual populations.
 
+Freeze the complete P0 catalog at the end of this step and record its digest in the artifact. If any later tail inspection discovers a credible P0 candidate, stop tail work, return to this step, expand and independently review the protected catalog, rerun every affected group, update the digest, and only then resume. Never append P0 after a tail decision has been accepted without that rollback.
+
 - [ ] **Step 3: Classify and independently review all 124 live manual rows**
 
 Use each manual `sourceRange`, `reason`, and `runnerTitles` to inspect the actual declaration. `manual` is extraction metadata, not a reason class. Record one of the ten substantive classes or `UNCLASSIFIED`; if a repeated unmatched group appears, amend the approved design before proceeding instead of adding an individual exception.
 
-The independent reviewer inspects the same 124 rows and records one cohort result. Every disagreement changes the named group rule and reruns every decision in that group.
+The separate clean-context reviewer receives the same 124 source declarations and candidate-owner inventories in bounded batches, but no author class or reason. The reviewer writes all 124 independent decisions before comparison. The carrier computes the cohort result from author versus blind decisions. Every disagreement changes the named group rule and reruns every decision in that group.
 
 - [ ] **Step 4: Classify and independently review the 26 large-contract rows**
 
 Review all 16 open rows in `analysis-crate-boundary-contract.test.ts` and the 10 open rows in `crate-extraction-shell-cap-contract.test.ts`. SC-000355 remains closed and unchanged. Prefer completed-history deletion, existing repository-rule/Cargo owners, or focused Rust/Node seams before proposing a new behavior owner.
 
-Record the complete 26-ID cohort and reviewer outcome. Do not give the large files a special class; the same ladder applies.
+Give the clean-context reviewer the complete 26-row input without proposed decisions. Record the independent output, then calculate the complete 26-ID cohort comparison. Do not give the large files a special class; the same ladder applies.
 
 - [ ] **Step 5: Validate the partial artifact without applying it**
 
 Run: `node scripts/testing/source-contract-redisposition-review.mjs check`
 
-Expected: non-zero only because unreviewed tail decisions remain `UNCLASSIFIED`; there must be no schema, scope, P0, owner, mixed, timing, or already-classified-row error.
+Expected: non-zero only because unreviewed tail decisions remain `UNCLASSIFIED`; there must be no schema, scope, P0, owner, mixed, timing, blind-review, or already-classified-row error.
 
 - [ ] **Step 6: Commit the calibrated mandatory pass**
 
@@ -365,6 +394,8 @@ Run: `git diff --check`
 Run: `git add testing/source-contract-redisposition-review.json`
 
 Run: `git commit -m "test: calibrate mandatory redisposition cohorts"`
+
+If the unmatched-group stop condition occurs, leave Tasks 1--3 committed, keep `apply` blocked by `UNCLASSIFIED`, and mark this checkpoint awaiting an approved class amendment. Resume from Task 3 Step 1 after that amendment; do not improvise a local exception.
 
 ---
 
@@ -391,15 +422,23 @@ Never use a generic `D1`, `D2`, or `D5` sentence. Each deletion reason must name
 
 Construct the remainder after excluding the 26 large rows, 124 manual rows, all P0/security/import/process rows, all B3/D5 rows, all new mixed rows, and all calibration rows. Sort by `sha256(id)` ascending and take `ceil(population.length * 0.10)` IDs. Store both the complete population and selected IDs so the carrier can recompute the sample.
 
-The independent reviewer checks every sampled declaration and owner. A disagreement updates the group rule, reclassifies all matching rows, and is recorded under `disagreements`.
+Send the sampled declarations, invariants, ordinals, candidate owners, catalog, and normative sources to the same clean-context reviewer without author decisions. The reviewer returns its own class/reason list before seeing the artifact. The carrier compares outputs. A disagreement updates the group rule, reclassifies all matching rows, and is recorded under `disagreements`.
 
 - [ ] **Step 3: Complete 100-percent review of expensive/loss/mixed decisions**
 
-Independently inspect every B3 and D5 decision and every newly mixed row after all group-rule changes. For B3 prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
+Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
 - [ ] **Step 4: Calculate the final forecast and loss summaries**
 
-Count proposed owners by class/mechanism in rows and assertion ordinals. Set `proposedNewJsdomRows` and `proposedNewJsdomOrdinals` from B3 behavior subgroups/rows only. Recalculate all timing fields and require `scalableForecastSeconds <= ceilingSeconds`. If it exceeds the ceiling, stop and write a separate program amendment; do not change valid row classes to force the number down.
+Count proposed owners by class/mechanism in rows and assertion ordinals. Derive jsdom versus Playwright from the replacement namespace and owner path, and count distinct proposed browser owner files.
+
+If any browser owner is proposed, run one unretained warm-up and three retained unsandboxed observations of:
+
+`npm.cmd run test:gemini-browser-adapter:e2e -- chromium-lifecycle`
+
+Store the samples and median as `mechanisms.browserOwner`; charge the full median once per distinct future browser owner file. If none is proposed, preserve `browserOwner: null` and zero browser counts.
+
+Set `proposedNewJsdomRows`/ordinals and `proposedNewBrowserRows`/ordinals from their B3 rows and subgroups. Recalculate component, browser, gross, removable-legacy, and net fields. Require `netGateForecastSeconds <= ceilingSeconds`; the gross addition alone is disclosure and cannot reject a change whose measured net effect is smaller. If the net forecast exceeds the ceiling, keep Tasks 1--3 and the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
 
 Build `acceptedLoss.items` from every D5 simple or subgroup decision, sorted by ID then first ordinal. Require the summary's row count, ordinal count, and complete behavior list to equal the decisions mechanically.
 
@@ -442,13 +481,39 @@ Run: `node scripts/testing/source-contract-redisposition-review.mjs check`
 
 Expected: PASS with zero `UNCLASSIFIED` and an idempotent simulated ledger.
 
-- [ ] **Step 2: Apply once through the committed carrier**
+- [ ] **Step 2: Normalize ledger formatting in a semantic-no-op commit**
+
+Run the repository's exact carrier canonicalization over the current ledger without applying decisions:
+
+```powershell
+node --input-type=module -e "import fs from 'node:fs'; import { canonicalJson } from './scripts/testing/source-contract-redisposition-review.mjs'; const p='testing/source-contract-ledger.json'; fs.writeFileSync(p, canonicalJson(JSON.parse(fs.readFileSync(p, 'utf8'))));"
+```
+
+Compare `JSON.parse` of the pre-normalized Git bytes with the normalized working file:
+
+```powershell
+node --input-type=module -e "import fs from 'node:fs'; import assert from 'node:assert/strict'; import { execFileSync } from 'node:child_process'; const p='testing/source-contract-ledger.json'; const before=JSON.parse(execFileSync('git',['show','HEAD:'+p],{encoding:'utf8'})); const after=JSON.parse(fs.readFileSync(p,'utf8')); assert.deepStrictEqual(after,before);"
+```
+
+Expected: exit 0. Then run:
+
+`node scripts/testing/source-contract-redisposition-review.mjs check`
+
+Expected: PASS; normalization changes formatting only and preserves all parsed rows and envelope fields.
+
+Run: `git add testing/source-contract-ledger.json`
+
+Run: `git commit -m "style: normalize source-contract ledger json"`
+
+This commit intentionally absorbs the known repository-wide JSON layout change before the semantic cutover, so the next diff contains resolution changes rather than 1,604 interleaved formatting lines.
+
+- [ ] **Step 3: Apply once through the committed carrier**
 
 Run: `node scripts/testing/source-contract-redisposition-review.mjs apply`
 
 Expected: exit 0 and a summary containing exactly 436 scoped rows; only `testing/source-contract-ledger.json` changes.
 
-- [ ] **Step 3: Prove post-apply idempotence and allowlist**
+- [ ] **Step 4: Prove post-apply idempotence and allowlist**
 
 Run: `node scripts/testing/source-contract-redisposition-review.mjs check`
 
@@ -458,23 +523,21 @@ Run: `node scripts/testing/source-contract-redisposition-review.mjs apply`
 
 Expected: exit 0 with `0 byte changes`.
 
-Run: `git diff -- testing/source-contract-ledger.json`
+Use the carrier's `check` output as the primary review surface: it prints decisions grouped by class and legacy path plus the complete changed-JSON-path list. Confirm no envelope, exception, identity, path, title/manual, hash, count, lineage, or invariant path appears. Keep `git diff -- testing/source-contract-ledger.json` as a secondary audit now that normalization is isolated.
 
-Inspect every changed JSON path mechanically from the carrier output. Confirm no envelope, exception, identity, path, title/manual, hash, count, lineage, or invariant change and no diff outside the ledger.
-
-- [ ] **Step 4: Run the unchanged transition validator**
+- [ ] **Step 5: Run the unchanged transition validator**
 
 Run: `node scripts/validate-testing-transition.mjs`
 
 Expected: PASS with `671 rows, 436 open`. Unresolved future replacement IDs remain valid because their legacy declarations are still live.
 
-- [ ] **Step 5: Prove runner ownership did not change**
+- [ ] **Step 6: Prove runner ownership did not change**
 
 Run: `node scripts/run-vitest.mjs list --project legacy-contract --filesOnly`
 
-Expected: the same 73 legacy files listed at the review base; disposition edits do not alter `vitest.config.ts` path-derived ownership.
+Expected: byte-identical normalized path listing to `mechanisms.legacyOwner.baseFiles`; disposition edits do not alter `vitest.config.ts` path-derived ownership. Do not rely on the number 73 without this stored baseline.
 
-- [ ] **Step 6: Commit the atomic ledger cutover**
+- [ ] **Step 7: Commit the atomic ledger cutover**
 
 Run: `git diff --check`
 
@@ -500,13 +563,13 @@ Run: `git commit -m "test: apply pre-slice 3c ledger redisposition"`
 
 - [ ] **Step 1: Write the evidence record from artifact values**
 
-Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; both upper/scalable forecasts; ceiling seconds/percent; fresh verify comparison; independent-review populations and disagreements; and confirmation that the program index was intentionally not changed.
+Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; browser owner-file upper forecast; removable legacy time/files; gross and net forecasts; ceiling seconds/percent; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
 
 Add a dedicated `Accepted D5 Losses` table with one row per artifact item and columns `SC ID`, `ordinals`, and `lost behavior`. State total D5 row and ordinal counts immediately above it.
 
 - [ ] **Step 2: Run read-only independent review of the final diff**
 
-Give a fresh reviewer the approved spec subsection, this plan, the review artifact, carrier, carrier tests, and ledger diff. Require findings-first review of scope pinning, class ordering, P0/B3/D5 boundaries, all mandatory cohorts, mixed partitions, owner evidence, timing arithmetic, closed-row preservation, and JSON-path allowlist.
+Give a fresh reviewer the approved spec subsection, this plan, the review artifact, carrier, carrier tests, and the carrier's class/path-grouped decision report. Require findings-first review of scope pinning, class ordering, P0/B3/D5 boundaries, all mandatory cohorts, mixed partitions, owner evidence, timing arithmetic, closed-row preservation, and JSON-path allowlist. The normalized ledger diff is secondary evidence, not the primary 592-KB review object.
 
 If findings exist, hand all findings to one fix owner in one wave. Rerun only the carrier test and `check` while fixing. Do not rerun the complete gate until the review is clean.
 
@@ -556,4 +619,4 @@ Expected: empty.
 
 Run: `git log --oneline -6`
 
-Expected: carrier, measured draft, calibrated review, completed review, ledger cutover, and verification commits are visible. Only after this checkpoint is approved may a separate detailed Slice 3C implementation plan be written from the new ledger state.
+Expected: carrier, measured draft, calibrated review, completed review, formatting normalization, ledger cutover, and verification commits are visible. Only after this checkpoint is approved may a separate detailed Slice 3C implementation plan be written from the new ledger state.

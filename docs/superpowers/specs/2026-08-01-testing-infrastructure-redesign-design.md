@@ -647,6 +647,19 @@ Measure fixed component startup separately with
 For each command, perform one unretained warm-up followed by three retained
 unsandboxed runs, and record the median wall time. Let `T3B` be the median for
 the three replacement files and `Tstartup` the median for the startup file.
+Measure the removable legacy side with the same protocol through
+`npm.cmd run test:legacy-contract`; call its median `Tlegacy`. This is the
+conservative removable contribution of the current legacy owner to the future
+3C+ gate, not a promise that every sub-slice realizes the saving immediately.
+
+If any B3 decision proposes a Playwright owner, also measure
+`npm.cmd run test:gemini-browser-adapter:e2e -- chromium-lifecycle` with the
+same protocol and call its median `Tbrowser`. Group future browser replacement
+IDs by owner file. The full direct-file median is charged once per proposed
+browser owner file as a conservative upper bound; browser rows may not disappear
+from the numerical forecast merely because the jsdom mechanism was measured.
+With no proposed browser owner, `Tbrowser` and the browser forecast are zero.
+
 The artifact records:
 
 ```text
@@ -654,12 +667,18 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
+browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
+grossAddedForecast = scalableForecast + browserUpperForecast
+netGateForecast = max(0, grossAddedForecast - Tlegacy)
 ```
 
 `upperBoundPerRow` is explicitly a conservative upper bound: 59 declarations,
 including smoke declarations, and one fixed startup are amortized across the
 46 Slice 3B ledger rows. `scalableForecast` is the estimate used for gate
-growth. Both values are published in seconds.
+growth. The browser-file charge is also deliberately gross. `netGateForecast`
+is the checkpoint decision value because it exposes both added replacement
+cost and the measured legacy owner that 3C+ removes. All component, browser,
+legacy, gross, and net values are published separately in seconds.
 
 Run one fresh unsandboxed complete `verify` at the redisposition checkpoint and
 compare its gate inventory and conditions with the recorded 208.1, 321.3, and
@@ -675,11 +694,12 @@ ceilingSeconds = max(0, T3B - Tstartup)
 ceilingPercent = ceilingSeconds / freshVerifySeconds * 100
 ```
 
-All proposed 3C+ jsdom replacements together must have
-`scalableForecast <= ceilingSeconds`. If they exceed that ceiling, their row
+All proposed 3C+ expensive replacements together must have
+`netGateForecast <= ceilingSeconds`. If they exceed that ceiling, their row
 classes remain valid, but the redisposition checkpoint cannot be approved
-without a separate program amendment. The artifact reports the forecast in
-rows, assertion ordinals, seconds, and percentage of the fresh complete gate.
+without a separate program amendment. The artifact reports jsdom rows and
+ordinals, browser rows, ordinals, and owner files, removable legacy files,
+gross and net seconds, and percentage of the fresh complete gate.
 
 #### Independent review and reproducibility
 
@@ -694,8 +714,18 @@ the following populations independently at 100 percent:
 - every newly mixed row.
 
 A deterministic ten-percent sample of all remaining rows checks mechanical
-application. A disagreement changes the rule or named class for the complete
-matching group and reruns that group; it never creates a per-row override.
+application. Each independent pass is performed by a separate reviewer with a
+clean context. The reviewer receives the row declaration, invariant, assertion
+ordinals, candidate-owner inventory, class catalog, and normative sources, but
+does not receive the proposed class, proposed reason, or author discussion.
+The reviewer records an independent class and reason in a separate result;
+agreement and disagreement are calculated mechanically only after both passes
+exist. A disagreement changes the rule or named class for the complete matching
+group and reruns that group; it never creates a per-row override.
+
+The P0 catalog freezes after the protected and normative-critical pass. A P0
+candidate discovered later returns the work to that pass, expands the catalog,
+and reruns every affected group before tail classification resumes.
 
 The acceptance evidence gives D5 its own table: row count, assertion-ordinal
 count, and the complete list of intentionally lost behavior. It also reports
@@ -723,6 +753,11 @@ cannot change row identity, path, title/manual metadata, source or authority
 hashes, assertion counts, lineage, invariant text, envelope fields, or source
 reader exceptions. The normal transition validator remains unchanged and the
 checkpoint closes only with a successful `npm.cmd run verify`.
+
+Because the frozen ledger predates the carrier's canonical JSON layout, one
+separate formatting-only commit precedes `apply`. Parsed JSON before and after
+that commit must be deeply equal. It contains no disposition decision; its only
+purpose is to keep the subsequent 436-row resolution diff reviewable.
 
 ### Transitional validation carrier
 
