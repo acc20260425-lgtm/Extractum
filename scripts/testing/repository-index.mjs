@@ -305,6 +305,43 @@ function conditionIdentifiers(expression) {
   return [...names].sort();
 }
 
+function svelteExpressionFact(expression) {
+  if (!expression || typeof expression !== "object") return { kind: "unsupported", syntaxKind: typeof expression };
+  if (expression.type === "Identifier") return { kind: "identifier", name: expression.name };
+  if (expression.type === "Literal") {
+    if (expression.value === null) return { kind: "null" };
+    if (typeof expression.value === "string") return { kind: "string", value: expression.value };
+    if (typeof expression.value === "boolean") return { kind: "boolean", value: expression.value };
+    if (typeof expression.value === "number") return { kind: "number", value: expression.value };
+  }
+  if (expression.type === "UnaryExpression") {
+    return {
+      kind: "unary",
+      operator: expression.operator,
+      operand: svelteExpressionFact(expression.argument),
+    };
+  }
+  if (expression.type === "BinaryExpression" || expression.type === "LogicalExpression") {
+    return {
+      kind: "binary",
+      operator: expression.operator,
+      left: svelteExpressionFact(expression.left),
+      right: svelteExpressionFact(expression.right),
+    };
+  }
+  if (expression.type === "MemberExpression") {
+    return {
+      kind: "member",
+      object: svelteExpressionFact(expression.object),
+      property: expression.computed
+        ? svelteExpressionFact(expression.property)
+        : expression.property?.name,
+      computed: Boolean(expression.computed),
+    };
+  }
+  return { kind: "unsupported", syntaxKind: expression.type };
+}
+
 function svelteImportFact(node) {
   const declarationTypeOnly = node.importKind === "type";
   const bindings = (node.specifiers ?? []).map((specifier) => ({
@@ -341,8 +378,9 @@ function svelteFacts(relativePath, source, svelte) {
     }
     if (value.type === "IfBlock") {
       const identifiers = conditionIdentifiers(value.test);
-      visit(value.consequent, [...branches, { conditionIdentifiers: identifiers, polarity: "consequent" }]);
-      visit(value.alternate, [...branches, { conditionIdentifiers: identifiers, polarity: "alternate" }]);
+      const condition = svelteExpressionFact(value.test);
+      visit(value.consequent, [...branches, { condition, conditionIdentifiers: identifiers, polarity: "consequent" }]);
+      visit(value.alternate, [...branches, { condition, conditionIdentifiers: identifiers, polarity: "alternate" }]);
       return;
     }
     for (const child of Object.values(value)) {

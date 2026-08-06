@@ -31,7 +31,28 @@ const SYMBOL_MAP_PATH = "src/lib/telegram-8b-symbol-map.json";
 const TEST_IDENTITIES_PATH = "src/lib/telegram-8b-test-identities.json";
 const STAGING_SHA_PATH = "src/lib/telegram-8b-staging-sha256.json";
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
+const PHASE_8_ROADMAP_PATH = "docs/superpowers/specs/2026-07-17-crate-roadmap.md";
+const PHASE_8_DESIGN_PATH = "docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md";
 const FROZEN_STAGING_SHA256 = "12e99b10aaaccc471ae4c950b4a3ea0331ae68db45618823ea2aa58bae29d1a9";
+const EXPECTED_PRODUCER_DEPENDENCIES = [
+  ["base64", null, [], true, null, null],
+  ["chacha20poly1305", null, ["std"], true, null, null],
+  ["extractum-core", null, [], true, null, null],
+  ["grammers-client", null, [], false, null, null],
+  ["grammers-mtsender", null, [], true, null, null],
+  ["grammers-session", null, ["serde"], false, null, null],
+  ["grammers-tl-types", null, ["deserializable-functions"], true, null, null],
+  ["rand_core", null, ["getrandom"], true, null, null],
+  ["secrecy", null, [], true, null, null],
+  ["serde", null, ["derive"], true, null, null],
+  ["serde_json", null, [], true, null, null],
+  ["tokio", null, ["rt", "sync", "time"], true, null, null],
+  ["tokio", "dev", ["macros", "test-util"], true, null, null],
+];
+const EXPECTED_APP_TELEGRAM_DEPENDENCIES = [
+  ["extractum-telegram", null, [], true, null, null],
+  ["extractum-telegram", "dev", ["app-test-support"], true, null, null],
+];
 
 const TRANSITIONAL_SOURCE_COMPONENTS = [
   ["RunCompanionTabs", "$lib/components/analysis/run-companion-tabs.svelte"],
@@ -44,168 +65,12 @@ const TRANSITIONAL_SOURCE_COMPONENTS = [
   ["YoutubeTranscriptReader", "$lib/components/analysis/youtube-transcript-reader.svelte"],
 ];
 
-function functionByName(facts, name) {
-  return facts.functions.find((item) => item.name === name);
-}
-
-function requireCalls(violations, functionFact, functionName, expectedCalls) {
-  if (!functionFact) {
-    violations.push(`${TELEGRAM_PATH}: missing function ${functionName}`);
-    return;
-  }
-  for (const call of expectedCalls) {
-    if (!functionFact.calls.includes(call)) {
-      violations.push(`${TELEGRAM_PATH}: ${functionName} must call ${call}`);
-    }
-  }
-}
-
 function identifier(expression, name) {
   return expression?.kind === "identifier" && expression.name === name;
 }
 
 function stringLiteral(expression, value) {
   return expression?.kind === "string" && expression.value === value;
-}
-
-function expressionPath(expression) {
-  if (expression?.kind === "identifier") return expression.name;
-  if (expression?.kind !== "member") return undefined;
-  const owner = expressionPath(expression.object);
-  return owner ? `${owner}.${expression.property}` : undefined;
-}
-
-function call(expression, callee, argumentsMatch) {
-  return expression?.kind === "call"
-    && expressionPath(expression.callee) === callee
-    && argumentsMatch(expression.arguments);
-}
-
-function unary(expression, operator, operandMatch) {
-  return expression?.kind === "unary"
-    && expression.operator === operator
-    && operandMatch(expression.operand);
-}
-
-function comparison(expression, operator, operandName, value) {
-  return expression?.kind === "binary"
-    && expression.operator === operator
-    && ((identifier(expression.left, operandName) && stringLiteral(expression.right, value))
-      || (stringLiteral(expression.left, value) && identifier(expression.right, operandName)));
-}
-
-function exactDotSegmentPredicate(expression, parameter) {
-  const comparisons = expression?.kind === "binary" && expression.operator === "||"
-    ? [expression.left, expression.right]
-    : [];
-  return expression?.kind === "binary"
-    && expression.operator === "||"
-    && comparisons.some((item) => comparison(item, "===", parameter, "."))
-    && comparisons.some((item) => comparison(item, "===", parameter, ".."));
-}
-
-function dotSegmentPredicate(expression) {
-  if (expression?.kind !== "call" || expression.callee?.kind !== "member" || expression.callee.property !== "some") {
-    return false;
-  }
-  const split = expression.callee.object;
-  if (!call(split, "relativePath.split", (args) => args.length === 1 && stringLiteral(args[0], "/"))) return false;
-  const predicate = expression.arguments[0];
-  const parameter = predicate?.kind === "arrow" ? predicate.parameters[0] : undefined;
-  return typeof parameter === "string" && exactDotSegmentPredicate(predicate.body, parameter);
-}
-
-function disjunctionTerms(expression) {
-  return expression?.kind === "binary" && expression.operator === "||"
-    ? [...disjunctionTerms(expression.left), ...disjunctionTerms(expression.right)]
-    : [expression];
-}
-
-function throwingGuardTerms(functionFact) {
-  return functionFact?.guards
-    .filter(({ consequenceThrows }) => consequenceThrows)
-    .flatMap(({ condition }) => disjunctionTerms(condition)) ?? [];
-}
-
-function requireThrowingGuard(violations, functionFact, label, match) {
-  if (!throwingGuardTerms(functionFact).some(match)) {
-    violations.push(`${TELEGRAM_PATH}: missing fail-closed ${label} guard`);
-  }
-}
-
-function pathSeparatorMember(expression) {
-  return expressionPath(expression) === "path.sep";
-}
-
-function parentPrefix(expression) {
-  if (expression?.kind === "binary" && expression.operator === "+") {
-    return stringLiteral(expression.left, "..") && pathSeparatorMember(expression.right);
-  }
-  return expression?.kind === "template"
-    && expression.head === ".."
-    && expression.spans.length === 1
-    && pathSeparatorMember(expression.spans[0].expression)
-    && expression.spans[0].literal === "";
-}
-
-function startsWithParent(expression, owner) {
-  return call(expression, `${owner}.startsWith`, (args) => args.length === 1 && parentPrefix(args[0]));
-}
-
-function evaluateTelegramRepositoryPathSafety(index) {
-  const facts = index.getTypeScript(TELEGRAM_PATH);
-  const violations = [];
-  const repositoryGuard = functionByName(facts, "assertRepositoryRelative");
-  const resolver = functionByName(facts, "resolveTelegramContractPath");
-  const reader = functionByName(facts, "readTelegramContractFile");
-  const normalizer = functionByName(facts, "normalizeTelegramContractSourceText");
-
-  requireCalls(violations, repositoryGuard, "assertRepositoryRelative", [
-    "path.isAbsolute",
-    "path.resolve",
-    "path.relative",
-    "relativePath.split",
-  ]);
-  requireThrowingGuard(violations, repositoryGuard, "empty repository path", (term) =>
-    unary(term, "!", (operand) => identifier(operand, "relativePath")));
-  requireThrowingGuard(violations, repositoryGuard, "absolute input path", (term) =>
-    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "relativePath")));
-  requireThrowingGuard(violations, repositoryGuard, "Windows-separator path", (term) =>
-    call(term, "relativePath.includes", (args) => args.length === 1 && stringLiteral(args[0], "\\")));
-  requireThrowingGuard(violations, repositoryGuard, "dot-segment path", dotSegmentPredicate);
-  requireThrowingGuard(violations, repositoryGuard, "resolved repository root", (term) =>
-    comparison(term, "===", "relative", ""));
-  requireThrowingGuard(violations, repositoryGuard, "resolved parent path", (term) =>
-    comparison(term, "===", "relative", ".."));
-  requireThrowingGuard(violations, repositoryGuard, "resolved parent-prefix path", (term) =>
-    startsWithParent(term, "relative"));
-  requireThrowingGuard(violations, repositoryGuard, "resolved absolute path", (term) =>
-    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "relative")));
-  requireCalls(violations, resolver, "resolveTelegramContractPath", [
-    "assertRepositoryRelative",
-    "existsSync",
-    "path.relative",
-    "realpathSync",
-  ]);
-  requireThrowingGuard(violations, resolver, "missing selected path", (term) =>
-    unary(term, "!", (operand) => call(operand, "existsSync", (args) => args.length === 1 && identifier(args[0], "selected"))));
-  requireThrowingGuard(violations, resolver, "realpath parent escape", (term) =>
-    comparison(term, "===", "realRelative", ".."));
-  requireThrowingGuard(violations, resolver, "realpath parent-prefix escape", (term) =>
-    startsWithParent(term, "realRelative"));
-  requireThrowingGuard(violations, resolver, "realpath absolute escape", (term) =>
-    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "realRelative")));
-  requireCalls(violations, reader, "readTelegramContractFile", [
-    "normalizeTelegramContractSourceText",
-    "readFileSync",
-    "resolveTelegramContractPath",
-  ]);
-
-  for (const item of [resolver, reader, normalizer]) {
-    if (item && !item.exported) violations.push(`${TELEGRAM_PATH}: ${item.name} must be exported`);
-  }
-
-  return violations;
 }
 
 function evaluateAnalysisSourceReaderSurfaceComposition(index) {
@@ -288,9 +153,27 @@ function hasComponentFromModule(facts, moduleSource) {
   return componentsFromModule(facts, moduleSource).length > 0;
 }
 
-function componentHasConsequentIdentifier(component, identifierName) {
-  return component.branches?.some((branch) =>
-    branch.polarity === "consequent" && branch.conditionIdentifiers.includes(identifierName)) ?? false;
+function exactActivityTab(expression) {
+  return expression?.kind === "binary"
+    && expression.operator === "==="
+    && ((identifier(expression.left, "activeTab") && stringLiteral(expression.right, "activity"))
+      || (stringLiteral(expression.left, "activity") && identifier(expression.right, "activeTab")));
+}
+
+function conjunctionTerms(expression) {
+  return expression?.kind === "binary" && expression.operator === "&&"
+    ? [...conjunctionTerms(expression.left), ...conjunctionTerms(expression.right)]
+    : [expression];
+}
+
+function exactPositiveActivityBranch(component, expectedIdentifiers) {
+  return component.branches?.some((branch) => {
+    if (branch.polarity !== "consequent") return false;
+    const terms = conjunctionTerms(branch.condition);
+    if (terms.length !== expectedIdentifiers.length + 1) return false;
+    if (terms.filter(exactActivityTab).length !== 1) return false;
+    return expectedIdentifiers.every((name) => terms.filter((term) => identifier(term, name)).length === 1);
+  }) ?? false;
 }
 
 function evaluateAnalysisSourceGroupTabLeafBoundary(index) {
@@ -353,11 +236,11 @@ function evaluateAnalysisSourceGroupActivityBoundary(index) {
   const violations = [];
   const groupBranches = componentsFromModule(shell, SOURCE_GROUP_ACTIVITY_MODULE);
   const sourceBranches = componentsFromModule(shell, SOURCE_ACTIVITY_MODULE);
-  if (!groupBranches.some((component) => componentHasConsequentIdentifier(component, "groupSubject"))) {
-    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceGroupActivityView must be under the groupSubject branch`);
+  if (!groupBranches.some((component) => exactPositiveActivityBranch(component, ["groupSubject"]))) {
+    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceGroupActivityView must be under the exact positive activity/groupSubject branch`);
   }
-  if (!sourceBranches.some((component) => componentHasConsequentIdentifier(component, "sourceSubject"))) {
-    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceActivityView must be under the sourceSubject branch`);
+  if (!sourceBranches.some((component) => exactPositiveActivityBranch(component, ["sourceSubject", "sourceData"]))) {
+    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceActivityView must be under the exact positive activity/sourceSubject/sourceData branch`);
   }
   if (!hasComponentFromModule(groupActivity, EMPTY_STATE_MODULE)) {
     violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: missing group-owned activity leaf`);
@@ -374,6 +257,46 @@ function evaluateAnalysisSourceGroupActivityBoundary(index) {
 
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function uniqueMatch(source, pattern) {
+  const matches = [...source.matchAll(pattern)];
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function retainedPhase8StatusViolations(index) {
+  const violations = [];
+  const phase8B = index.getText(PHASE_8B_PLAN_PATH).replaceAll("\r\n", "\n");
+  const sectionStart = phase8B.indexOf("### Phase 8B Status State Machine\n");
+  const sectionEnd = phase8B.indexOf("\n`TelegramLifecycle` gains exact", sectionStart);
+  const section = sectionStart >= 0 && sectionEnd > sectionStart
+    ? phase8B.slice(sectionStart, sectionEnd)
+    : "";
+  const checkpointRange = uniqueMatch(
+    section,
+    /roadmap `8B preparation Checkpoint (\d+) retained` through\n\s+`8B preparation Checkpoint (\d+) retained`; design\n\s+`Approved; 8B preparation Checkpoint N retained`/g,
+  );
+  if (checkpointRange?.[1] !== "1" || checkpointRange?.[2] !== "8") {
+    violations.push(`${PHASE_8B_PLAN_PATH}: retained checkpoint status range drifted`);
+  }
+  const terminal = [...section.matchAll(/roadmap `([^`]+)`; design `([^`]+)`/g)]
+    .find((match) => match[1] === "8B preparation retained; 8C pending");
+  if (terminal?.[1] !== "8B preparation retained; 8C pending"
+    || terminal?.[2] !== "Approved; 8B preparation retained; 8C pending") {
+    violations.push(`${PHASE_8B_PLAN_PATH}: terminal Phase 8B retained status pair drifted`);
+  }
+
+  const roadmap = index.getText(PHASE_8_ROADMAP_PATH);
+  const roadmapStatus = uniqueMatch(roadmap, /^### Phase 8 — `extractum-telegram` \(([^)]+)\)$/gm)?.[1];
+  if (roadmapStatus !== "done: retained") {
+    violations.push(`${PHASE_8_ROADMAP_PATH}: retained Phase 8 roadmap status drifted`);
+  }
+  const design = index.getText(PHASE_8_DESIGN_PATH);
+  const designStatus = uniqueMatch(design, /^\*\*Status:\*\* (.+)$/gm)?.[1];
+  if (designStatus !== "Implemented and retained; [verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md)") {
+    violations.push(`${PHASE_8_DESIGN_PATH}: retained Phase 8 design status drifted`);
+  }
+  return violations;
 }
 
 function evaluateTelegramPhase8BAuthorityIntegrity(index) {
@@ -408,6 +331,7 @@ function evaluateTelegramPhase8BAuthorityIntegrity(index) {
   if (contentAddress !== FROZEN_STAGING_SHA256) {
     violations.push(`${STAGING_SHA_PATH}: frozen content address drifted`);
   }
+  violations.push(...retainedPhase8StatusViolations(index));
   return violations;
 }
 
@@ -422,6 +346,30 @@ function resolvedNode(metadata, packageId) {
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+function dependencyTuple(dependency) {
+  return [
+    dependency?.name,
+    dependency?.kind ?? null,
+    [...(dependency?.features ?? [])].sort(),
+    dependency?.uses_default_features ?? true,
+    dependency?.target ?? null,
+    dependency?.rename ?? null,
+  ];
+}
+
+function sortedJson(values) {
+  return values.map((value) => JSON.stringify(value)).sort().join("\n");
+}
+
+function exactDependencyInventory(actual, expected) {
+  return sortedJson(actual.map(dependencyTuple)) === sortedJson(expected);
+}
+
+function exactDependencyKinds(edge, expectedKinds) {
+  const actual = (edge?.dep_kinds ?? []).map(({ kind, target }) => [kind ?? null, target ?? null]);
+  return sortedJson(actual) === sortedJson(expectedKinds.map((kind) => [kind, null]));
+}
+
 function evaluateTelegramCrateManifestBoundary(index) {
   const metadata = index.getCargoMetadata();
   const violations = [];
@@ -429,23 +377,74 @@ function evaluateTelegramCrateManifestBoundary(index) {
   const producer = workspacePackage(metadata, "extractum-telegram");
   if (!app) violations.push("Cargo metadata: missing extractum workspace package");
   if (!producer) return [...violations, "Cargo metadata: missing extractum-telegram workspace package"];
-  if (!(producer.targets ?? []).some((target) => target?.kind?.includes("lib") && target.name === "extractum_telegram")) {
-    violations.push("extractum-telegram: missing library target");
+  const producerTargets = (producer.targets ?? []).filter((target) => target?.kind?.includes("lib"));
+  if (producerTargets.length !== 1
+    || producerTargets[0]?.name !== "extractum_telegram"
+    || sortedJson(producerTargets[0]?.kind ?? []) !== sortedJson(["lib"])) {
+    violations.push("extractum-telegram: library target inventory drifted");
   }
-  if (!Object.prototype.hasOwnProperty.call(producer.features ?? {}, "app-test-support")) {
-    violations.push("extractum-telegram: missing app-test-support feature");
+  if (!sameJson(producer.features ?? {}, { "app-test-support": [] })) {
+    violations.push("extractum-telegram: feature inventory must contain only app-test-support");
+  }
+  if (!exactDependencyInventory(producer.dependencies ?? [], EXPECTED_PRODUCER_DEPENDENCIES)) {
+    violations.push("extractum-telegram: dependency and dev-dependency inventory drifted");
   }
   if (app) {
     const edges = (app.dependencies ?? []).filter((dependency) => dependency?.name === "extractum-telegram");
     const normal = edges.filter((dependency) => dependency.kind === null);
     const development = edges.filter((dependency) => dependency.kind === "dev");
-    if (normal.length !== 1 || (normal[0]?.features ?? []).length !== 0) {
+    if (normal.length !== 1
+      || !exactDependencyInventory(normal, [EXPECTED_APP_TELEGRAM_DEPENDENCIES[0]])) {
       violations.push("extractum: production extractum-telegram edge must be feature-free");
     }
     if (development.length !== 1
-      || [...(development[0]?.features ?? [])].sort().join(",") !== "app-test-support") {
+      || !exactDependencyInventory(development, [EXPECTED_APP_TELEGRAM_DEPENDENCIES[1]])) {
       violations.push("extractum: dev extractum-telegram edge must enable only app-test-support");
     }
+    if (!exactDependencyInventory(edges, EXPECTED_APP_TELEGRAM_DEPENDENCIES)) {
+      violations.push("extractum: Telegram dependency kinds or targets drifted");
+    }
+
+    const appNode = resolvedNode(metadata, app.id);
+    const resolvedEdges = (appNode?.deps ?? []).filter(({ pkg }) => pkg === producer.id);
+    if (resolvedEdges.length !== 1 || !exactDependencyKinds(resolvedEdges[0], [null, "dev"])) {
+      violations.push("extractum: resolver-v2 Telegram normal/dev edge semantics drifted");
+    }
+  }
+
+  const producerNode = resolvedNode(metadata, producer.id);
+  if (!producerNode || sortedJson(producerNode.features ?? []) !== sortedJson(["app-test-support"])) {
+    violations.push("extractum-telegram: resolved app-test-support feature drifted");
+  }
+  const expectedResolvedDependencies = EXPECTED_PRODUCER_DEPENDENCIES
+    .filter(([name, kind]) => !(name === "tokio" && kind === "dev"))
+    .map(([name]) => String(name).replaceAll("-", "_"));
+  const actualResolvedDependencies = (producerNode?.deps ?? []).map(({ name }) => name);
+  if (sortedJson(actualResolvedDependencies) !== sortedJson(expectedResolvedDependencies)) {
+    violations.push("extractum-telegram: resolved dependency inventory drifted");
+  }
+  const tokioResolved = (producerNode?.deps ?? []).filter(({ name }) => name === "tokio");
+  if (tokioResolved.length !== 1 || !exactDependencyKinds(tokioResolved[0], [null, "dev"])) {
+    violations.push("extractum-telegram: resolved Tokio normal/dev edge semantics drifted");
+  }
+
+  const workspaceMembers = new Set(metadata?.workspace_members ?? []);
+  const featureMentions = [];
+  for (const workspace of (metadata?.packages ?? []).filter(({ id }) => workspaceMembers.has(id))) {
+    if (Object.prototype.hasOwnProperty.call(workspace.features ?? {}, "app-test-support")) {
+      featureMentions.push(`${workspace.name}|feature`);
+    }
+    for (const dependency of workspace.dependencies ?? []) {
+      if ((dependency.features ?? []).includes("app-test-support")) {
+        featureMentions.push(`${workspace.name}|${dependency.kind ?? "normal"}`);
+      }
+    }
+  }
+  if (sortedJson(featureMentions) !== sortedJson([
+    "extractum-telegram|feature",
+    "extractum|dev",
+  ])) {
+    violations.push("Cargo metadata: app-test-support feature mentions drifted");
   }
   return violations;
 }
@@ -503,7 +502,6 @@ const evaluators = new Map([
   ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
   ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],
   ["rule:telegram-phase-8b-authority-integrity", evaluateTelegramPhase8BAuthorityIntegrity],
-  ["rule:telegram-repository-path-safety", evaluateTelegramRepositoryPathSafety],
 ]);
 
 export const registeredRuleIds = Object.freeze([...evaluators.keys()].sort());

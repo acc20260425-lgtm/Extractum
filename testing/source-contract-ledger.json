@@ -4696,9 +4696,37 @@
       "authorityHash": "954c54374d7e42390fdc5e54a288baee161cfef488a1a8d2431790efa3d234b0",
       "lineage": [],
       "invariant": "The source-group Sources tab is a route-free leaf component.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:analysis-source-group-tab-leaf-boundary"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            12
+          ],
+          "invariant": "The source-group Sources leaf exposes its accessible region, grouped Telegram and YouTube material, selected/evidence focus, per-source paging callbacks, and no duplicate focus control.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group sources as a route-free tab leaf"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "invariant": "The leaf imports no route API and composes neither the route-owning shell nor per-source activity view.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:analysis-source-group-tab-leaf-boundary"
+          ]
+        }
       ]
     },
     {
@@ -4752,9 +4780,33 @@
       "authorityHash": "86574a89e7caf07e5f0baefc356b13a5ef57752706f27f6a967feb4932ee662d",
       "lineage": [],
       "invariant": "Source-group activity is kept separate from per-source activity.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:analysis-source-group-activity-boundary"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "invariant": "Group subjects render group-owned activity while source subjects render the user-visible per-source activity surface.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards",
+            "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > covers Telegram source activity without adding backend job APIs"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            3,
+            4,
+            7
+          ],
+          "invariant": "The canonical shell composes distinct group and source activity modules under exact positive activity-tab subject branches.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:analysis-source-group-activity-boundary"
+          ]
+        }
       ]
     },
     {
@@ -8998,9 +9050,9 @@
       "authorityHash": "b405488f8235703e223746408542a96214abf7ca8ca2f3fb253335cfb5c38059",
       "lineage": [],
       "invariant": "Telegram contract readers accept only existing repository-relative paths and reject escapes.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-repository-path-safety"
+        "test:vitest:src/lib/telegram-contract-paths.behavior.test.ts#Telegram contract paths > reads only existing repository-relative files and rejects escapes"
       ]
     },
     {
@@ -9020,7 +9072,7 @@
       "invariant": "Phase 8 lifecycle data uses only recognized retained values.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/telegram-contract-paths.behavior.test.ts#recognizes the retained Phase 8 lifecycle vocabulary and paths"
+        "test:vitest:src/lib/telegram-contract-paths.behavior.test.ts#Telegram contract paths > recognizes the retained Phase 8 lifecycle vocabulary and paths"
       ]
     },
     {

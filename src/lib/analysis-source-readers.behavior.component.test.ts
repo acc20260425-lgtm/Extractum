@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
+import SourceGroupSourcesView from "$lib/components/analysis/source-group-sources-view.svelte";
 import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
 import type { SourceBrowserSubject } from "$lib/source-browser-model";
 import type { SourceReaderItem } from "$lib/source-reader-model";
@@ -1234,6 +1235,62 @@ describe("analysis source readers", () => {
     const activity = screen.getByRole("region", { name: "Source group activity" });
     expect(activity.textContent).toContain("Group activity is not available yet. Source jobs are still tracked per source.");
     expect(screen.queryByRole("region", { name: "Detailed source jobs" })).toBeNull();
+  });
+
+  it("renders source group sources as a route-free tab leaf", async () => {
+    const onLoadMoreSource = vi.fn();
+    const highlightedRef = "group:youtube:highlighted";
+    const props = {
+        items: [
+          readerItem({
+            id: "telegram-group-row",
+            sourceId: 1,
+            sourceTitle: "Research channel",
+            content: "Grouped Telegram evidence",
+          }),
+          readerItem({
+            id: "youtube-group-row",
+            sourceId: 2,
+            sourceTitle: "Research video",
+            ref: highlightedRef,
+            kind: "youtube_transcript",
+            content: "Grouped YouTube evidence",
+            youtubeStartSeconds: 12,
+            youtubeEndSeconds: 18,
+            selected: true,
+          }),
+        ],
+        selectedGroupSourceId: null,
+        loading: false,
+        hasMoreBySource: { 1: true, 2: true },
+        youtubeDetailsBySource: { 2: youtubeVideoDetail({
+          summary: { ...youtubeVideoDetail().summary, sourceId: 2 },
+          sourceMetadata: { ...youtubeVideoDetail().sourceMetadata, sourceId: 2 },
+        }) },
+        selectedTraceRef: highlightedRef,
+        highlightToken: evidenceToken("group-leaf-focus", highlightedRef),
+        formatTimestamp,
+        onLoadMoreSource,
+      };
+    const view = render(SourceGroupSourcesView, { props });
+
+    const leaf = screen.getByRole("region", { name: "Source group sources" });
+    expect(screen.getByRole("region", { name: "Research channel" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Research video" })).toBeTruthy();
+    expect(screen.getByText("Grouped Telegram evidence")).toBeTruthy();
+    const youtubeRow = screen.getByText("Grouped YouTube evidence").closest("li");
+    expect(youtubeRow?.classList.contains("selected")).toBe(true);
+    expect(youtubeRow?.getAttribute("data-evidence-highlighted")).toBe("true");
+    expect(leaf.textContent).not.toContain("Source focus");
+
+    const loadMoreButtons = screen.getAllByRole("button", { name: /Load (older messages|more transcript)/ });
+    expect(loadMoreButtons).toHaveLength(2);
+    for (const button of loadMoreButtons) await fireEvent.click(button);
+    expect(onLoadMoreSource.mock.calls).toEqual([[1], [2]]);
+
+    await view.rerender({ ...props, selectedGroupSourceId: 2 });
+    expect(screen.queryByRole("region", { name: "Research channel" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Research video" })).toBeTruthy();
   });
 
   it("groups source group material by source", async () => {

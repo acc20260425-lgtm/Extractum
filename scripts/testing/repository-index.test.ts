@@ -212,12 +212,103 @@ describe("RepositoryIndex", () => {
       {
         name: "CanonicalAlias",
         attributes: [],
-        branches: [{ conditionIdentifiers: ["groupSubject"], polarity: "consequent" }],
+        branches: [{
+          condition: { kind: "identifier", name: "groupSubject" },
+          conditionIdentifiers: ["groupSubject"],
+          polarity: "consequent",
+        }],
       },
       {
         name: "NamedAlias",
         attributes: [],
-        branches: [{ conditionIdentifiers: ["groupSubject"], polarity: "alternate" }],
+        branches: [{
+          condition: { kind: "identifier", name: "groupSubject" },
+          conditionIdentifiers: ["groupSubject"],
+          polarity: "alternate",
+        }],
+      },
+    ]);
+  });
+
+  it("retains complete Svelte branch predicates instead of identifier presence", () => {
+    const { index } = fixtureIndex({
+      "src/example.svelte": [
+        "{#if activeTab === \"activity\" && !groupSubject}",
+        "  <GroupActivity />",
+        "{:else if activeTab === \"activity\" || sourceSubject !== null}",
+        "  <SourceActivity />",
+        "{/if}",
+      ].join("\n"),
+    });
+
+    expect(index.getSvelte("src/example.svelte").components).toEqual([
+      {
+        name: "GroupActivity",
+        attributes: [],
+        branches: [{
+          condition: {
+            kind: "binary",
+            operator: "&&",
+            left: {
+              kind: "binary",
+              operator: "===",
+              left: { kind: "identifier", name: "activeTab" },
+              right: { kind: "string", value: "activity" },
+            },
+            right: {
+              kind: "unary",
+              operator: "!",
+              operand: { kind: "identifier", name: "groupSubject" },
+            },
+          },
+          conditionIdentifiers: ["activeTab", "groupSubject"],
+          polarity: "consequent",
+        }],
+      },
+      {
+        name: "SourceActivity",
+        attributes: [],
+        branches: [
+          {
+            condition: {
+              kind: "binary",
+              operator: "&&",
+              left: {
+                kind: "binary",
+                operator: "===",
+                left: { kind: "identifier", name: "activeTab" },
+                right: { kind: "string", value: "activity" },
+              },
+              right: {
+                kind: "unary",
+                operator: "!",
+                operand: { kind: "identifier", name: "groupSubject" },
+              },
+            },
+            conditionIdentifiers: ["activeTab", "groupSubject"],
+            polarity: "alternate",
+          },
+          {
+            condition: {
+              kind: "binary",
+              operator: "||",
+              left: {
+                kind: "binary",
+                operator: "===",
+                left: { kind: "identifier", name: "activeTab" },
+                right: { kind: "string", value: "activity" },
+              },
+              right: {
+                kind: "binary",
+                operator: "!==",
+                left: { kind: "identifier", name: "sourceSubject" },
+                right: { kind: "null" },
+              },
+            },
+            conditionIdentifiers: ["activeTab", "sourceSubject"],
+            polarity: "consequent",
+          },
+        ],
       },
     ]);
   });
