@@ -67,11 +67,13 @@ Before writing each next detailed plan:
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
-Slice 3B is the latest completed detailed-plan checkpoint. It closed 46 rows
-across the Projects workspace and analysis report canvas cohorts, leaving 437
-open rows in the live ledger, and its authoritative unsandboxed full gate is
-green. Slice 3C planning from the live ledger is next and must not extend this
-evidence task into another cohort. Slice 4 continues without Nx under the
-approved TestingManifest architecture. The separate disposable Slice 2C Nx
-decision spike remains deferred until after Slice 4 has committed; no Nx
-package or configuration is adopted before then.
+Slice 3B's historical implementation checkpoint closed 46 rows across the
+Projects workspace and analysis report canvas cohorts. The follow-up integration
+checkpoint now observes 436 open ledger rows after SC-000355 closure and
+SC-000649 evidence correction. After two fail-closed source-contract repairs
+and mechanical rustfmt, its final fresh unsandboxed `npm.cmd run verify` exited
+0 in 383.4 seconds. The integration handoff is green; Slice 3C may plan from
+this ledger state but must not expand this completed evidence checkpoint.
+Slice 4 continues without Nx under the approved TestingManifest architecture.
+The separate disposable Slice 2C Nx decision spike remains deferred until after
+Slice 4 has committed; no Nx package or configuration is adopted before then.

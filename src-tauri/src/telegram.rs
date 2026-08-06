@@ -765,6 +765,19 @@ mod tests {
         )
         .await;
 
+        let statuses = state.statuses.lock().await;
+        for (account_id, message) in [
+            (7, "missing credentials"),
+            (8, "Telegram request failed: runtime unavailable"),
+        ] {
+            let status = statuses
+                .get(&account_id)
+                .unwrap_or_else(|| panic!("missing failed status for account {account_id}"));
+            assert_eq!(status.status, STATUS_RESTORE_FAILED);
+            assert_eq!(status.message.as_deref(), Some(message));
+        }
+        drop(statuses);
+
         assert_eq!(
             *order.lock().expect("read restore order"),
             [

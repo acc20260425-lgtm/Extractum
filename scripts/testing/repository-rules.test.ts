@@ -644,6 +644,18 @@ const telegramStructuredFixtures = {
         metadata.resolve.nodes.find(({ id }: any) => id === selected.id)!.features.push("impl-serde");
         return cargoIndex(metadata);
       },
+      "reorders the generated baseline packages": () => {
+        const index = cargoIndex();
+        return {
+          ...index,
+          getJson(inputPath: string) {
+            const value = index.getJson(inputPath);
+            return inputPath === GRAMMERS_BASELINE_PATH
+              ? { ...value, packages: [...value.packages].reverse() }
+              : value;
+          },
+        };
+      },
     },
   },
 } as const;
@@ -735,6 +747,25 @@ describe("repository rule registry", () => {
         expectSemanticViolations(evaluateRule({ id, index: mutationIndex }).violations, `${id}: ${name}`);
       }
     }
+  });
+
+  it("rule:telegram-crate-dependency-ownership rejects a reordered generated baseline", () => {
+    const fixture = telegramStructuredFixtures["rule:telegram-crate-dependency-ownership"];
+    expect(evaluateRule({
+      id: "rule:telegram-crate-dependency-ownership",
+      index: fixture.positive(),
+    })).toEqual({
+      id: "rule:telegram-crate-dependency-ownership",
+      violations: [],
+    });
+
+    expectSemanticViolations(
+      evaluateRule({
+        id: "rule:telegram-crate-dependency-ownership",
+        index: fixture.mutations["reorders the generated baseline packages"](),
+      }).violations,
+      "rule:telegram-crate-dependency-ownership: reordered generated baseline",
+    );
   });
 
   it("converts declared-input parse failures to INFRA_ERROR violations", () => {

@@ -11,7 +11,7 @@ no scanner and no browser harness.
 | Legacy file | Rows | Ledger dispositions |
 | --- | ---: | --- |
 | `src/lib/research-projects-route-contract.test.ts` | SC-000517--SC-000542 (26) | 20 behavior, 3 mixed, 3 delete after the corrections below |
-| `src/lib/analysis-report-canvas.test.ts` | SC-000138--SC-000157 (20) | 20 behavior |
+| `src/lib/analysis-report-canvas.test.ts` | SC-000138--SC-000157 (20) | 16 Canvas behavior + 4 route-receiver behavior (SC-000151--SC-000154) |
 
 Per-row replacement identities and deletion reasons are already frozen in the
 ledger. Apart from the four documented row corrections and component-owner
@@ -54,7 +54,7 @@ subgroups form an exact, non-overlapping partition of every assertion ordinal.
 
 ## Component Project Ownership
 
-Both replacements are rendered Svelte suites and must land in the `component`
+All three replacement files are rendered Svelte suites and must land in the `component`
 Vitest project, whose only include pattern is `src/**/*.component.test.ts`.
 They therefore use the Slice 3A `*.behavior.component.test.ts` suffix, and the
 ledger `replacementIds` paths are updated to match.
@@ -63,9 +63,10 @@ Replacement resolution compares the complete declaration title exactly. The
 23 required Projects replacement declarations contain only each `it` title,
 so they remain top-level and must not gain a `describe` prefix. Additional
 top-level smoke declarations with distinct titles are permitted. The
-report-canvas IDs include `report canvas component contract >`; that suite
-therefore retains `describe("report canvas component contract")` around its 20
-replacement declarations.
+report-canvas IDs include `report canvas component contract >`; the main Canvas
+suite retains `describe("report canvas component contract")` around its 16
+component-owned declarations, and the route-receiver suite uses the same exact
+describe title for SC-000151--SC-000154.
 
 ## Renderability and SVAR Boundary
 
@@ -90,7 +91,8 @@ treated as evidence for these distinct components.
 
 The analysis component directory has no existing component test. The
 report-canvas cohort therefore starts with one minimal successful render of
-`report-canvas.svelte` before implementing its 20 replacement declarations.
+`report-canvas.svelte` before implementing its 16 component-owned declarations;
+SC-000151--SC-000154 are kept in the dedicated route-receiver suite.
 
 ## Route Ownership
 
@@ -131,13 +133,13 @@ Inherits the Non-Goals and Timing Principles of the program design and the
 Global Constraints of Slice 3A. The source-reader guardrail is enforced by
 `scripts/testing/test-conventions.test.ts`, not by this document.
 
-Neither new behavior suite may use `?raw`, `readFileSync`, or another direct
+None of the three behavior suites may use `?raw`, `readFileSync`, or another direct
 production-source reader, and this slice adds no `sourceReaderExceptions`
 entry. If a frozen behavior row cannot be demonstrated through rendered DOM,
 callbacks, or a direct module import, implementation stops for a design
 revision instead of recording nominal evidence.
 
-The expected implementation is two focused component suites totaling roughly
+The expected implementation is three focused component suites totaling roughly
 1,000--1,800 lines for 43 behavior-bearing rows, including component smokes and
 the four route-mock fixtures; this is a planning estimate, not a metric or
 acceptance threshold.

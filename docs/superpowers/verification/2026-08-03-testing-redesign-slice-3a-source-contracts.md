@@ -26,6 +26,21 @@ The live validator now reports 671 total rows; the open count fell from 670
 before the first cutover to 483. It also reports 194 runner candidates: 187
 Vitest files and 7 Playwright files, with bidirectional ownership intact.
 
+## Reviewed Post-Cutover Legacy-Row Corrections
+
+The whole-branch audit made two out-of-cohort legacy declaration corrections
+explicit. Both rows remain open and keep their original assertion counts,
+authority hashes, invariants, and resolution metadata; these corrections are
+not closure evidence.
+
+| Row | Frozen source hash | Corrected source hash | Reason |
+| --- | --- | --- | --- |
+| SC-000082 | `08a81cb13930622e9737446ee75f7ce28399d63ec8a823c1f037ae4102b4b8cb` | `c92b40c78f1fe5a9cea64a1b5d7311c1a8cc0417470cbc5051a070e379b34a36` | The still-live six-table-owner declaration stopped requiring marker text from the deliberately deleted `analysis-application-contract.test.ts`; it now asserts that the obsolete contract is absent. Its 103 assertions and `e2044d88492da370b874ecbfec3b2281dfd21f2c2233382c551e1ad25cd4dd98` authority hash are unchanged. |
+| SC-000090 | `ec2ff741bfba67d3187a3b5addb8b29142caa6ce6ff906c66958ff5320bfe6cf` | `414f093b4c95bbc9b5a0d206176dfbc22661e61f021e1fac4598b1ea8d3ec8a1` | The still-live command/event/AppError declaration stopped requiring a declaration title from that deleted contract and now asserts its absence. Its 25 assertions and `b3897d2086441d81ac175eb2682df4eb1f73b34414e70909d19cde534927ed76` authority hash are unchanged. |
+
+The live validator continues to fail closed on any later source, assertion,
+authority, manual-range, or resolution drift in either corrected row.
+
 ## Structured Authority
 
 The final registry is exactly these ten implemented IDs:

@@ -3082,7 +3082,7 @@
       "invariant": "Submits NotebookLM export for either current source or current source group.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > submits NotebookLM export for either current source or current source group"
+        "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > submits NotebookLM export for either current source or current source group"
       ]
     },
     {
@@ -3096,7 +3096,7 @@
       "invariant": "Opens NotebookLM export for Telegram source groups without the old single-source guard.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > opens NotebookLM export for Telegram source groups without the old single-source guard"
+        "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > opens NotebookLM export for Telegram source groups without the old single-source guard"
       ]
     },
     {
@@ -3110,7 +3110,7 @@
       "invariant": "Passes transient evidence highlight tokens from route to source surfaces.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces"
+        "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces"
       ]
     },
     {
@@ -3124,7 +3124,7 @@
       "invariant": "Passes focused group transcript segments from route to source surfaces.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces"
+        "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces"
       ]
     },
     {
@@ -5881,13 +5881,13 @@
       "id": "SC-000355",
       "path": "src/lib/crate-extraction-shell-cap-contract.test.ts",
       "title": "crate extraction timing policy > checks the generated Grammers feature baseline",
-      "sourceHash": "7f0ebda2cc220a08897dbadbff213cccb7fc4c8738782e6b3b686f1b75b2356d",
-      "assertionCount": 9,
-      "authorityHash": "f5719cb6ef1f418cc376c04c03ea4ab8fb175eadf506995fe6479efd38f4759c",
+      "sourceHash": "8b64700cf95011182de84cf012ffa76078b4bc2e9dec14cd954c3dda56adcef7",
+      "assertionCount": 10,
+      "authorityHash": "1090837c6ab5086ea754b82b7fdbbc3a0f661a309d8ed6498527ccb6bb0f4ff7",
       "lineage": [],
       "invariant": "The checked Grammers feature baseline is derived from locked Cargo metadata and remains reproducible.",
       "disposition": "architecture",
-      "replacementIds": ["rule:telegram-grammers-feature-baseline"]
+      "replacementIds": ["rule:telegram-crate-dependency-ownership"]
     },
     {
       "id": "SC-000356",

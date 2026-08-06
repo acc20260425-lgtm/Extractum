@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { generateIdentityAuthority } from "../telegram-8b-test-identities.mjs";
 import { generateSymbolAuthority } from "../telegram-8b-symbol-map.mjs";
+import { generateFeatureBaseline } from "../telegram-grammers-feature-baseline.mjs";
 
 const TELEGRAM_PATH = "src/lib/telegram-contract-paths.ts";
 const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface.svelte";
@@ -453,6 +454,17 @@ function evaluateTelegramCrateDependencyOwnership(index) {
   const metadata = index.getCargoMetadata();
   const baseline = index.getJson(GRAMMERS_BASELINE_PATH);
   const violations = [];
+  let generatedBaseline;
+  try {
+    generatedBaseline = generateFeatureBaseline(metadata);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    violations.push(`Cargo metadata: cannot generate Grammers feature baseline: ${detail}`);
+    return violations;
+  }
+  if (!sameJson(baseline, generatedBaseline)) {
+    violations.push(`${GRAMMERS_BASELINE_PATH}: generated baseline is not canonical or reproducible`);
+  }
   const app = workspacePackage(metadata, "extractum");
   const producer = workspacePackage(metadata, "extractum-telegram");
   if (!app || !producer) return ["Cargo metadata: missing Telegram owner package"];

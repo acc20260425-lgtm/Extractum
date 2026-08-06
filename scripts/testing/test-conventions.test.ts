@@ -178,7 +178,6 @@ describe("test conventions", () => {
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
       "rule:telegram-phase-8b-authority-integrity",
-      "rule:telegram-repository-path-safety",
     ]);
 
     expect(directTextReaderViolations({

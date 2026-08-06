@@ -1239,20 +1239,38 @@ it("refreshes Workspace source content when source sync jobs finish", async () =
   expect(api.listProjects).toHaveBeenCalledOnce();
   expect(api.listProjectSources).toHaveBeenCalledOnce();
 
-  for (const [index, status] of ["succeeded", "failed", "cancelled"].entries()) {
-    const callsBeforeRefresh = index + 1;
-    onSourceJob({ status });
-    await vi.advanceTimersByTimeAsync(349);
-    expect(api.listProjects).toHaveBeenCalledTimes(callsBeforeRefresh);
-    expect(api.listProjectSources).toHaveBeenCalledTimes(callsBeforeRefresh);
+  onSourceJob({ status: "succeeded" });
+  await vi.advanceTimersByTimeAsync(349);
+  expect(api.listProjects).toHaveBeenCalledOnce();
+  expect(api.listProjectSources).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(1);
+  await tick();
+  await Promise.resolve();
+  expect(api.listProjects).toHaveBeenCalledTimes(2);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(2);
+  expect(api.listProjectSources).toHaveBeenNthCalledWith(2, 1);
 
-    await vi.advanceTimersByTimeAsync(1);
-    await tick();
-    await Promise.resolve();
-    expect(api.listProjects).toHaveBeenCalledTimes(callsBeforeRefresh + 1);
-    expect(api.listProjectSources).toHaveBeenCalledTimes(callsBeforeRefresh + 1);
-    expect(api.listProjectSources).toHaveBeenNthCalledWith(callsBeforeRefresh + 1, 1);
-  }
+  onSourceJob({ status: "failed" });
+  await vi.advanceTimersByTimeAsync(349);
+  expect(api.listProjects).toHaveBeenCalledTimes(2);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(1);
+  await tick();
+  await Promise.resolve();
+  expect(api.listProjects).toHaveBeenCalledTimes(3);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(3);
+  expect(api.listProjectSources).toHaveBeenNthCalledWith(3, 1);
+
+  onSourceJob({ status: "cancelled" });
+  await vi.advanceTimersByTimeAsync(349);
+  expect(api.listProjects).toHaveBeenCalledTimes(3);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(3);
+  await vi.advanceTimersByTimeAsync(1);
+  await tick();
+  await Promise.resolve();
+  expect(api.listProjects).toHaveBeenCalledTimes(4);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(4);
+  expect(api.listProjectSources).toHaveBeenNthCalledWith(4, 1);
 
   view.unmount();
   expect(api.unlistenSourceJobs).toHaveBeenCalledOnce();
