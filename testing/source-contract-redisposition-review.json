@@ -258,7 +258,14 @@
         "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
         "git diff HEAD --check"
       ],
-      "successfulBaseline": null,
+      "successfulBaseline": {
+        "executionOrder": 2,
+        "seconds": 244.6,
+        "exitCode": 0,
+        "authorization": "explicit user-authorized compensating verify after complete GREEN"
+      },
+      "seconds": 244.6,
+      "exitCode": 0,
       "observations": [
         {
           "executionOrder": 1,
@@ -266,6 +273,12 @@
           "exitCode": 1,
           "failedGate": "npm run test:unit",
           "failure": "Static draft integration RED: source-contract-redisposition-review.json did not exist."
+        },
+        {
+          "executionOrder": 2,
+          "seconds": 244.6,
+          "exitCode": 0,
+          "authorization": "explicit user-authorized compensating verify after complete GREEN"
         }
       ]
     }
@@ -3392,7 +3405,7 @@
     "replacementUnitCeiling": 46,
     "legacyDominatesFullUnitCeiling": false,
     "scalableForecastPercent": 0,
-    "netGateForecastPercent": null
+    "netGateForecastPercent": 0
   },
   "acceptedLoss": {
     "rows": 0,
