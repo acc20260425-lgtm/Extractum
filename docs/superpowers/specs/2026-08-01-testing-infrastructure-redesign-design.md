@@ -518,6 +518,212 @@ Unsupported syntax produces an explicit manual row instead of expanding a
 custom parser indefinitely. The completed ledger remains checked in as review
 evidence.
 
+### Pre-Slice 3C remainder redisposition checkpoint
+
+Before authoring the detailed Slice 3C plan, perform one separate, reviewable
+redisposition checkpoint over the validator-open remainder. This checkpoint
+changes ledger resolution decisions only. It does not remove or rewrite tests,
+change production code, change Vitest ownership, extend RepositoryIndex or the
+repository-rule engine, or reopen completed Slice 3A or Slice 3B evidence.
+
+#### Scope reconciliation
+
+At integration checkpoint `f86e682b`, 438 ledger rows name paths that still
+exist, but only 436 are open according to the transition validator. SC-000355
+and SC-000366 are already closed through reviewed replacements although their
+containing legacy files remain. They are outside this review together with the
+other 233 closed rows. The immutable closed population is therefore 235 rows.
+
+The redisposition scope is exactly the 436 validator-open rows in 86 files:
+
+- 276 current `behavior` rows;
+- 144 current `architecture` rows;
+- 16 current `delete` rows;
+- zero current open mixed rows;
+- 124 rows marked `manual`, which is an extraction limitation rather than a
+  disposition.
+
+The two large doc-reading contracts contribute 26 open rows: 16 from
+`src/lib/analysis-crate-boundary-contract.test.ts` and 10 from
+`src/lib/crate-extraction-shell-cap-contract.test.ts`. The remaining pass
+contains 410 rows in 84 smaller files. The rule is calibrated first against
+adversarial boundary cases from the 410-row tail, then applied to the 26-row
+large-contract pass and finally to the complete tail.
+
+The 3A and 3B verification records and the `Current Detailed Plan` section of
+the program index are immutable inputs. Redisposition is committed as its own
+checkpoint before the Slice 3C plan is written.
+
+#### Review artifact and frozen evidence
+
+Commit both:
+
+- `testing/source-contract-redisposition-review.json`, the decision artifact;
+- `scripts/testing/source-contract-redisposition-review.mjs`, the bounded
+  reproducibility carrier with `check` and `apply` modes.
+
+The artifact records its exact review base commit, the ledger's
+`frozenAtCommit`, the closed-row digest, reason-class catalog, protected-row
+catalog, normative criticality sources, measured replacement mechanisms,
+per-row decisions, independent-review evidence, and the numerical 3C+
+forecast. Every scoped decision is pinned by `id + sourceHash`. `apply` refuses
+source-hash drift. A second invariant hash is not stored because the ledger's
+existing `sourceHash`, `authorityHash`, and `assertionCount` checks already
+protect live evidence.
+
+The original invariant text is frozen during redisposition. A factual
+invariant correction requires a separately listed and approved specification
+amendment; it cannot be smuggled into a disposition decision.
+
+An unresolved future `replacementIds` value on a still-live row is allowed.
+It keeps the row open and does not require the referenced test, rule, or tool
+to be implemented before this checkpoint. Delete decisions instead contain no
+`replacementIds` and require a specific non-placeholder `deletionReason`.
+
+#### Ordered disposition rule
+
+Apply the following classes in order. A row that matches no class is recorded
+as `UNCLASSIFIED` in the review artifact. `UNCLASSIFIED` is not a ledger
+disposition and blocks `apply`; it requires a new named class covering the
+entire matching group, never an individual override.
+
+0. `P0 protected-invariant`: a protected row ID cannot receive D1 through D5.
+1. `D1 completed-history-only`: the invariant records completed work only. The
+   operational test is whether a future code, configuration, or test commit
+   could violate it in a way that would be a defect. If yes, D1 is forbidden.
+2. `D2 implementation-shape`: exact names, source strings, statement order,
+   formatting, or composition have no independent contract.
+3. `D3 non-observable-visual`: CSS, DOM order, or visual detail cannot be
+   demonstrated truthfully by the available non-browser seam.
+4. `D4 duplicate-evidence`: an existing test, rule, compiler, Cargo metadata
+   check, or tool already proves the complete invariant. The decision cites
+   that exact owner.
+5. `A1 existing-structured-owner`: an existing structured rule, compiler, or
+   Cargo-metadata owner is the durable replacement.
+6. `T1 existing-tool-owner`: an existing maintained tool owns the generic
+   invariant.
+7. `B1 existing-behavior-owner`: an existing executable test proves the
+   behavior through a public seam.
+8. `B2 new-cheap-behavior`: a new Node unit or focused Rust test through a
+   cheap public seam is required.
+9. `B3 protected-expensive-behavior`: a new jsdom or browser test is required,
+   no cheaper truthful seam exists, and `criticalityRef` identifies an approved
+   normative source.
+10. `D5 accepted-loss`: the behavior is real, the only truthful mechanism is
+    expensive, the row is not P0, and no normative criticality source requires
+    retention. Its deletion reason enumerates the lost behavior and assertion
+    ordinals.
+
+`P0` and normative criticality are separate catalogs. P0 initially contains
+SC-000555 through SC-000560, SC-000511 through SC-000515, and SC-000420. It may
+be supplemented only by an exact citation to `AGENTS.md` sections 2, 6, or 7,
+or to an approved program-specification section. `criticalityRef` cites one of
+those normative sources rather than P0 membership. A P0 row without an A1,
+T1, B1, or B2 owner terminates at B3 by construction. A non-P0 row may also
+receive B3 when its normative citation is exact.
+
+D1 through D5 deletion reasons begin with the full class name and continue
+with row-specific explanatory text; a class code alone is not sufficient.
+
+If one row's assertion ordinals require different dispositions or owners,
+`apply` removes top-level `disposition`, `replacementIds`, and
+`deletionReason`, then writes at least two `subgroups`. The subgroup ordinals
+must form an exact, non-overlapping partition of `1..assertionCount`, and every
+subgroup carries its own invariant and resolution. No open mixed row exists
+before this checkpoint, so every resulting mixed row is new review evidence.
+
+#### Mechanism-level timing calibration
+
+Cost is a property of a replacement mechanism, not an invented per-row
+measurement. Measure the Slice 3B jsdom mechanism directly on the current
+checkout. Use these three replacement files as one command:
+
+- `src/lib/components/research-projects/projects-workspace.behavior.component.test.ts`;
+- `src/lib/analysis-report-canvas.behavior.component.test.ts`;
+- `src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts`.
+
+Measure fixed component startup separately with
+`src/lib/components/research-projects/SourceStatusCell.component.test.ts`.
+For each command, perform one unretained warm-up followed by three retained
+unsandboxed runs, and record the median wall time. Let `T3B` be the median for
+the three replacement files and `Tstartup` the median for the startup file.
+The artifact records:
+
+```text
+upperBoundPerRow = T3B / 46
+scalablePerRow = max(0, T3B - Tstartup) / 46
+upperForecast = upperBoundPerRow * proposedNewJsdomRows
+scalableForecast = scalablePerRow * proposedNewJsdomRows
+```
+
+`upperBoundPerRow` is explicitly a conservative upper bound: 59 declarations,
+including smoke declarations, and one fixed startup are amortized across the
+46 Slice 3B ledger rows. `scalableForecast` is the estimate used for gate
+growth. Both values are published in seconds.
+
+Run one fresh unsandboxed complete `verify` at the redisposition checkpoint and
+compare its gate inventory and conditions with the recorded 208.1, 321.3, and
+383.4 second observations. The 90-second program value remains an objective,
+not a row-admissibility filter. B3 admissibility depends only on its normative
+criticality evidence.
+
+The checkpoint-level growth ceiling is derived from the measured Slice 3B
+precedent rather than an arbitrary percentage:
+
+```text
+ceilingSeconds = max(0, T3B - Tstartup)
+ceilingPercent = ceilingSeconds / freshVerifySeconds * 100
+```
+
+All proposed 3C+ jsdom replacements together must have
+`scalableForecast <= ceilingSeconds`. If they exceed that ceiling, their row
+classes remain valid, but the redisposition checkpoint cannot be approved
+without a separate program amendment. The artifact reports the forecast in
+rows, assertion ordinals, seconds, and percentage of the fresh complete gate.
+
+#### Independent review and reproducibility
+
+Calibrate every named class with two or three manually reviewed cases nearest
+its boundary with an adjacent class, including the D5/B3 boundary. Then review
+the following populations independently at 100 percent:
+
+- all 26 rows in the two large doc-reading contracts;
+- all 124 live `manual` rows;
+- every P0 row and every mandatory security, import, and process invariant;
+- every B3 and D5 decision;
+- every newly mixed row.
+
+A deterministic ten-percent sample of all remaining rows checks mechanical
+application. A disagreement changes the rule or named class for the complete
+matching group and reruns that group; it never creates a per-row override.
+
+The acceptance evidence gives D5 its own table: row count, assertion-ordinal
+count, and the complete list of intentionally lost behavior. It also reports
+the mechanically calculated before/after disposition counts and the projected
+number and mechanism of future replacement owners.
+
+#### `check` and `apply` guarantees
+
+The committed carrier remains outside `verify`, but its `check` command is
+mandatory evidence for this checkpoint. It proves:
+
+- exact coverage of the 436 scoped `id + sourceHash` pairs;
+- absence of `UNCLASSIFIED` and individual overrides;
+- validity of reason classes, P0 membership, normative `criticalityRef` values,
+  D5 loss descriptions, and subgroup partitions;
+- byte-equivalence of all 235 closed rows;
+- a JSON-path allowlist limited to top-level resolution fields or a complete
+  replacement of those fields with `subgroups`;
+- numerical forecast consistency with the retained timing observations;
+- in-memory idempotence: applying the artifact twice produces identical ledger
+  bytes.
+
+`apply` writes only the allowed resolution paths in the 436 open rows. It
+cannot change row identity, path, title/manual metadata, source or authority
+hashes, assertion counts, lineage, invariant text, envelope fields, or source
+reader exceptions. The normal transition validator remains unchanged and the
+checkpoint closes only with a successful `npm.cmd run verify`.
+
 ### Transitional validation carrier
 
 Slice 2A introduces scripts/validate-testing-transition.mjs before census or
