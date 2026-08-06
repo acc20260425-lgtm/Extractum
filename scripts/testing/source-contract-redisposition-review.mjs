@@ -6,6 +6,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REVIEW_BASE_COMMIT = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const PATH_PRESENT_CLOSED_ROW_IDS = ["SC-000355", "SC-000366"];
+const MANDATORY_P0_SEED_IDS = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
+const CRITICALITY_SOURCES = new Map([
+  ["AGENTS_WINDOWS_SANDBOX", "AGENTS.md §2"],
+  ["AGENTS_DATABASE_OWNERSHIP", "AGENTS.md §6"],
+  ["AGENTS_SECURITY", "AGENTS.md §7"],
+  ["TESTING_SOURCE_CONTRACT_REPLACEMENT", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement"],
+  ["TESTING_BROWSER_COMPONENT_OWNERSHIP", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership"],
+  ["TESTING_COVERAGE_FLAKE_QUARANTINE", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy"],
+]);
 const CLASS_DISPOSITIONS = new Map([
   ["D1_COMPLETED_HISTORY_ONLY", "delete"],
   ["D2_IMPLEMENTATION_SHAPE", "delete"],
@@ -74,6 +83,14 @@ function issueList(issues) {
 
 function exactIds(items) {
   return Array.isArray(items) ? items.map((item) => item?.id).filter((id) => typeof id === "string") : [];
+}
+
+function resolutionIds(row) {
+  if (row?.disposition === "delete") return [];
+  return [
+    ...(row?.replacementIds ?? []),
+    ...(row?.subgroups ?? []).flatMap((subgroup) => subgroup?.disposition === "delete" ? [] : subgroup?.replacementIds ?? []),
+  ].filter((id) => typeof id === "string" && !id.startsWith("test:playwright:"));
 }
 
 function validateResolution(decision, row, protectedIds, resolvedOwners, issues) {
@@ -183,10 +200,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (artifact.scope?.closedRowsDigest !== sha256Text(canonicalJson(closedRows))) issues.push("scope: closedRowsDigest mismatch");
 
   const currentById = new Map(currentLedger.rows.map((row) => [row?.id, row]));
-  const resolvedOwners = new Set(baseLedger.rows.flatMap((row) => [
-    ...(row?.replacementIds ?? []),
-    ...(row?.subgroups ?? []).flatMap((subgroup) => subgroup?.replacementIds ?? []),
-  ]));
+  const resolvedOwners = new Set(closedRows.flatMap(resolutionIds));
   if (currentLedger.rows.length !== baseLedger.rows.length) issues.push("ledger: row count changed");
   for (const baseRow of baseLedger.rows) {
     const currentRow = currentById.get(baseRow.id);
@@ -221,8 +235,18 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
 
   const protectedRows = Array.isArray(artifact.protectedRows) ? artifact.protectedRows : [];
   const protectedIds = new Set(exactIds(protectedRows));
+  if (protectedIds.size !== protectedRows.length) issues.push("protectedRows: duplicate id");
   if (artifact.protectedRowsDigest !== sha256Text(canonicalJson(protectedRows))) issues.push("protectedRows: digest mismatch");
-  const criticalityIds = new Set(exactIds(artifact.criticalitySources));
+  const criticalityIds = new Set();
+  const seenCriticalityIds = new Set();
+  if (!Array.isArray(artifact.criticalitySources)) issues.push("criticalitySources: must be an array");
+  for (const source of artifact.criticalitySources ?? []) {
+    if (seenCriticalityIds.has(source?.id)) issues.push(`criticalitySources: duplicate id: ${source?.id}`);
+    seenCriticalityIds.add(source?.id);
+    if (Object.keys(source ?? {}).sort(compareText).join(",") !== "citation,id" || CRITICALITY_SOURCES.get(source?.id) !== source?.citation) issues.push(`criticalitySources: invalid built-in mapping: ${source?.id}`);
+    else criticalityIds.add(source.id);
+  }
+  for (const id of MANDATORY_P0_SEED_IDS) if (!protectedIds.has(id)) issues.push("protectedRows: mandatory P0 seed set mismatch");
   for (const protectedRow of protectedRows) if (!baseOpenIds.has(protectedRow?.id) || !criticalityIds.has(protectedRow?.criticalityRef)) issues.push(`protectedRows: invalid criticality source for ${protectedRow?.id}`);
   for (const decision of decisions) {
     const baseRow = baseLedger.rows.find((row) => row.id === decision.id);
@@ -237,18 +261,35 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   else {
     if (!independent.authorRunId || !independent.reviewer?.agentTaskId || independent.authorRunId === independent.reviewer.agentTaskId) issues.push("independentReview: authorRunId and reviewer agentTaskId must differ");
     if (independent.reviewer?.contextPolicy !== "blind-no-proposed-class-or-reason") issues.push("independentReview: unsupported contextPolicy");
+    const sample = independent.deterministicSample;
+    const expected = expectedSample(decisions, protectedIds);
+    const requiredBlindIds = new Set([
+      ...(Array.isArray(independent.calibrations) ? independent.calibrations : []).flatMap((item) => item?.rowIds ?? []),
+      ...(Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : []).flatMap((item) => item?.rowIds ?? []),
+      ...(Array.isArray(sample?.rowIds) ? sample.rowIds : []),
+    ]);
     const blinds = Array.isArray(independent.blindResults) ? independent.blindResults : [];
-    const blindById = new Map(blinds.map((item) => [item?.id, item]));
-    for (const decision of decisions) {
-      const blind = blindById.get(decision.id);
-      if (!blind) { issues.push(`${decision.id}: missing blind result`); continue; }
+    const blindById = new Map();
+    for (const blind of blinds) {
+      if (blindById.has(blind?.id)) issues.push(`independentReview: duplicate blind result: ${blind?.id}`);
+      blindById.set(blind?.id, blind);
+      if (!requiredBlindIds.has(blind?.id)) issues.push(`${blind?.id}: extraneous blind result`);
+      if (!CLASS_DISPOSITIONS.has(blind?.class) || blind?.class === "UNCLASSIFIED") issues.push(`${blind?.id}: blind result has an unsupported class`);
+      if (typeof blind?.reason !== "string" || !blind.reason.trim()) issues.push(`${blind?.id}: blind result requires a substantive reason`);
+      if (blind?.ownerEvidence !== undefined && (!Array.isArray(blind.ownerEvidence) || blind.ownerEvidence.some((owner) => typeof owner !== "string" || !owner.trim()))) issues.push(`${blind?.id}: blind ownerEvidence is invalid`);
+      if (blind?.criticalityRef !== undefined && !criticalityIds.has(blind.criticalityRef)) issues.push(`${blind?.id}: blind criticalityRef is invalid`);
+      if (blind?.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && !criticalityIds.has(blind?.criticalityRef)) issues.push(`${blind?.id}: blind protected behavior requires a valid criticalityRef`);
+      if (OWNER_CLASSES.has(blind?.class) && (!Array.isArray(blind.ownerEvidence) || !blind.ownerEvidence.some((owner) => resolvedOwners.has(owner)))) issues.push(`${blind?.id}: blind existing owner evidence is unresolved`);
+    }
+    for (const id of requiredBlindIds) {
+      const decision = decisions.find((item) => item.id === id);
+      if (!decision) { issues.push(`${id}: blind scope references no decision`); continue; }
+      const blind = blindById.get(id);
+      if (!blind) { issues.push(`${id}: missing blind result`); continue; }
       if (blind.reviewerRunId !== independent.reviewer?.agentTaskId) issues.push(`${decision.id}: reviewerRunId differs from reviewer task`);
       if (blind.sourceHash !== decision.sourceHash) issues.push(`${decision.id}: blind sourceHash drift`);
       if (blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
-      if (typeof blind.reason !== "string" || !blind.reason.trim()) issues.push(`${decision.id}: blind result requires a substantive reason`);
     }
-    const sample = independent.deterministicSample;
-    const expected = expectedSample(decisions, protectedIds);
     if (!sample || sample.algorithm !== "sha256-id-lowest-10-percent") issues.push("independentReview: unsupported deterministic sample algorithm");
     else {
       if (canonicalJson(sample.population) !== canonicalJson(expected.population)) issues.push("independentReview: deterministic sample population is stale");
@@ -269,21 +310,21 @@ export function applyReview({ artifact, baseLedger, currentLedger, baseTrackedPa
     const row = rowsById.get(decision.id);
     const resolution = resolutionForDecision(decision);
     if (!row || !resolution) continue;
+    const before = Object.fromEntries([...RESOLUTION_KEYS].filter((key) => own(row, key)).map((key) => [key, clone(row[key])]));
     for (const key of RESOLUTION_KEYS) delete row[key];
     if (own(resolution, "subgroups")) {
       row.subgroups = resolution.subgroups;
-      changedPaths.push(`rows[${decision.id}].subgroups`);
     } else {
       row.disposition = resolution.disposition;
-      changedPaths.push(`rows[${decision.id}].disposition`);
       if (own(resolution, "replacementIds")) {
         row.replacementIds = resolution.replacementIds;
-        changedPaths.push(`rows[${decision.id}].replacementIds`);
       }
       if (own(resolution, "deletionReason")) {
         row.deletionReason = resolution.deletionReason;
-        changedPaths.push(`rows[${decision.id}].deletionReason`);
       }
+    }
+    for (const key of RESOLUTION_KEYS) {
+      if (own(before, key) !== own(row, key) || (own(before, key) && canonicalJson(before[key]) !== canonicalJson(row[key]))) changedPaths.push(`rows[${decision.id}].${key}`);
     }
   }
   return { ledger, changedPaths: [...new Set(changedPaths)].sort(compareText) };
@@ -324,6 +365,11 @@ async function runCli() {
   const artifactPath = path.join(repoRoot, "testing", "source-contract-redisposition-review.json");
   const ledgerPath = path.join(repoRoot, "testing", "source-contract-ledger.json");
   const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
+  if (artifact.reviewBaseCommit !== REVIEW_BASE_COMMIT) {
+    process.stderr.write(`artifact: reviewBaseCommit must be ${REVIEW_BASE_COMMIT}\n`);
+    process.exitCode = 1;
+    return;
+  }
   const [baseLedger, baseTrackedPaths, currentLedger] = await Promise.all([
     loadBaseLedger({ repoRoot, commit: artifact.reviewBaseCommit }),
     loadBaseTrackedPaths({ repoRoot, commit: artifact.reviewBaseCommit }),
