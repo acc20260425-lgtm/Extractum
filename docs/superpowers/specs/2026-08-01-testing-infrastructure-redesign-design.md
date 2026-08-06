@@ -658,6 +658,28 @@ checkpoint, and request a program amendment. This gives browser work the same
 fail-closed outcome as a cost conversion would, without four Chromium runs,
 startup attribution, or a synthetic browser-to-jsdom exchange rate.
 
+An exact Playwright ID may count as B1 or D4 only when the unchanged transition
+validator already resolves that ID through current runner and verify evidence.
+At this checkpoint base the validator has no generic Playwright-resolution
+path, so none qualify. A file merely present in the Playwright census is not
+enough to claim resolution.
+
+Five open rows already carry unresolved future `test:playwright:` IDs. Resolve
+their D3/B3 boundary before the tail pass. They are non-normative visual details
+and therefore match D3 before B3:
+
+| Row | D3 loss recorded by redisposition |
+| --- | --- |
+| SC-000312 | Responsive desktop/mobile visibility of the menu trigger. |
+| SC-000323 | Visible active-row focus and selection affordance. |
+| SC-000352 | Two-line source titles remaining visible without clipping. |
+| SC-000353 | Centered single-line cells retaining overflow ellipsis. |
+| SC-000385 | Portaled dialog content remaining visibly layered and interactive above its overlay. |
+
+The calibration set must include D3/B3 explicitly. A later row reaches the
+browser stop only after D3 is tested and rejected because the invariant has
+normative criticality or independently observable behavior beyond visual detail.
+
 The artifact records:
 
 ```text
@@ -665,7 +687,6 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
-grossAddedForecast = scalableForecast
 netGateForecast = max(0, scalableForecast - Tlegacy)
 ```
 
@@ -673,7 +694,7 @@ netGateForecast = max(0, scalableForecast - Tlegacy)
 including smoke declarations, and one fixed startup are amortized across the
 46 Slice 3B ledger rows. `scalableForecast` is the estimate used for gate
 growth. `netGateForecast` exposes both added jsdom replacement cost and the
-measured legacy owner that 3C+ removes. Component, legacy, gross, and net values
+measured legacy owner that 3C+ removes. Component, legacy, scalable, and net values
 are published separately in seconds.
 
 Run one fresh unsandboxed complete `verify` at the redisposition checkpoint and
@@ -694,13 +715,13 @@ One proposed jsdom row consumes one unit. Browser owners are outside this
 checkpoint by the explicit stop rule above. This count is the binding
 guardrail. `netGateForecast` remains a disclosure of expected gate effect and
 cannot make the unit ceiling pass or fail. The artifact also reports
-whether `Tlegacy` exceeds the gross forecast at the full 46-unit ceiling so a
+whether `Tlegacy` exceeds the scalable forecast at the full 46-unit ceiling so a
 vacuously zero net forecast is visible rather than celebrated as a constraint.
 
 If proposed jsdom rows exceed 46, their row classes remain valid, but the
 redisposition checkpoint cannot be approved without a separate program
 amendment. The artifact reports jsdom rows and ordinals, removable legacy
-files, gross and net seconds, and percentage of the fresh complete gate.
+files, scalable and net seconds, and percentage of the fresh complete gate.
 
 #### Independent review and reproducibility
 
@@ -729,7 +750,8 @@ After any group-rule change, recompute the risk-cohort exclusions and the
 ten-percent remainder population. If that population changes, reselect the
 sample deterministically and review it again. Iterate until one complete pass
 changes neither group rules nor the sampled population; record the final
-population digest and iteration count.
+population digest and iteration count. Stop for explicit rule review if a fixed
+point has not been reached after three iterations.
 
 The P0 catalog freezes after the protected and normative-critical pass. A P0
 candidate discovered later returns the work to that pass, expands the catalog,

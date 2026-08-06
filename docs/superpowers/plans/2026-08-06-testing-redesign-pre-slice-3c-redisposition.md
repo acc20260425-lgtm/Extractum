@@ -72,7 +72,7 @@ type Decision = {
   sourceHash: string;
   authorRunId: string;
   class: ReasonClass;
-  reason: string;
+  reason?: string; // absent only while class is UNCLASSIFIED
   ownerEvidence?: string[];
   criticalityRef?: string;
   lostBehavior?: Array<{ assertionOrdinals: number[]; behavior: string }>;
@@ -116,7 +116,6 @@ type ReviewArtifact = {
     scalablePerRow: number;
     upperForecastSeconds: number;
     scalableForecastSeconds: number;
-    grossAddedForecastSeconds: number;
     netGateForecastSeconds: number;
     replacementUnitCeiling: 46;
     legacyDominatesFullUnitCeiling: boolean;
@@ -186,7 +185,7 @@ Closed-row bytes are `canonicalJson(baseLedger.rows.filter(row => !baseOpenIds.h
 
 - [ ] **Step 4: Write RED tests for the resolution allowlist and class ladder**
 
-Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, equal/missing `authorRunId` and reviewer `agentTaskId`, a decision whose `authorRunId` differs from the artifact author run, a blind result whose `reviewerRunId` differs from the reviewer task, blind `sourceHash` drift, an unsupported `contextPolicy`, stale sample populations/digests, non-deterministic sample IDs, and mechanically incorrect author/blind comparisons. The distinct recorded run IDs validate the observable consequence of separate executions; the harness-specific clean-context mechanism remains an execution precondition.
+Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Permit an absent `reason` only with `class: "UNCLASSIFIED"`; require a substantive reason for every classified decision. Reject class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, equal/missing `authorRunId` and reviewer `agentTaskId`, a decision whose `authorRunId` differs from the artifact author run, a blind result whose `reviewerRunId` differs from the reviewer task, blind `sourceHash` drift, an unsupported `contextPolicy`, stale sample populations/digests, non-deterministic sample IDs, and mechanically incorrect author/blind comparisons. The distinct recorded run IDs validate the observable consequence of separate executions; the harness-specific clean-context mechanism remains an execution precondition.
 
 ```ts
 expect(validateReview({ artifact: withDecision("SC-000001", {
@@ -198,7 +197,7 @@ expect(validateReview({ artifact: withDecision("SC-000001", {
 
 - [ ] **Step 5: Implement class, P0, criticality, owner, and D5 checks**
 
-Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact existing test/rule/tool owner, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. Reject every proposed `test:playwright:` replacement with `browser owner requires program amendment`. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
+Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact owner already resolved by the unchanged transition validator, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. A Playwright ID is allowed only if that same validator evidence already resolves the exact ID; the base has no such IDs, so every current or proposed unresolved `test:playwright:` replacement fails with `browser owner requires program amendment`. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
 
 - [ ] **Step 6: Write RED tests for mixed rows and idempotent apply**
 
@@ -262,7 +261,7 @@ Expected: FAIL because the artifact does not exist.
 
 - [ ] **Step 2: Create the deterministic draft artifact**
 
-Populate `reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e"`, copy the ledger's exact `frozenAtCommit`, record the current author task/run ID, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash` and author run ID, uses `class: "UNCLASSIFIED"`, and contains no fabricated resolution.
+Populate `reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e"`, copy the ledger's exact `frozenAtCommit`, record the current author task/run ID, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash` and author run ID, uses `class: "UNCLASSIFIED"`, omits `reason`, and contains no fabricated resolution.
 
 Run the focused integration test again.
 
@@ -314,7 +313,6 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
-grossAddedForecast = scalableForecast
 netGateForecast = max(0, scalableForecast - Tlegacy)
 replacementUnitCeiling = 46
 netGateForecastPercent = netGateForecast / freshVerifySeconds * 100
@@ -353,9 +351,21 @@ Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 
 - [ ] **Step 1: Select adversarial calibration cases from the 410-row tail**
 
-For each class, record two or three rows closest to an adjacent-class boundary. Include D1/D2, D3/D5, D4/A1, A1/T1, B1/B2, B2/B3, and B3/D5. For every selected row inspect the complete frozen declaration, its invariant and ordinals, candidate owner implementation, and normative source if claimed.
+For each class, record two or three rows closest to an adjacent-class boundary. Include D1/D2, D3/D5, D3/B3, D4/A1, A1/T1, B1/B2, B2/B3, and B3/D5. For every selected row inspect the complete frozen declaration, its invariant and ordinals, candidate owner implementation, and normative source if claimed.
 
 The author records proposed calibration decisions first. Then dispatch a separate reviewer agent with a clean context containing only each declaration, invariant, ordinals, candidate-owner inventory, class catalog, and normative sources. Do not provide the author's proposed class, reason, artifact decision, discussion, or diff. Store the reviewer's independently written class/reason under `blindResults`; only then calculate each calibration comparison. If no truthful example exists for a class, retain the class catalog but record an empty calibration with `result: "no_match"`; do not manufacture a row.
+
+Use the known unresolved browser references as the mandatory D3/B3 calibration set and decide them before any family pass:
+
+| Row | Required decision | Required row-specific D3 reason |
+| --- | --- | --- |
+| SC-000312 | D3 / delete | Responsive desktop/mobile menu-trigger visibility is a non-normative visual breakpoint detail with no truthful non-browser seam. |
+| SC-000323 | D3 / delete | Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam. |
+| SC-000352 | D3 / delete | Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam. |
+| SC-000353 | D3 / delete | Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam. |
+| SC-000385 | D3 / delete | Dialog/overlay visual stacking and pointer interactivity are non-normative browser-layering details with no truthful non-browser seam. |
+
+Each final `deletionReason` begins `D3 non-observable-visual:` and expands the table text. Remove the unresolved future Playwright replacement ID. If blind review finds normative criticality or independently observable behavior in any of the five, do not force D3; stop for the browser program amendment before continuing.
 
 - [ ] **Step 2: Classify the exact protected and normative-critical cohorts**
 
@@ -446,13 +456,13 @@ Send the sampled declarations, invariants, ordinals, candidate owners, catalog, 
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
-After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Continue until one full iteration changes neither the group rules nor the sample population; record the final population digest and iteration count. The carrier rejects a comparison whose sample was derived from an earlier population.
+After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Continue until one full iteration changes neither the group rules nor the sample population; record the final population digest and iteration count. Permit at most three iterations. If the third still changes rules or population, keep `apply` blocked and stop for explicit rule review. The carrier rejects more than three iterations and any comparison whose sample was derived from an earlier population.
 
 - [ ] **Step 8: Calculate the final forecast and loss summaries**
 
 Count proposed owners by class/mechanism in rows and assertion ordinals. Assert that no replacement ID uses the Playwright namespace. Set `proposedNewJsdomRows`/ordinals from B3 jsdom rows and subgroups, then recalculate component, gross, removable-legacy, and net fields. Require `proposedNewJsdomRows <= 46`. If the count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
 
-Publish `legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * 46` and the actual comparison of `Tlegacy` with `grossAddedForecastSeconds`. These are explicit diagnostics: net seconds remain disclosure and never determine whether the 46-unit constraint passes.
+Publish `legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * 46` and the actual comparison of `Tlegacy` with `scalableForecastSeconds`. These are explicit diagnostics: net seconds remain disclosure and never determine whether the 46-row constraint passes.
 
 Build `acceptedLoss.items` from every D5 simple or subgroup decision, sorted by ID then first ordinal. Require the summary's row count, ordinal count, and complete behavior list to equal the decisions mechanically.
 
@@ -577,7 +587,7 @@ Run: `git commit -m "test: apply pre-slice 3c ledger redisposition"`
 
 - [ ] **Step 1: Write the evidence record from artifact values**
 
-Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; explicit confirmation that no Playwright owner was proposed; removable legacy time/files; gross and net forecasts; the binding 46-row result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
+Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; explicit confirmation that no unresolved Playwright owner was proposed; removable legacy time/files; net forecast; the binding 46-row result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
 
 Add a dedicated `Accepted D5 Losses` table with one row per artifact item and columns `SC ID`, `ordinals`, and `lost behavior`. State total D5 row and ordinal counts immediately above it.
 
