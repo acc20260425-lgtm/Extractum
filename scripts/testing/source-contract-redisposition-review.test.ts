@@ -152,6 +152,32 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ currentLedger: badEnvelope }))).toContain("ledger: sourceReaderExceptions changed");
   });
 
+  it("requires current open resolutions to remain frozen before apply", () => {
+    const mutated = clone(baseLedger); mutated.rows[0].replacementIds = ["test:vitest:src/mutated.test.ts#owner"];
+    expect(validateReview(review({ currentLedger: mutated }))).toContain("SC-000001: current resolution drift from review base");
+    const replaced = clone(baseLedger); replaced.rows[0].subgroups = [{ assertionOrdinals: [1, 2], invariant: "replacement", disposition: "behavior", replacementIds: ["test:vitest:src/replaced.test.ts#owner"] }]; delete (replaced.rows[0] as any).disposition; delete (replaced.rows[0] as any).replacementIds;
+    expect(validateReview(review({ currentLedger: replaced }))).toContain("SC-000001: current resolution drift from review base");
+
+    const d3 = artifactFor(); d3.decisions[0] = {
+      ...d3.decisions[0], class: "D3_NON_OBSERVABLE_VISUAL", reason: "D3_NON_OBSERVABLE_VISUAL removes this visual-only assertion.",
+      resolution: { disposition: "delete", deletionReason: "D3_NON_OBSERVABLE_VISUAL removes the visual-only assertion." },
+    };
+    expect(validateReview(review({ artifact: artifactFor(d3.decisions) }))).toEqual([]);
+
+    const frozenPlaywrightBase = clone(baseLedger); frozenPlaywrightBase.rows[1].replacementIds = ["test:playwright:legacy/frozen.spec.ts"];
+    const frozenPlaywrightArtifact = artifactFor(); frozenPlaywrightArtifact.scope.closedRowsDigest = sha256Text(canonicalJson(frozenPlaywrightBase.rows.filter((item) => !baseOpenIds.has(item.id))));
+    frozenPlaywrightArtifact.decisions[1] = {
+      ...frozenPlaywrightArtifact.decisions[1], class: "D3_NON_OBSERVABLE_VISUAL", criticalityRef: undefined,
+      reason: "D3_NON_OBSERVABLE_VISUAL removes the obsolete visual assertion.",
+      resolution: { disposition: "delete", deletionReason: "D3_NON_OBSERVABLE_VISUAL removes the obsolete visual assertion." },
+    };
+    expect(validateReview(review({ artifact: artifactFor(frozenPlaywrightArtifact.decisions), baseLedger: frozenPlaywrightBase, currentLedger: clone(frozenPlaywrightBase) }))).toEqual([]);
+
+    const proposedPlaywright = artifactFor(); proposedPlaywright.decisions[0].resolution = { disposition: "behavior", replacementIds: ["test:playwright:future/new.spec.ts"] };
+    const simulated = applyReview(review({ artifact: proposedPlaywright }));
+    expect(validateReview(review({ artifact: proposedPlaywright, currentLedger: simulated.ledger }))).toContain("SC-000001: browser owner requires program amendment");
+  });
+
   it("enforces the class ladder, resolution allowlist, criticality, owner, and D5 loss rules", () => {
     for (const [reasonClass, disposition] of [
       ["D1_COMPLETED_HISTORY_ONLY", "delete"], ["D2_IMPLEMENTATION_SHAPE", "delete"], ["D3_NON_OBSERVABLE_VISUAL", "delete"],
@@ -241,6 +267,33 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: extraneous }))).toContain("SC-000002: extraneous blind result");
     const duplicateBlind = artifactFor(); duplicateBlind.independentReview.blindResults.push(clone(duplicateBlind.independentReview.blindResults[0]));
     expect(validateReview(review({ artifact: duplicateBlind }))).toContain("independentReview: duplicate blind result: SC-000001");
+  });
+
+  it("derives blind comparisons and disagreement IDs from class and evidence fingerprints", () => {
+    const exact = artifactFor();
+    exact.independentReview.calibrations = [{ class: "B2_NEW_CHEAP_BEHAVIOR", rowIds: ["SC-000001"], adjacentClass: "B1_EXISTING_BEHAVIOR_OWNER", result: "agree" }];
+    expect(validateReview(review({ artifact: exact }))).toEqual([]);
+
+    const criticalityMismatch = artifactFor();
+    criticalityMismatch.criticalitySources.push({ id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md §2" });
+    const criticalBlind = criticalityMismatch.independentReview.blindResults.find((item: any) => item.id === "SC-000420");
+    criticalBlind.criticalityRef = "AGENTS_WINDOWS_SANDBOX";
+    expect(validateReview(review({ artifact: criticalityMismatch }))).toEqual(expect.arrayContaining([
+      "mandatoryCohorts: recorded comparison must be rule_changed",
+      "independentReview: disagreements must equal fingerprint mismatch IDs",
+    ]));
+
+    criticalityMismatch.independentReview.mandatoryCohorts[0].comparison = "rule_changed";
+    criticalityMismatch.independentReview.disagreements = [{ rowIds: ["SC-000420"], oldClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: "criticality citation differs" }];
+    expect(validateReview(review({ artifact: criticalityMismatch }))).toEqual([]);
+
+    const ownerBase = clone(baseLedger); ownerBase.rows[4].replacementIds = ["test:vitest:src/closed.test.ts#owner", "test:vitest:src/closed.test.ts#alternate"];
+    const ownerMismatch = artifactFor(); ownerMismatch.scope.closedRowsDigest = sha256Text(canonicalJson(ownerBase.rows.filter((item) => !baseOpenIds.has(item.id))));
+    ownerMismatch.decisions[0] = { ...ownerMismatch.decisions[0], class: "B1_EXISTING_BEHAVIOR_OWNER", reason: "B1_EXISTING_BEHAVIOR_OWNER has an existing owner.", ownerEvidence: ["test:vitest:src/closed.test.ts#owner"], resolution: { disposition: "behavior", replacementIds: ["test:vitest:src/closed.test.ts#owner"] } };
+    const ownerArtifact = artifactFor(ownerMismatch.decisions); ownerArtifact.scope.closedRowsDigest = ownerMismatch.scope.closedRowsDigest;
+    const ownerBlind = ownerArtifact.independentReview.blindResults.find((item: any) => item.id === "SC-000001");
+    ownerBlind.ownerEvidence = ["test:vitest:src/closed.test.ts#alternate"];
+    expect(validateReview(review({ artifact: ownerArtifact, baseLedger: ownerBase, currentLedger: clone(ownerBase) }))).toContain("deterministicSample: recorded comparison must be rule_changed");
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {

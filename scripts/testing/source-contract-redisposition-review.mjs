@@ -65,6 +65,10 @@ function resolutionless(row) {
   return result;
 }
 
+function resolutionOnly(row) {
+  return Object.fromEntries([...RESOLUTION_KEYS].filter((key) => own(row, key)).map((key) => [key, row[key]]));
+}
+
 function envelopeWithoutRows(ledger) {
   const { rows, ...envelope } = ledger ?? {};
   return envelope;
@@ -172,6 +176,35 @@ function expectedSample(decisions, protectedIds) {
   return { population, rowIds: [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1)) };
 }
 
+function reviewFingerprint(item) {
+  const ownerEvidence = [...new Set(Array.isArray(item?.ownerEvidence) ? item.ownerEvidence : [])].sort(compareText);
+  return canonicalJson({ class: item?.class, ownerEvidence, criticalityRef: item?.criticalityRef ?? null });
+}
+
+function expectedComparison(rowIds, matches) {
+  return rowIds.every((id) => matches.get(id) === true) ? "agree" : "rule_changed";
+}
+
+function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrackedPaths }) {
+  const issues = [];
+  const baseOpenIds = baseOpenIdsFor(baseLedger, baseTrackedPaths);
+  const expectedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger }).ledger;
+  const expectedById = new Map(expectedLedger.rows.map((row) => [row.id, row]));
+  const currentById = new Map(currentLedger.rows.map((row) => [row.id, row]));
+  for (const baseRow of baseLedger.rows) {
+    const expected = expectedById.get(baseRow.id);
+    const current = currentById.get(baseRow.id);
+    if (!current || !expected) {
+      issues.push(`simulated ledger: missing row: ${baseRow.id}`);
+      continue;
+    }
+    if (canonicalJson(resolutionless(expected)) !== canonicalJson(resolutionless(current)) || canonicalJson(resolutionOnly(expected)) !== canonicalJson(resolutionOnly(current))) issues.push(`simulated ledger: unexpected row output: ${baseRow.id}`);
+    const replacementIds = [...(current?.replacementIds ?? []), ...(current?.subgroups ?? []).flatMap((subgroup) => subgroup?.replacementIds ?? [])];
+    if (baseOpenIds.has(baseRow.id) && replacementIds.some((id) => id?.startsWith("test:playwright:"))) issues.push(`${baseRow.id}: browser owner requires program amendment`);
+  }
+  return issueList(issues);
+}
+
 /**
  * Validate a proposed artifact against its immutable review-base ledger.
  * The base-open set is derived from the review-base tracked paths, never from decisions.
@@ -209,6 +242,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       continue;
     }
     if (canonicalJson(resolutionless(baseRow)) !== canonicalJson(resolutionless(currentRow))) issues.push(`${baseRow.id}: immutable row field drift`);
+    if (baseOpenIds.has(baseRow.id) && canonicalJson(resolutionOnly(baseRow)) !== canonicalJson(resolutionOnly(currentRow))) issues.push(`${baseRow.id}: current resolution drift from review base`);
   }
   const currentClosedRows = currentLedger.rows.filter((row) => !baseOpenIds.has(row?.id));
   if (canonicalJson(currentClosedRows) !== canonicalJson(closedRows)) issues.push("scope: closed rows changed");
@@ -270,6 +304,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     ]);
     const blinds = Array.isArray(independent.blindResults) ? independent.blindResults : [];
     const blindById = new Map();
+    const fingerprintMatches = new Map();
     for (const blind of blinds) {
       if (blindById.has(blind?.id)) issues.push(`independentReview: duplicate blind result: ${blind?.id}`);
       blindById.set(blind?.id, blind);
@@ -289,6 +324,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (blind.reviewerRunId !== independent.reviewer?.agentTaskId) issues.push(`${decision.id}: reviewerRunId differs from reviewer task`);
       if (blind.sourceHash !== decision.sourceHash) issues.push(`${decision.id}: blind sourceHash drift`);
       if (blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
+      fingerprintMatches.set(id, reviewFingerprint(decision) === reviewFingerprint(blind));
     }
     if (!sample || sample.algorithm !== "sha256-id-lowest-10-percent") issues.push("independentReview: unsupported deterministic sample algorithm");
     else {
@@ -297,6 +333,30 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (canonicalJson(sample.rowIds) !== canonicalJson(expected.rowIds)) issues.push("independentReview: deterministic sample IDs are not deterministic");
       if (!Number.isInteger(sample.iterations) || sample.iterations < 1 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 1..3");
     }
+    for (const cohort of Array.isArray(independent.calibrations) ? independent.calibrations : []) {
+      const expectedComparisonValue = expectedComparison(Array.isArray(cohort?.rowIds) ? cohort.rowIds : [], fingerprintMatches);
+      if (cohort?.result !== expectedComparisonValue) issues.push(`calibrations: recorded comparison must be ${expectedComparisonValue}`);
+    }
+    for (const cohort of Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : []) {
+      const expectedComparisonValue = expectedComparison(Array.isArray(cohort?.rowIds) ? cohort.rowIds : [], fingerprintMatches);
+      if (cohort?.comparison !== expectedComparisonValue) issues.push(`mandatoryCohorts: recorded comparison must be ${expectedComparisonValue}`);
+    }
+    if (sample) {
+      const expectedComparisonValue = expectedComparison(Array.isArray(sample.rowIds) ? sample.rowIds : [], fingerprintMatches);
+      if (sample.comparison !== expectedComparisonValue) issues.push(`deterministicSample: recorded comparison must be ${expectedComparisonValue}`);
+    }
+    const mismatchIds = [...fingerprintMatches].filter(([, matches]) => !matches).map(([id]) => id).sort(compareId);
+    const disagreementIds = Array.isArray(independent.disagreements)
+      ? independent.disagreements.flatMap((item) => Array.isArray(item?.rowIds) ? item.rowIds : [])
+      : [];
+    for (const disagreement of independent.disagreements ?? []) {
+      if (!Array.isArray(disagreement?.rowIds) || !disagreement.rowIds.length
+        || typeof disagreement.oldClass !== "string" || typeof disagreement.newClass !== "string"
+        || typeof disagreement.groupRuleChange !== "string" || !disagreement.groupRuleChange.trim()) {
+        issues.push("independentReview: invalid disagreement");
+      }
+    }
+    if (canonicalJson(disagreementIds) !== canonicalJson(mismatchIds)) issues.push("independentReview: disagreements must equal fingerprint mismatch IDs");
   }
   return issueList(issues);
 }
@@ -383,7 +443,7 @@ async function runCli() {
     return;
   }
   const first = applyReview(input);
-  const simulatedIssues = validateReview({ ...input, currentLedger: first.ledger });
+  const simulatedIssues = validateSimulatedLedger({ ...input, currentLedger: first.ledger });
   if (simulatedIssues.length) {
     for (const issue of simulatedIssues) process.stderr.write(`simulated: ${issue}\n`);
     process.exitCode = 1;
