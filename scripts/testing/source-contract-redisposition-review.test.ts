@@ -153,6 +153,8 @@ describe("source-contract redisposition review", () => {
   });
 
   it("requires current open resolutions to remain frozen before apply", () => {
+    const reordered = clone(baseLedger); [reordered.rows[0], reordered.rows[1]] = [reordered.rows[1], reordered.rows[0]];
+    expect(validateReview(review({ currentLedger: reordered }))).toContain("ledger: current row ID order drift from review base");
     const mutated = clone(baseLedger); mutated.rows[0].replacementIds = ["test:vitest:src/mutated.test.ts#owner"];
     expect(validateReview(review({ currentLedger: mutated }))).toContain("SC-000001: current resolution drift from review base");
     const replaced = clone(baseLedger); replaced.rows[0].subgroups = [{ assertionOrdinals: [1, 2], invariant: "replacement", disposition: "behavior", replacementIds: ["test:vitest:src/replaced.test.ts#owner"] }]; delete (replaced.rows[0] as any).disposition; delete (replaced.rows[0] as any).replacementIds;

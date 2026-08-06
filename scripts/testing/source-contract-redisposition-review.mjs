@@ -189,6 +189,7 @@ function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrac
   const issues = [];
   const baseOpenIds = baseOpenIdsFor(baseLedger, baseTrackedPaths);
   const expectedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger }).ledger;
+  if (canonicalJson(currentLedger.rows.map((row) => row?.id)) !== canonicalJson(baseLedger.rows.map((row) => row?.id))) issues.push("simulated ledger: row ID order drift from review base");
   const expectedById = new Map(expectedLedger.rows.map((row) => [row.id, row]));
   const currentById = new Map(currentLedger.rows.map((row) => [row.id, row]));
   for (const baseRow of baseLedger.rows) {
@@ -232,6 +233,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (artifact.scope?.closedRows !== closedRows.length) issues.push(`scope: expected ${artifact.scope?.closedRows ?? "unknown"} closed rows, found ${closedRows.length}`);
   if (artifact.scope?.closedRowsDigest !== sha256Text(canonicalJson(closedRows))) issues.push("scope: closedRowsDigest mismatch");
 
+  if (canonicalJson(currentLedger.rows.map((row) => row?.id)) !== canonicalJson(baseLedger.rows.map((row) => row?.id))) issues.push("ledger: current row ID order drift from review base");
   const currentById = new Map(currentLedger.rows.map((row) => [row?.id, row]));
   const resolvedOwners = new Set(closedRows.flatMap(resolutionIds));
   if (currentLedger.rows.length !== baseLedger.rows.length) issues.push("ledger: row count changed");
