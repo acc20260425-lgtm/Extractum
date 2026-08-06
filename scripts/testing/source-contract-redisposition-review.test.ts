@@ -62,6 +62,8 @@ const classIds = [
 ];
 const criticalitySources = [{ id: "AGENTS_SECURITY", citation: "AGENTS.md §7" }];
 
+const immutableReasonClasses = clone(reviewArtifact.reasonClasses);
+const immutableCriticalitySources = clone(reviewArtifact.criticalitySources);
 const componentReplacementCommand = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/projects-workspace.behavior.component.test.ts src/lib/analysis-report-canvas.behavior.component.test.ts src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts";
 const componentStartupCommand = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/SourceStatusCell.component.test.ts";
 const verifyGateInventory = [
@@ -75,8 +77,16 @@ const verifyGateInventory = [
 function timingFixture() {
   const componentReplacement = { command: componentReplacementCommand, warmupExitCode: 0, retainedSeconds: [28, 29, 30], medianSeconds: 29 };
   const componentStartup = { command: componentStartupCommand, warmupExitCode: 0, retainedSeconds: [4, 5, 6], medianSeconds: 5 };
-  const legacyOwner = { command: "npm.cmd run test:legacy-contract", warmupExitCode: 0, retainedSeconds: [10, 11, 12], medianSeconds: 11, baseFiles: ["src/a.test.ts", "src/z.test.ts"] };
-  const verify = { command: "npm.cmd run verify", seconds: 200, exitCode: 0, historicalSeconds: [208.1, 321.3, 383.4], gateInventory: verifyGateInventory };
+  const legacyOwner = { command: "npm.cmd run test:legacy-contract", warmupExitCode: 0, retainedSeconds: [10, 11, 12], medianSeconds: 11, baseFiles: clone(reviewArtifact.mechanisms.legacyOwner.baseFiles) };
+  const successfulBaseline = { executionOrder: 2, seconds: 244.6, exitCode: 0, authorization: "explicit user-authorized compensating verify after complete GREEN" };
+  const verify = {
+    command: "npm.cmd run verify", seconds: successfulBaseline.seconds, exitCode: successfulBaseline.exitCode,
+    historicalSeconds: [208.1, 321.3, 383.4], gateInventory: verifyGateInventory, successfulBaseline,
+    observations: [
+      { executionOrder: 1, seconds: 53.987, exitCode: 1, failedGate: "npm run test:unit", failure: "Static draft integration RED: source-contract-redisposition-review.json did not exist." },
+      clone(successfulBaseline),
+    ],
+  };
   const scalablePerRow = (componentReplacement.medianSeconds - componentStartup.medianSeconds) / 46;
   return {
     mechanisms: { componentReplacement, componentStartup, legacyOwner, verify },
@@ -120,10 +130,10 @@ function artifactFor(decisions = defaultDecisions()) {
     reviewBaseCommit: REVIEW_BASE,
     ledgerFrozenAtCommit: baseLedger.frozenAtCommit,
     scope: { openRows: 14, closedRows: 3, closedRowsDigest: closedDigest, pathPresentClosedRowIds: ["SC-000355", "SC-000366"] },
-    reasonClasses: classIds.map((id) => ({ id, rule: `${id} named rule` })),
+    reasonClasses: clone(immutableReasonClasses),
     protectedRows: mandatoryP0Ids.map((id) => ({ id, criticalityRef: "AGENTS_SECURITY" })),
     protectedRowsDigest: sha256Text(canonicalJson(mandatoryP0Ids.map((id) => ({ id, criticalityRef: "AGENTS_SECURITY" })))),
-    criticalitySources,
+    criticalitySources: clone(immutableCriticalitySources),
     ...timingFixture(),
     decisions,
     independentReview: {
@@ -262,6 +272,40 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: playwrightProposal }))).toContain("SC-000001: browser owner requires program amendment");
   });
 
+  it("fails closed for exact verify evidence, immutable catalogs, and the pinned legacy listing", () => {
+    const alteredFailure = artifactFor();
+    alteredFailure.mechanisms.verify.observations[0].failure = "another failure";
+    expect(validateReview(review({ artifact: alteredFailure }))).toContain("mechanisms.verify: observations must match the approved execution record");
+
+    const reorderedObservations = artifactFor();
+    reorderedObservations.mechanisms.verify.observations.reverse();
+    expect(validateReview(review({ artifact: reorderedObservations }))).toContain("mechanisms.verify: observations must match the approved execution record");
+
+    const missingBaseline = artifactFor();
+    delete missingBaseline.mechanisms.verify.successfulBaseline;
+    expect(validateReview(review({ artifact: missingBaseline }))).toContain("mechanisms.verify: successfulBaseline must match the approved execution record");
+
+    const changedReasonCatalog = artifactFor();
+    changedReasonCatalog.reasonClasses[0].rule = "rewritten";
+    expect(validateReview(review({ artifact: changedReasonCatalog }))).toContain("reasonClasses: must equal the approved catalog");
+
+    const changedCriticalityCatalog = artifactFor();
+    changedCriticalityCatalog.criticalitySources[0].citation = "rewritten";
+    expect(validateReview(review({ artifact: changedCriticalityCatalog }))).toContain("criticalitySources: must equal the approved catalog");
+
+    const changedLegacyListing = artifactFor();
+    changedLegacyListing.mechanisms.legacyOwner.baseFiles[0] = "aaa.test.ts";
+    expect(validateReview(review({ artifact: changedLegacyListing }))).toContain("mechanisms.legacyOwner: baseFiles do not match the pinned legacy listing");
+
+    const wrongCeiling = artifactFor();
+    wrongCeiling.forecast.replacementUnitCeiling = 45;
+    expect(validateReview(review({ artifact: wrongCeiling }))).toContain("forecast: replacementUnitCeiling must equal 46");
+
+    const wrongScalablePercent = artifactFor();
+    wrongScalablePercent.forecast.scalableForecastPercent += 1;
+    expect(validateReview(review({ artifact: wrongScalablePercent }))).toContain("forecast: scalableForecastPercent does not match the fresh verify baseline");
+  });
+
   it("pins the base and scopes every independently derived open row", () => {
     expect(validateReview(review())).toEqual([]);
     expect(validateReview(review({ artifact: artifactFor([]) }))).toContain("scope: expected one decision for every base-open row");
@@ -390,7 +434,7 @@ describe("source-contract redisposition review", () => {
     const invented = clone(p0.artifact); invented.criticalitySources = [{ id: "INVENTED", citation: "anything" }];
     expect(validateReview({ ...p0, artifact: invented })).toContain("criticalitySources: invalid built-in mapping: INVENTED");
     const duplicateSource = clone(p0.artifact); duplicateSource.criticalitySources.push(clone(duplicateSource.criticalitySources[0]));
-    expect(validateReview({ ...p0, artifact: duplicateSource })).toContain("criticalitySources: duplicate id: AGENTS_SECURITY");
+    expect(validateReview({ ...p0, artifact: duplicateSource })).toContain("criticalitySources: duplicate id: AGENTS_WINDOWS_SANDBOX");
   });
 
   it("accepts only base-closed resolved owner evidence and exact blind scope", () => {
@@ -415,7 +459,6 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: exact }))).toEqual([]);
 
     const criticalityMismatch = artifactFor();
-    criticalityMismatch.criticalitySources.push({ id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md §2" });
     const criticalBlind = criticalityMismatch.independentReview.blindResults.find((item: any) => item.id === "SC-000420");
     criticalBlind.criticalityRef = "AGENTS_WINDOWS_SANDBOX";
     expect(validateReview(review({ artifact: criticalityMismatch }))).toEqual(expect.arrayContaining([

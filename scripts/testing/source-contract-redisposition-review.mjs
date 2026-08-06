@@ -7,14 +7,27 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REVIEW_BASE_COMMIT = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const PATH_PRESENT_CLOSED_ROW_IDS = ["SC-000355", "SC-000366"];
 const MANDATORY_P0_SEED_IDS = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
-const CRITICALITY_SOURCES = new Map([
-  ["AGENTS_WINDOWS_SANDBOX", "AGENTS.md §2"],
-  ["AGENTS_DATABASE_OWNERSHIP", "AGENTS.md §6"],
-  ["AGENTS_SECURITY", "AGENTS.md §7"],
-  ["TESTING_SOURCE_CONTRACT_REPLACEMENT", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement"],
-  ["TESTING_BROWSER_COMPONENT_OWNERSHIP", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership"],
-  ["TESTING_COVERAGE_FLAKE_QUARANTINE", "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy"],
-]);
+const REASON_CLASS_CATALOG = [
+  { id: "D1_COMPLETED_HISTORY_ONLY", rule: "Completed historical evidence with no future-defect seam." },
+  { id: "D2_IMPLEMENTATION_SHAPE", rule: "Implementation-shape assertion with no durable behavioral obligation." },
+  { id: "D3_NON_OBSERVABLE_VISUAL", rule: "Non-normative visual detail with no truthful non-browser seam." },
+  { id: "D4_DUPLICATE_EVIDENCE", rule: "Duplicate behavior already owned by a base-closed exact owner." },
+  { id: "A1_EXISTING_STRUCTURED_OWNER", rule: "Existing repository rule owns the structured architecture invariant." },
+  { id: "T1_EXISTING_TOOL_OWNER", rule: "Existing tool owns the executable invariant." },
+  { id: "B1_EXISTING_BEHAVIOR_OWNER", rule: "Existing base-closed behavior owner proves the invariant." },
+  { id: "B2_NEW_CHEAP_BEHAVIOR", rule: "A new focused jsdom or Cargo behavior owner is cheap and truthful." },
+  { id: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", rule: "A protected behavior needs a future owner and normative criticality." },
+  { id: "D5_ACCEPTED_LOSS", rule: "Explicitly accepted non-protected behavior loss." },
+];
+const CRITICALITY_CATALOG = [
+  { id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md \u00a72" },
+  { id: "AGENTS_DATABASE_OWNERSHIP", citation: "AGENTS.md \u00a76" },
+  { id: "AGENTS_SECURITY", citation: "AGENTS.md \u00a77" },
+  { id: "TESTING_SOURCE_CONTRACT_REPLACEMENT", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement" },
+  { id: "TESTING_BROWSER_COMPONENT_OWNERSHIP", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership" },
+  { id: "TESTING_COVERAGE_FLAKE_QUARANTINE", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy" },
+];
+const CRITICALITY_SOURCES = new Map(CRITICALITY_CATALOG.map((source) => [source.id, source.citation]));
 const CLASS_DISPOSITIONS = new Map([
   ["D1_COMPLETED_HISTORY_ONLY", "delete"],
   ["D2_IMPLEMENTATION_SHAPE", "delete"],
@@ -178,6 +191,21 @@ const VERIFY_GATE_INVENTORY = [
   "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
   "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets", "git diff HEAD --check",
 ];
+const LEGACY_BASE_FILES_COUNT = 73;
+const LEGACY_BASE_FILES_DIGEST = "5cb1c11d81755cc2b64e5f7bcc6abfff10c4dc50d7e1101d53d8ff692a6bd90e";
+const VERIFY_RED_OBSERVATION = {
+  executionOrder: 1,
+  seconds: 53.987,
+  exitCode: 1,
+  failedGate: "npm run test:unit",
+  failure: "Static draft integration RED: source-contract-redisposition-review.json did not exist.",
+};
+const VERIFY_GREEN_OBSERVATION = {
+  executionOrder: 2,
+  seconds: 244.6,
+  exitCode: 0,
+  authorization: "explicit user-authorized compensating verify after complete GREEN",
+};
 
 function equalNumber(left, right) {
   return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) < 1e-12;
@@ -229,6 +257,7 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
   if (!Array.isArray(baseFiles) || !baseFiles.length || baseFiles.some((file) => typeof file !== "string" || !file || file !== normalizedPath(file) || file.startsWith("../")) || canonicalJson(baseFiles) !== canonicalJson([...baseFiles].sort(compareText))) {
     issues.push("mechanisms.legacyOwner: baseFiles must be sorted normalized repository-relative paths");
   }
+  if (!Array.isArray(baseFiles) || baseFiles.length !== LEGACY_BASE_FILES_COUNT || sha256Text(canonicalJson(baseFiles)) !== LEGACY_BASE_FILES_DIGEST) issues.push("mechanisms.legacyOwner: baseFiles do not match the pinned legacy listing");
   const verify = mechanisms?.verify;
   let freshVerifySeconds;
   if (!verify || typeof verify !== "object") issues.push("mechanisms.verify: missing");
@@ -237,9 +266,11 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
     if (canonicalJson(verify.historicalSeconds) !== canonicalJson([208.1, 321.3, 383.4])) issues.push("mechanisms.verify: historicalSeconds mismatch");
     if (canonicalJson(verify.gateInventory) !== canonicalJson(VERIFY_GATE_INVENTORY)) issues.push("mechanisms.verify: gateInventory mismatch");
     if (verify.successfulBaseline === null) {
-      const observations = verify.observations;
-      if (!Array.isArray(observations) || observations.length !== 1 || observations[0]?.executionOrder !== 1 || observations[0]?.exitCode !== 1 || !Number.isFinite(observations[0]?.seconds) || observations[0].seconds <= 0 || typeof observations[0]?.failedGate !== "string" || typeof observations[0]?.failure !== "string") issues.push("mechanisms.verify: pending baseline must retain one failed observation");
+      if (canonicalJson(verify.observations) !== canonicalJson([VERIFY_RED_OBSERVATION]) || own(verify, "seconds") || own(verify, "exitCode")) issues.push("mechanisms.verify: pending baseline must retain the approved RED observation");
     } else {
+      if (canonicalJson(verify.successfulBaseline) !== canonicalJson(VERIFY_GREEN_OBSERVATION)) issues.push("mechanisms.verify: successfulBaseline must match the approved execution record");
+      if (canonicalJson(verify.observations) !== canonicalJson([VERIFY_RED_OBSERVATION, VERIFY_GREEN_OBSERVATION])) issues.push("mechanisms.verify: observations must match the approved execution record");
+      if (verify.seconds !== verify.successfulBaseline?.seconds || verify.exitCode !== verify.successfulBaseline?.exitCode) issues.push("mechanisms.verify: top-level seconds and exitCode must match successfulBaseline");
       if (verify.exitCode !== 0 || !Number.isFinite(verify.seconds) || verify.seconds <= 0) issues.push("mechanisms.verify: successful baseline requires exitCode 0 and positive seconds");
       else freshVerifySeconds = verify.seconds;
     }
@@ -376,6 +407,8 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (decisionIds.size !== baseOpenIds.size) issues.push("scope: expected one decision for every base-open row");
   for (const id of baseOpenIds) if (!decisionIds.has(id)) issues.push(`scope: missing decision: ${id}`);
 
+  if (canonicalJson(artifact.reasonClasses) !== canonicalJson(REASON_CLASS_CATALOG)) issues.push("reasonClasses: must equal the approved catalog");
+
   const protectedRows = Array.isArray(artifact.protectedRows) ? artifact.protectedRows : [];
   const protectedIds = new Set(exactIds(protectedRows));
   if (protectedIds.size !== protectedRows.length) issues.push("protectedRows: duplicate id");
@@ -383,6 +416,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const criticalityIds = new Set();
   const seenCriticalityIds = new Set();
   if (!Array.isArray(artifact.criticalitySources)) issues.push("criticalitySources: must be an array");
+  if (canonicalJson(artifact.criticalitySources) !== canonicalJson(CRITICALITY_CATALOG)) issues.push("criticalitySources: must equal the approved catalog");
   for (const source of artifact.criticalitySources ?? []) {
     if (seenCriticalityIds.has(source?.id)) issues.push(`criticalitySources: duplicate id: ${source?.id}`);
     seenCriticalityIds.add(source?.id);
