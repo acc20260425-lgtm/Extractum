@@ -339,6 +339,8 @@ Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 **Files:**
 
 - Modify: `testing/source-contract-redisposition-review.json`
+- Modify: `scripts/testing/source-contract-redisposition-review.mjs` (only the approved empty-calibration `no_match` schema correction)
+- Modify: `scripts/testing/source-contract-redisposition-review.test.ts` (RED/GREEN coverage for that correction)
 - Reference: `AGENTS.md`
 - Reference: `testing/source-contract-ledger.json`
 - Reference: `scripts/testing/repository-rules.mjs`
@@ -394,7 +396,7 @@ Expected: non-zero only because unreviewed tail decisions remain `UNCLASSIFIED`;
 
 Run: `git diff --check`
 
-Run: `git add testing/source-contract-redisposition-review.json`
+Run: `git add testing/source-contract-redisposition-review.json scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts docs/superpowers/plans/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md`
 
 Run: `git commit -m "test: calibrate mandatory redisposition cohorts"`
 

@@ -479,7 +479,12 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (!Number.isInteger(sample.iterations) || sample.iterations < 1 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 1..3");
     }
     for (const cohort of Array.isArray(independent.calibrations) ? independent.calibrations : []) {
-      const expectedComparisonValue = expectedComparison(Array.isArray(cohort?.rowIds) ? cohort.rowIds : [], fingerprintMatches);
+      const rowIds = Array.isArray(cohort?.rowIds) ? cohort.rowIds : [];
+      const expectedComparisonValue = rowIds.length ? expectedComparison(rowIds, fingerprintMatches) : "no_match";
+      if (!rowIds.length && cohort?.result !== expectedComparisonValue) {
+        issues.push("calibrations: empty calibration must record no_match");
+        continue;
+      }
       if (cohort?.result !== expectedComparisonValue) issues.push(`calibrations: recorded comparison must be ${expectedComparisonValue}`);
     }
     for (const cohort of Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : []) {

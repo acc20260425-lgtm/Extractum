@@ -207,7 +207,7 @@ function review(overrides: Record<string, unknown> = {}) {
 }
 
 describe("source-contract redisposition review", () => {
-  it("pins every real base-open row in the static draft artifact", async () => {
+  it("pins every real base-open row in the static partial-review artifact", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
       loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
@@ -230,7 +230,20 @@ describe("source-contract redisposition review", () => {
       .sort((left: any, right: any) => Number(left.id.slice(3)) - Number(right.id.slice(3)))
       .map((item: any) => [item.id, item.sourceHash]));
     expect(reviewArtifact.protectedRows.map((item) => item.id)).toEqual(expect.arrayContaining(mandatoryP0Ids));
-    expect(decisions.every((item) => item.class === "UNCLASSIFIED" && !("reason" in item) && !("resolution" in item))).toBe(true);
+    expect(decisions.reduce<Record<string, number>>((counts, item) => {
+      counts[item.class] = (counts[item.class] ?? 0) + 1;
+      return counts;
+    }, {})).toEqual({
+      A1_EXISTING_STRUCTURED_OWNER: 3,
+      B2_NEW_CHEAP_BEHAVIOR: 58,
+      D1_COMPLETED_HISTORY_ONLY: 9,
+      D2_IMPLEMENTATION_SHAPE: 19,
+      D3_NON_OBSERVABLE_VISUAL: 8,
+      D4_DUPLICATE_EVIDENCE: 1,
+      UNCLASSIFIED: 338,
+    });
+    expect(reviewArtifact.protectedRows).toHaveLength(14);
+    expect(reviewArtifact.independentReview.blindResults).toHaveLength(97);
   });
 
   it("derives timing forecasts from retained measurements and rejects invalid baseline or jsdom proposals", () => {
@@ -477,6 +490,20 @@ describe("source-contract redisposition review", () => {
     const ownerBlind = ownerArtifact.independentReview.blindResults.find((item: any) => item.id === "SC-000001");
     ownerBlind.ownerEvidence = ["test:vitest:src/closed.test.ts#alternate"];
     expect(validateReview(review({ artifact: ownerArtifact, baseLedger: ownerBase, currentLedger: clone(ownerBase) }))).toContain("deterministicSample: recorded comparison must be rule_changed");
+  });
+
+  it("records no_match only for an empty calibration cohort", () => {
+    const empty = artifactFor();
+    empty.independentReview.calibrations = [{ class: "T1_EXISTING_TOOL_OWNER", rowIds: [], adjacentClass: "A1_EXISTING_STRUCTURED_OWNER", result: "no_match" }];
+    expect(validateReview(review({ artifact: empty }))).toEqual([]);
+
+    const wrongEmptyResult = clone(empty);
+    wrongEmptyResult.independentReview.calibrations[0].result = "agree";
+    expect(validateReview(review({ artifact: wrongEmptyResult }))).toContain("calibrations: empty calibration must record no_match");
+
+    const nonEmpty = artifactFor();
+    nonEmpty.independentReview.calibrations = [{ class: "B2_NEW_CHEAP_BEHAVIOR", rowIds: ["SC-000001"], adjacentClass: "B1_EXISTING_BEHAVIOR_OWNER", result: "no_match" }];
+    expect(validateReview(review({ artifact: nonEmpty }))).toContain("calibrations: recorded comparison must be agree");
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {
