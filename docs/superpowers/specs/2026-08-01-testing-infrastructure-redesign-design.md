@@ -652,13 +652,11 @@ Measure the removable legacy side with the same protocol through
 conservative removable contribution of the current legacy owner to the future
 3C+ gate, not a promise that every sub-slice realizes the saving immediately.
 
-If any B3 decision proposes a Playwright owner, also measure
-`npm.cmd run test:gemini-browser-adapter:e2e -- chromium-lifecycle` with the
-same protocol and call its median `Tbrowser`. Group future browser replacement
-IDs by owner file. The full direct-file median is charged once per proposed
-browser owner file as a conservative upper bound; browser rows may not disappear
-from the numerical forecast merely because the jsdom mechanism was measured.
-With no proposed browser owner, `Tbrowser` and the browser forecast are zero.
+This checkpoint does not propose new Playwright owners. If the ladder reaches
+B3 and only a browser seam is truthful, leave that row `UNCLASSIFIED`, stop the
+checkpoint, and request a program amendment. This gives browser work the same
+fail-closed outcome as a cost conversion would, without four Chromium runs,
+startup attribution, or a synthetic browser-to-jsdom exchange rate.
 
 The artifact records:
 
@@ -667,21 +665,16 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
-browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
-grossAddedForecast = scalableForecast + browserUpperForecast
-netGateForecast = max(0, grossAddedForecast - Tlegacy)
-browserOwnerEquivalentRows = ceil(Tbrowser / scalablePerRow)
-replacementUnits = proposedNewJsdomRows
-  + browserOwnerEquivalentRows * proposedNewBrowserOwnerFiles
+grossAddedForecast = scalableForecast
+netGateForecast = max(0, scalableForecast - Tlegacy)
 ```
 
 `upperBoundPerRow` is explicitly a conservative upper bound: 59 declarations,
 including smoke declarations, and one fixed startup are amortized across the
 46 Slice 3B ledger rows. `scalableForecast` is the estimate used for gate
-growth. The browser-file charge is also deliberately gross. `netGateForecast`
-is the checkpoint decision value because it exposes both added replacement
-cost and the measured legacy owner that 3C+ removes. All component, browser,
-legacy, gross, and net values are published separately in seconds.
+growth. `netGateForecast` exposes both added jsdom replacement cost and the
+measured legacy owner that 3C+ removes. Component, legacy, gross, and net values
+are published separately in seconds.
 
 Run one fresh unsandboxed complete `verify` at the redisposition checkpoint and
 compare its gate inventory and conditions with the recorded 208.1, 321.3, and
@@ -694,23 +687,20 @@ replacement units:
 
 ```text
 replacementUnitCeiling = 46
-replacementUnits <= replacementUnitCeiling
+proposedNewJsdomRows <= replacementUnitCeiling
 ```
 
-One jsdom row consumes one unit. Each proposed browser owner file consumes its
-measured whole-file cost converted to jsdom-row equivalents, rounded up and
-never below one. If `scalablePerRow` is zero while a browser owner is proposed,
-the conversion is undefined and requires a program amendment. This count is
-the binding guardrail. `netGateForecast` remains a disclosure of expected gate
-effect and cannot make the unit ceiling pass or fail. The artifact also reports
+One proposed jsdom row consumes one unit. Browser owners are outside this
+checkpoint by the explicit stop rule above. This count is the binding
+guardrail. `netGateForecast` remains a disclosure of expected gate effect and
+cannot make the unit ceiling pass or fail. The artifact also reports
 whether `Tlegacy` exceeds the gross forecast at the full 46-unit ceiling so a
 vacuously zero net forecast is visible rather than celebrated as a constraint.
 
-If replacement units exceed 46, their row classes remain valid, but the
+If proposed jsdom rows exceed 46, their row classes remain valid, but the
 redisposition checkpoint cannot be approved without a separate program
-amendment. The artifact reports jsdom rows and ordinals, browser rows,
-ordinals, owner files and equivalent units, removable legacy files, gross and
-net seconds, and percentage of the fresh complete gate.
+amendment. The artifact reports jsdom rows and ordinals, removable legacy
+files, gross and net seconds, and percentage of the fresh complete gate.
 
 #### Independent review and reproducibility
 
@@ -734,6 +724,12 @@ The reviewer records an independent class and reason in a separate result;
 agreement and disagreement are calculated mechanically only after both passes
 exist. A disagreement changes the rule or named class for the complete matching
 group and reruns that group; it never creates a per-row override.
+
+After any group-rule change, recompute the risk-cohort exclusions and the
+ten-percent remainder population. If that population changes, reselect the
+sample deterministically and review it again. Iterate until one complete pass
+changes neither group rules nor the sampled population; record the final
+population digest and iteration count.
 
 The P0 catalog freezes after the protected and normative-critical pass. A P0
 candidate discovered later returns the work to that pass, expands the catalog,

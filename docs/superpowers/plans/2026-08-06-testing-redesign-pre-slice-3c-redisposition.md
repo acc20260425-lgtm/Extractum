@@ -23,7 +23,7 @@
 - A mixed decision removes top-level resolution fields and writes at least two subgroups whose ordinals exactly and non-overlappingly partition `1..assertionCount`; every subgroup has its own invariant and resolution.
 - The committed carrier remains outside `verify`. Its `check` command is mandatory checkpoint evidence; the existing transition validator remains unchanged.
 - Run timing observations and the complete `verify` unsandboxed. Use one unretained warm-up plus three retained runs per component mechanism. Use `npm.cmd` for repository scripts and canonical `src-tauri/target`.
-- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The binding 3C+ ceiling is 46 replacement units: one per proposed jsdom row plus measured jsdom-row equivalents per proposed browser owner file. Net gate seconds are disclosure only.
+- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The binding 3C+ ceiling is 46 proposed jsdom rows. This checkpoint does not propose Playwright owners: a browser-only B3 candidate stops for a program amendment. Net gate seconds are disclosure only.
 - Do not add Nx, Nx Cloud, GitHub Actions, branch protection, git hooks, remote cache, or an external reporting service.
 
 ---
@@ -92,7 +92,6 @@ type ReviewArtifact = {
     componentReplacement: { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
     componentStartup: { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
     legacyOwner: { command: "npm.cmd run test:legacy-contract"; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number; baseFiles: string[] };
-    browserOwner: null | { command: string; warmupExitCode: number; retainedSeconds: number[]; medianSeconds: number };
     verify: { command: "npm.cmd run verify"; seconds: number; exitCode: 0; historicalSeconds: [208.1, 321.3, 383.4] };
   };
   decisions: Decision[];
@@ -102,7 +101,7 @@ type ReviewArtifact = {
     blindResults: Array<{ id: string; sourceHash: string; reviewerRunId: string; class: Exclude<ReasonClass, "UNCLASSIFIED">; reason: string; ownerEvidence?: string[]; criticalityRef?: string }>;
     calibrations: Array<{ class: Exclude<ReasonClass, "UNCLASSIFIED">; rowIds: string[]; adjacentClass: string; result: "agree" | "rule_changed" | "no_match" }>;
     mandatoryCohorts: Array<{ name: string; rowIds: string[]; comparison: "agree" | "rule_changed" }>;
-    deterministicSample: { algorithm: "sha256-id-lowest-10-percent"; population: string[]; rowIds: string[]; comparison: "agree" | "rule_changed" };
+    deterministicSample: { algorithm: "sha256-id-lowest-10-percent"; population: string[]; populationDigest: string; rowIds: string[]; iterations: number; comparison: "agree" | "rule_changed" };
     disagreements: Array<{ rowIds: string[]; oldClass: string; newClass: string; groupRuleChange: string }>;
   };
   forecast: {
@@ -111,20 +110,14 @@ type ReviewArtifact = {
     futureOwnersByMechanism: Record<string, { rows: number; assertionOrdinals: number }>;
     proposedNewJsdomRows: number;
     proposedNewJsdomOrdinals: number;
-    proposedNewBrowserRows: number;
-    proposedNewBrowserOrdinals: number;
-    proposedNewBrowserOwnerFiles: number;
     removableLegacyFiles: number;
     removableLegacySeconds: number;
     upperBoundPerRow: number;
     scalablePerRow: number;
     upperForecastSeconds: number;
     scalableForecastSeconds: number;
-    browserUpperForecastSeconds: number;
     grossAddedForecastSeconds: number;
     netGateForecastSeconds: number;
-    browserOwnerEquivalentRows: number;
-    replacementUnits: number;
     replacementUnitCeiling: 46;
     legacyDominatesFullUnitCeiling: boolean;
     scalableForecastPercent: number;
@@ -193,7 +186,7 @@ Closed-row bytes are `canonicalJson(baseLedger.rows.filter(row => !baseOpenIds.h
 
 - [ ] **Step 4: Write RED tests for the resolution allowlist and class ladder**
 
-Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, equal/missing `authorRunId` and reviewer `agentTaskId`, a decision whose `authorRunId` differs from the artifact author run, a blind result whose `reviewerRunId` differs from the reviewer task, blind `sourceHash` drift, an unsupported `contextPolicy`, and mechanically incorrect author/blind comparisons. The distinct recorded run IDs validate the observable consequence of separate executions; the harness-specific clean-context mechanism remains an execution precondition.
+Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, equal/missing `authorRunId` and reviewer `agentTaskId`, a decision whose `authorRunId` differs from the artifact author run, a blind result whose `reviewerRunId` differs from the reviewer task, blind `sourceHash` drift, an unsupported `contextPolicy`, stale sample populations/digests, non-deterministic sample IDs, and mechanically incorrect author/blind comparisons. The distinct recorded run IDs validate the observable consequence of separate executions; the harness-specific clean-context mechanism remains an execution precondition.
 
 ```ts
 expect(validateReview({ artifact: withDecision("SC-000001", {
@@ -205,7 +198,7 @@ expect(validateReview({ artifact: withDecision("SC-000001", {
 
 - [ ] **Step 5: Implement class, P0, criticality, owner, and D5 checks**
 
-Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact existing test/rule/tool owner, while B2/B3 may name unresolved future `test:vitest:`, `test:playwright:`, or `test:cargo:` IDs. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
+Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact existing test/rule/tool owner, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. Reject every proposed `test:playwright:` replacement with `browser owner requires program amendment`. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
 
 - [ ] **Step 6: Write RED tests for mixed rows and idempotent apply**
 
@@ -321,18 +314,14 @@ upperBoundPerRow = T3B / 46
 scalablePerRow = max(0, T3B - Tstartup) / 46
 upperForecast = upperBoundPerRow * proposedNewJsdomRows
 scalableForecast = scalablePerRow * proposedNewJsdomRows
-browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
-grossAddedForecast = scalableForecast + browserUpperForecast
-netGateForecast = max(0, grossAddedForecast - Tlegacy)
-browserOwnerEquivalentRows = ceil(Tbrowser / scalablePerRow)
-replacementUnits = proposedNewJsdomRows
-  + browserOwnerEquivalentRows * proposedNewBrowserOwnerFiles
+grossAddedForecast = scalableForecast
+netGateForecast = max(0, scalableForecast - Tlegacy)
 replacementUnitCeiling = 46
 netGateForecastPercent = netGateForecast / freshVerifySeconds * 100
 legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * replacementUnitCeiling
 ```
 
-When no browser owner is proposed, require `browserOwner: null`, zero browser counts, zero browser forecast, and zero browser-equivalent rows. When at least one `test:playwright:` owner is proposed, require a measured browser owner, charge its full direct-file median once per distinct proposed owner file, and round its jsdom-row equivalent up to at least one. If `scalablePerRow` is zero with a browser proposal, fail closed for a program amendment. Add tests that perturb every derived number, the 46-unit ceiling, the legacy-dominance disclosure, the baseline listing, and the jsdom/browser owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
+Require `proposedNewJsdomRows <= replacementUnitCeiling`. Reject any Playwright replacement before forecast calculation; it is an explicit program-amendment stop rather than a measured mechanism. Add tests that perturb every derived number, the 46-unit ceiling, the legacy-dominance disclosure, the baseline listing, and jsdom owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
 
 - [ ] **Step 7: Commit the measured draft**
 
@@ -443,7 +432,7 @@ Apply the same group-rule process to the 126 rows in these two families. Prefer 
 
 - [ ] **Step 5: Classify Gemini browser and other-product families**
 
-Apply the ladder to the remaining 83 rows. A browser-facing invariant does not imply Playwright: test B1/B2 and jsdom seams first. Any proposed Playwright owner must use `test:playwright:` and becomes part of the measured browser forecast.
+Apply the ladder to the remaining 83 rows. A browser-facing invariant does not imply Playwright: test B1/B2 and jsdom seams first. If a row reaches B3 and only Playwright is truthful, leave it `UNCLASSIFIED`, record `browser owner requires program amendment`, and stop Task 4. Do not measure or propose a browser owner inside this checkpoint.
 
 Across Steps 2--5, `manual` remains extraction metadata only. Process its 124 rows in their ordinary families; it neither supplies a class nor triggers automatic 100-percent blind review. Never use a generic D1, D2, or D5 sentence. Each deletion reason names the exact historical fact, implementation detail, unobservable visual, duplicate owner, or accepted behavior loss. When only some ordinals match, emit a mixed resolution with exact subgroup invariants and a full partition.
 
@@ -457,17 +446,11 @@ Send the sampled declarations, invariants, ordinals, candidate owners, catalog, 
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
+After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Continue until one full iteration changes neither the group rules nor the sample population; record the final population digest and iteration count. The carrier rejects a comparison whose sample was derived from an earlier population.
+
 - [ ] **Step 8: Calculate the final forecast and loss summaries**
 
-Count proposed owners by class/mechanism in rows and assertion ordinals. Derive jsdom versus Playwright from the replacement namespace and owner path, and count distinct proposed browser owner files.
-
-If any browser owner is proposed, run one unretained warm-up and three retained unsandboxed observations of:
-
-`npm.cmd run test:gemini-browser-adapter:e2e -- chromium-lifecycle`
-
-Store the samples and median as `mechanisms.browserOwner`; charge the full median once per distinct future browser owner file. If none is proposed, preserve `browserOwner: null` and zero browser counts.
-
-Set `proposedNewJsdomRows`/ordinals and `proposedNewBrowserRows`/ordinals from their B3 rows and subgroups. Recalculate component, browser, gross, removable-legacy, and net fields. Convert each browser owner file to `ceil(Tbrowser / scalablePerRow)` jsdom-row equivalents, minimum one, and require `replacementUnits <= 46`. If `scalablePerRow` is zero with a browser owner, or the unit count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
+Count proposed owners by class/mechanism in rows and assertion ordinals. Assert that no replacement ID uses the Playwright namespace. Set `proposedNewJsdomRows`/ordinals from B3 jsdom rows and subgroups, then recalculate component, gross, removable-legacy, and net fields. Require `proposedNewJsdomRows <= 46`. If the count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
 
 Publish `legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * 46` and the actual comparison of `Tlegacy` with `grossAddedForecastSeconds`. These are explicit diagnostics: net seconds remain disclosure and never determine whether the 46-unit constraint passes.
 
@@ -594,7 +577,7 @@ Run: `git commit -m "test: apply pre-slice 3c ledger redisposition"`
 
 - [ ] **Step 1: Write the evidence record from artifact values**
 
-Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; browser owner-file upper forecast and row equivalents; removable legacy time/files; gross and net forecasts; the binding 46-unit result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
+Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; explicit confirmation that no Playwright owner was proposed; removable legacy time/files; gross and net forecasts; the binding 46-row result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
 
 Add a dedicated `Accepted D5 Losses` table with one row per artifact item and columns `SC ID`, `ordinals`, and `lost behavior`. State total D5 row and ordinal counts immediately above it.
 
@@ -648,6 +631,6 @@ Run: `git status --short`
 
 Expected: empty.
 
-Run: `git log --oneline -6`
+Run: `git log --oneline -7`
 
 Expected: carrier, measured draft, calibrated review, completed review, formatting normalization, ledger cutover, and verification commits are visible. Only after this checkpoint is approved may a separate detailed Slice 3C implementation plan be written from the new ledger state.
