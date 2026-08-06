@@ -238,6 +238,7 @@ Run: `git commit -m "test: add source-contract redisposition carrier"`
 **Files:**
 
 - Create: `testing/source-contract-redisposition-review.json`
+- Modify: `scripts/testing/source-contract-redisposition-review.mjs`
 - Modify: `scripts/testing/source-contract-redisposition-review.test.ts`
 - Reference: `testing/source-contract-ledger.json`
 - Reference: `src/lib/components/research-projects/projects-workspace.behavior.component.test.ts`
@@ -306,6 +307,8 @@ Expected: exit 0. Store its wall time, exit code, exact gate inventory from `scr
 
 - [ ] **Step 6: Implement and test timing arithmetic validation**
 
+Implement this validation in the production carrier, not as test-only logic, so both `check` and `apply` fail closed on timing or forecast drift.
+
 Calculate medians from retained arrays and require:
 
 ```text
@@ -325,7 +328,7 @@ Require `proposedNewJsdomRows <= replacementUnitCeiling`. Reject any Playwright 
 
 Run: `git diff --check`
 
-Run: `git add testing/source-contract-redisposition-review.json scripts/testing/source-contract-redisposition-review.test.ts`
+Run: `git add testing/source-contract-redisposition-review.json scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts docs/superpowers/plans/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md`
 
 Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 

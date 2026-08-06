@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import reviewArtifact from "../../testing/source-contract-redisposition-review.json";
 import {
   applyReview,
   canonicalJson,
+  loadBaseLedger,
+  loadBaseTrackedPaths,
   resolutionForDecision,
   sha256Text,
   validateReview,
@@ -58,6 +62,35 @@ const classIds = [
 ];
 const criticalitySources = [{ id: "AGENTS_SECURITY", citation: "AGENTS.md §7" }];
 
+const componentReplacementCommand = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/projects-workspace.behavior.component.test.ts src/lib/analysis-report-canvas.behavior.component.test.ts src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts";
+const componentStartupCommand = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/SourceStatusCell.component.test.ts";
+const verifyGateInventory = [
+  "npm run check:gemini-browser-sidecar-binary", "node scripts/validate-testing-transition.mjs", "npm run test:unit",
+  "npm run test:component", "npm run test:architecture", "npm run test:legacy-contract", "npm run test:integration:os",
+  "npm run test:e2e", "npm run check", "npm run check:rustfmt",
+  "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
+  "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets", "git diff HEAD --check",
+];
+
+function timingFixture() {
+  const componentReplacement = { command: componentReplacementCommand, warmupExitCode: 0, retainedSeconds: [28, 29, 30], medianSeconds: 29 };
+  const componentStartup = { command: componentStartupCommand, warmupExitCode: 0, retainedSeconds: [4, 5, 6], medianSeconds: 5 };
+  const legacyOwner = { command: "npm.cmd run test:legacy-contract", warmupExitCode: 0, retainedSeconds: [10, 11, 12], medianSeconds: 11, baseFiles: ["src/a.test.ts", "src/z.test.ts"] };
+  const verify = { command: "npm.cmd run verify", seconds: 200, exitCode: 0, historicalSeconds: [208.1, 321.3, 383.4], gateInventory: verifyGateInventory };
+  const scalablePerRow = (componentReplacement.medianSeconds - componentStartup.medianSeconds) / 46;
+  return {
+    mechanisms: { componentReplacement, componentStartup, legacyOwner, verify },
+    forecast: {
+      beforeByDisposition: {}, afterByDisposition: {}, futureOwnersByMechanism: {},
+      proposedNewJsdomRows: 0, proposedNewJsdomOrdinals: 0, removableLegacyFiles: 0,
+      removableLegacySeconds: legacyOwner.medianSeconds, upperBoundPerRow: componentReplacement.medianSeconds / 46,
+      scalablePerRow, upperForecastSeconds: 0, scalableForecastSeconds: 0, netGateForecastSeconds: 0,
+      replacementUnitCeiling: 46, legacyDominatesFullUnitCeiling: legacyOwner.medianSeconds >= scalablePerRow * 46,
+      scalableForecastPercent: 0, netGateForecastPercent: 0,
+    },
+  };
+}
+
 function defaultDecisions() {
   return [
   {
@@ -82,7 +115,7 @@ function artifactFor(decisions = defaultDecisions()) {
   const ordinary = decisions.filter((decision) => !["B3_PROTECTED_EXPENSIVE_BEHAVIOR", "D5_ACCEPTED_LOSS"].includes(decision.class) && !decision.resolution?.subgroups);
   const population = ordinary.map((decision) => decision.id).sort();
   const sample = [...population].sort((a, b) => hash(a).localeCompare(hash(b))).slice(0, Math.ceil(population.length * 0.1));
-  return {
+  const artifact: any = {
     schemaVersion: 1,
     reviewBaseCommit: REVIEW_BASE,
     ledgerFrozenAtCommit: baseLedger.frozenAtCommit,
@@ -91,7 +124,7 @@ function artifactFor(decisions = defaultDecisions()) {
     protectedRows: mandatoryP0Ids.map((id) => ({ id, criticalityRef: "AGENTS_SECURITY" })),
     protectedRowsDigest: sha256Text(canonicalJson(mandatoryP0Ids.map((id) => ({ id, criticalityRef: "AGENTS_SECURITY" })))),
     criticalitySources,
-    mechanisms: {},
+    ...timingFixture(),
     decisions,
     independentReview: {
       authorRunId: "author-run",
@@ -104,8 +137,48 @@ function artifactFor(decisions = defaultDecisions()) {
       deterministicSample: { algorithm: "sha256-id-lowest-10-percent", population, populationDigest: sha256Text(canonicalJson(population)), rowIds: sample, iterations: 1, comparison: "agree" },
       disagreements: [],
     },
-    forecast: {}, acceptedLoss: { rows: 0, assertionOrdinals: 0, items: [] },
+    acceptedLoss: { rows: 0, assertionOrdinals: 0, items: [] },
   };
+  const rowById = new Map(baseLedger.rows.map((item) => [item.id, item]));
+  const futureRows = new Set<string>();
+  const proposedRows = new Set<string>();
+  let futureOrdinals = 0;
+  let proposedOrdinals = 0;
+  for (const decision of decisions) {
+    if (!["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"].includes(decision.class)) continue;
+    const row = rowById.get(decision.id) as any;
+    const groups = decision.resolution?.subgroups ?? [decision.resolution];
+    for (const group of groups) {
+      if (!group?.replacementIds?.some((id: string) => id.startsWith("test:vitest:"))) continue;
+      const ordinals = decision.resolution?.subgroups ? group.assertionOrdinals : Array.from({ length: row.assertionCount }, (_, index) => index + 1);
+      futureRows.add(decision.id);
+      futureOrdinals += ordinals.length;
+      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") {
+        proposedRows.add(decision.id);
+        proposedOrdinals += ordinals.length;
+      }
+    }
+  }
+  const replacement = artifact.mechanisms.componentReplacement.medianSeconds;
+  const startup = artifact.mechanisms.componentStartup.medianSeconds;
+  const legacy = artifact.mechanisms.legacyOwner.medianSeconds;
+  const verify = artifact.mechanisms.verify.seconds;
+  const scalable = Math.max(0, replacement - startup) / 46;
+  artifact.forecast = {
+    ...artifact.forecast,
+    futureOwnersByMechanism: futureRows.size ? { jsdom: { rows: futureRows.size, assertionOrdinals: futureOrdinals } } : {},
+    proposedNewJsdomRows: proposedRows.size,
+    proposedNewJsdomOrdinals: proposedOrdinals,
+    upperBoundPerRow: replacement / 46,
+    scalablePerRow: scalable,
+    upperForecastSeconds: replacement / 46 * proposedRows.size,
+    scalableForecastSeconds: scalable * proposedRows.size,
+    netGateForecastSeconds: Math.max(0, scalable * proposedRows.size - legacy),
+    legacyDominatesFullUnitCeiling: legacy >= scalable * 46,
+    scalableForecastPercent: scalable * proposedRows.size / verify * 100,
+    netGateForecastPercent: Math.max(0, scalable * proposedRows.size - legacy) / verify * 100,
+  };
+  return artifact;
 }
 
 function p0Review() {
@@ -124,6 +197,71 @@ function review(overrides: Record<string, unknown> = {}) {
 }
 
 describe("source-contract redisposition review", () => {
+  it("pins every real base-open row in the static draft artifact", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+    ]);
+    const baseOpenRows = realBaseLedger.rows.filter((item: any) =>
+      realBaseTrackedPaths.has(item.path) && !["SC-000355", "SC-000366"].includes(item.id));
+    const baseOpenById = new Map(baseOpenRows.map((item: any) => [item.id, item]));
+    const closedRows = realBaseLedger.rows.filter((item: any) => !baseOpenById.has(item.id));
+    const decisions = reviewArtifact.decisions;
+    const decisionIds = decisions.map((item) => item.id);
+    const mandatoryP0Ids = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
+
+    expect(decisions).toHaveLength(436);
+    expect(baseOpenRows).toHaveLength(436);
+    expect(closedRows).toHaveLength(235);
+    expect(new Set(decisionIds).size).toBe(436);
+    expect(decisionIds).toEqual([...decisionIds].sort((left, right) => Number(left.slice(3)) - Number(right.slice(3))));
+    expect(decisions.map((item) => [item.id, item.sourceHash])).toEqual(baseOpenRows
+      .sort((left: any, right: any) => Number(left.id.slice(3)) - Number(right.id.slice(3)))
+      .map((item: any) => [item.id, item.sourceHash]));
+    expect(reviewArtifact.protectedRows.map((item) => item.id)).toEqual(expect.arrayContaining(mandatoryP0Ids));
+    expect(decisions.every((item) => item.class === "UNCLASSIFIED" && !("reason" in item) && !("resolution" in item))).toBe(true);
+  });
+
+  it("derives timing forecasts from retained measurements and rejects invalid baseline or jsdom proposals", () => {
+    expect(validateReview(review())).toEqual([]);
+
+    const wrongMedian = artifactFor();
+    wrongMedian.mechanisms.componentReplacement.medianSeconds = 28;
+    expect(validateReview(review({ artifact: wrongMedian }))).toContain("mechanisms.componentReplacement: medianSeconds must equal the retained median");
+
+    const wrongForecast = artifactFor();
+    wrongForecast.forecast.scalablePerRow = 1;
+    expect(validateReview(review({ artifact: wrongForecast }))).toContain("forecast: scalablePerRow does not match retained timing arithmetic");
+
+    for (const field of ["upperBoundPerRow", "upperForecastSeconds", "scalableForecastSeconds", "netGateForecastSeconds", "removableLegacySeconds"] as const) {
+      const perturbed = artifactFor();
+      perturbed.forecast[field] += 1;
+      expect(validateReview(review({ artifact: perturbed }))).toContain(`forecast: ${field} does not match retained timing arithmetic`);
+    }
+    const wrongPercent = artifactFor();
+    wrongPercent.forecast.netGateForecastPercent = 1;
+    expect(validateReview(review({ artifact: wrongPercent }))).toContain("forecast: netGateForecastPercent does not match the fresh verify baseline");
+    const wrongDominance = artifactFor();
+    wrongDominance.forecast.legacyDominatesFullUnitCeiling = !wrongDominance.forecast.legacyDominatesFullUnitCeiling;
+    expect(validateReview(review({ artifact: wrongDominance }))).toContain("forecast: legacyDominatesFullUnitCeiling mismatch");
+    const wrongGrouping = artifactFor();
+    wrongGrouping.forecast.futureOwnersByMechanism = {};
+    expect(validateReview(review({ artifact: wrongGrouping }))).toContain("forecast: futureOwnersByMechanism does not match jsdom owner grouping");
+
+    const overCeiling = artifactFor();
+    overCeiling.forecast.proposedNewJsdomRows = 47;
+    expect(validateReview(review({ artifact: overCeiling }))).toContain("forecast: proposedNewJsdomRows exceeds replacementUnitCeiling");
+
+    const unsortedBaseline = artifactFor();
+    unsortedBaseline.mechanisms.legacyOwner.baseFiles.reverse();
+    expect(validateReview(review({ artifact: unsortedBaseline }))).toContain("mechanisms.legacyOwner: baseFiles must be sorted normalized repository-relative paths");
+
+    const playwrightProposal = artifactFor();
+    playwrightProposal.decisions[0].resolution.replacementIds = ["test:playwright:future/proposal.spec.ts"];
+    expect(validateReview(review({ artifact: playwrightProposal }))).toContain("SC-000001: browser owner requires program amendment");
+  });
+
   it("pins the base and scopes every independently derived open row", () => {
     expect(validateReview(review())).toEqual([]);
     expect(validateReview(review({ artifact: artifactFor([]) }))).toContain("scope: expected one decision for every base-open row");

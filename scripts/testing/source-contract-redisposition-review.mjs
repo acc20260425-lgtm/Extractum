@@ -169,6 +169,113 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
   }
 }
 
+const COMPONENT_REPLACEMENT_COMMAND = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/projects-workspace.behavior.component.test.ts src/lib/analysis-report-canvas.behavior.component.test.ts src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts";
+const COMPONENT_STARTUP_COMMAND = "node scripts/run-vitest.mjs run --project component src/lib/components/research-projects/SourceStatusCell.component.test.ts";
+const VERIFY_GATE_INVENTORY = [
+  "npm run check:gemini-browser-sidecar-binary", "node scripts/validate-testing-transition.mjs", "npm run test:unit",
+  "npm run test:component", "npm run test:architecture", "npm run test:legacy-contract", "npm run test:integration:os",
+  "npm run test:e2e", "npm run check", "npm run check:rustfmt",
+  "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
+  "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets", "git diff HEAD --check",
+];
+
+function equalNumber(left, right) {
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) < 1e-12;
+}
+
+function retainedMedian(mechanism, name, command, issues) {
+  if (!mechanism || typeof mechanism !== "object") {
+    issues.push(`mechanisms.${name}: missing`);
+    return undefined;
+  }
+  if (mechanism.command !== command) issues.push(`mechanisms.${name}: command mismatch`);
+  if (mechanism.warmupExitCode !== 0) issues.push(`mechanisms.${name}: warmupExitCode must be 0`);
+  if (!Array.isArray(mechanism.retainedSeconds) || mechanism.retainedSeconds.length !== 3 || mechanism.retainedSeconds.some((value) => !Number.isFinite(value) || value <= 0)) {
+    issues.push(`mechanisms.${name}: retainedSeconds must contain three positive observations`);
+    return undefined;
+  }
+  const median = [...mechanism.retainedSeconds].sort((left, right) => left - right)[1];
+  if (!equalNumber(mechanism.medianSeconds, median)) issues.push(`mechanisms.${name}: medianSeconds must equal the retained median`);
+  return median;
+}
+
+function jsdomSummary(decisions, baseLedger) {
+  const rowsById = new Map((baseLedger?.rows ?? []).map((row) => [row.id, row]));
+  const summary = { futureRows: new Set(), futureOrdinals: 0, proposedRows: new Set(), proposedOrdinals: 0 };
+  for (const decision of decisions ?? []) {
+    if (!["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"].includes(decision?.class)) continue;
+    const row = rowsById.get(decision.id);
+    const groups = decision.resolution?.subgroups ?? [decision.resolution];
+    for (const group of groups) {
+      if (!Array.isArray(group?.replacementIds) || !group.replacementIds.some((id) => id.startsWith("test:vitest:"))) continue;
+      const ordinals = decision.resolution?.subgroups ? group.assertionOrdinals ?? [] : Array.from({ length: row?.assertionCount ?? 0 }, (_, index) => index + 1);
+      summary.futureRows.add(decision.id);
+      summary.futureOrdinals += ordinals.length;
+      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") {
+        summary.proposedRows.add(decision.id);
+        summary.proposedOrdinals += ordinals.length;
+      }
+    }
+  }
+  return { futureRows: summary.futureRows.size, futureOrdinals: summary.futureOrdinals, proposedRows: summary.proposedRows.size, proposedOrdinals: summary.proposedOrdinals };
+}
+
+function validateTimingAndForecast(artifact, baseLedger, issues) {
+  const mechanisms = artifact.mechanisms;
+  const replacement = retainedMedian(mechanisms?.componentReplacement, "componentReplacement", COMPONENT_REPLACEMENT_COMMAND, issues);
+  const startup = retainedMedian(mechanisms?.componentStartup, "componentStartup", COMPONENT_STARTUP_COMMAND, issues);
+  const legacy = retainedMedian(mechanisms?.legacyOwner, "legacyOwner", "npm.cmd run test:legacy-contract", issues);
+  const baseFiles = mechanisms?.legacyOwner?.baseFiles;
+  if (!Array.isArray(baseFiles) || !baseFiles.length || baseFiles.some((file) => typeof file !== "string" || !file || file !== normalizedPath(file) || file.startsWith("../")) || canonicalJson(baseFiles) !== canonicalJson([...baseFiles].sort(compareText))) {
+    issues.push("mechanisms.legacyOwner: baseFiles must be sorted normalized repository-relative paths");
+  }
+  const verify = mechanisms?.verify;
+  let freshVerifySeconds;
+  if (!verify || typeof verify !== "object") issues.push("mechanisms.verify: missing");
+  else {
+    if (verify.command !== "npm.cmd run verify") issues.push("mechanisms.verify: command mismatch");
+    if (canonicalJson(verify.historicalSeconds) !== canonicalJson([208.1, 321.3, 383.4])) issues.push("mechanisms.verify: historicalSeconds mismatch");
+    if (canonicalJson(verify.gateInventory) !== canonicalJson(VERIFY_GATE_INVENTORY)) issues.push("mechanisms.verify: gateInventory mismatch");
+    if (verify.successfulBaseline === null) {
+      const observations = verify.observations;
+      if (!Array.isArray(observations) || observations.length !== 1 || observations[0]?.executionOrder !== 1 || observations[0]?.exitCode !== 1 || !Number.isFinite(observations[0]?.seconds) || observations[0].seconds <= 0 || typeof observations[0]?.failedGate !== "string" || typeof observations[0]?.failure !== "string") issues.push("mechanisms.verify: pending baseline must retain one failed observation");
+    } else {
+      if (verify.exitCode !== 0 || !Number.isFinite(verify.seconds) || verify.seconds <= 0) issues.push("mechanisms.verify: successful baseline requires exitCode 0 and positive seconds");
+      else freshVerifySeconds = verify.seconds;
+    }
+  }
+  const forecast = artifact.forecast;
+  if (!forecast || typeof forecast !== "object" || replacement === undefined || startup === undefined || legacy === undefined) {
+    if (!forecast || typeof forecast !== "object") issues.push("forecast: missing");
+    return;
+  }
+  const proposedRows = forecast.proposedNewJsdomRows;
+  const jsdom = jsdomSummary(artifact.decisions, baseLedger);
+  const expectedFutureOwners = jsdom.futureRows ? { jsdom: { rows: jsdom.futureRows, assertionOrdinals: jsdom.futureOrdinals } } : {};
+  if (canonicalJson(forecast.futureOwnersByMechanism) !== canonicalJson(expectedFutureOwners)) issues.push("forecast: futureOwnersByMechanism does not match jsdom owner grouping");
+  if (forecast.proposedNewJsdomRows !== jsdom.proposedRows || forecast.proposedNewJsdomOrdinals !== jsdom.proposedOrdinals) issues.push("forecast: proposed jsdom rows or ordinals do not match B3 owner grouping");
+  if (!Number.isInteger(proposedRows) || proposedRows < 0) issues.push("forecast: proposedNewJsdomRows must be a non-negative integer");
+  if (proposedRows > 46) issues.push("forecast: proposedNewJsdomRows exceeds replacementUnitCeiling");
+  if (forecast.replacementUnitCeiling !== 46) issues.push("forecast: replacementUnitCeiling must equal 46");
+  const upperBoundPerRow = replacement / 46;
+  const scalablePerRow = Math.max(0, replacement - startup) / 46;
+  const upperForecastSeconds = upperBoundPerRow * proposedRows;
+  const scalableForecastSeconds = scalablePerRow * proposedRows;
+  const netGateForecastSeconds = Math.max(0, scalableForecastSeconds - legacy);
+  const derived = [
+    ["upperBoundPerRow", upperBoundPerRow], ["scalablePerRow", scalablePerRow], ["upperForecastSeconds", upperForecastSeconds],
+    ["scalableForecastSeconds", scalableForecastSeconds], ["netGateForecastSeconds", netGateForecastSeconds], ["removableLegacySeconds", legacy],
+  ];
+  for (const [field, value] of derived) if (!equalNumber(forecast[field], value)) issues.push(`forecast: ${field} does not match retained timing arithmetic`);
+  if (forecast.legacyDominatesFullUnitCeiling !== (legacy >= scalablePerRow * 46)) issues.push("forecast: legacyDominatesFullUnitCeiling mismatch");
+  if (freshVerifySeconds === undefined) {
+    if (forecast.netGateForecastPercent !== null) issues.push("forecast: netGateForecastPercent must be null while the successful baseline is pending");
+  } else {
+    if (!equalNumber(forecast.scalableForecastPercent, scalableForecastSeconds / freshVerifySeconds * 100)) issues.push("forecast: scalableForecastPercent does not match the fresh verify baseline");
+    if (!equalNumber(forecast.netGateForecastPercent, netGateForecastSeconds / freshVerifySeconds * 100)) issues.push("forecast: netGateForecastPercent does not match the fresh verify baseline");
+  }
+}
+
 function expectedSample(decisions, protectedIds) {
   const population = decisions
     .filter((decision) => decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && decision.class !== "D5_ACCEPTED_LOSS" && !protectedIds.has(decision.id) && !decision.resolution?.subgroups)
@@ -288,9 +395,11 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     const baseRow = baseLedger.rows.find((row) => row.id === decision.id);
     if (!baseRow) continue;
     const protectedRow = protectedRows.find((item) => item.id === decision.id);
-    if ((protectedRow || decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") && (!criticalityIds.has(decision.criticalityRef) || (protectedRow && protectedRow.criticalityRef !== decision.criticalityRef))) issues.push(`${decision.id}: protected behavior requires a valid criticalityRef`);
+    if (decision.class !== "UNCLASSIFIED" && (protectedRow || decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") && (!criticalityIds.has(decision.criticalityRef) || (protectedRow && protectedRow.criticalityRef !== decision.criticalityRef))) issues.push(`${decision.id}: protected behavior requires a valid criticalityRef`);
     validateResolution(decision, baseRow, protectedIds, resolvedOwners, issues);
   }
+
+  validateTimingAndForecast(artifact, baseLedger, issues);
 
   const independent = artifact.independentReview;
   if (!independent || typeof independent !== "object") issues.push("independentReview: missing");
