@@ -19,11 +19,11 @@
 - P0 contains at least SC-000555--SC-000560, SC-000511--SC-000515, and SC-000420. Add a row only with an exact citation to `AGENTS.md` section 2, 6, or 7, or an approved program-specification section.
 - P0 membership and normative criticality are separate. B3 requires an exact normative `criticalityRef`; a P0 row with no A1/T1/B1/B2 owner terminates at B3.
 - D1--D5 reasons begin with the full class name and continue with row-specific text. D5 additionally enumerates all intentionally lost behavior and exact assertion ordinals.
-- Independent classification uses a separate reviewer subagent spawned with `fork_turns: "none"`. Its prompt contains only the approved class catalog, normative-source catalog, source declaration/invariant/ordinals, and candidate-owner inventory; it must not contain the author's proposed class, reason, artifact decision, conversation history, or diff.
+- Independent classification uses a reviewer context that contains only the approved class catalog, normative-source catalog, source declaration/invariant/ordinals, and candidate-owner inventory; it must not contain the author's proposed class, reason, artifact decision, conversation history, or diff. In the current Codex harness, create that context through a separate subagent with `fork_turns: "none"`; another harness must provide an equivalent clean-context primitive or stop explicitly.
 - A mixed decision removes top-level resolution fields and writes at least two subgroups whose ordinals exactly and non-overlappingly partition `1..assertionCount`; every subgroup has its own invariant and resolution.
 - The committed carrier remains outside `verify`. Its `check` command is mandatory checkpoint evidence; the existing transition validator remains unchanged.
 - Run timing observations and the complete `verify` unsandboxed. Use one unretained warm-up plus three retained runs per component mechanism. Use `npm.cmd` for repository scripts and canonical `src-tauri/target`.
-- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The 3C+ net expensive-replacement forecast, after subtracting the measured removable legacy owner, must fit one measured Slice 3B increment or the checkpoint requires a separate program amendment.
+- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The binding 3C+ ceiling is 46 replacement units: one per proposed jsdom row plus measured jsdom-row equivalents per proposed browser owner file. Net gate seconds are disclosure only.
 - Do not add Nx, Nx Cloud, GitHub Actions, branch protection, git hooks, remote cache, or an external reporting service.
 
 ---
@@ -70,6 +70,7 @@ type Resolution =
 type Decision = {
   id: string;
   sourceHash: string;
+  authorRunId: string;
   class: ReasonClass;
   reason: string;
   ownerEvidence?: string[];
@@ -96,8 +97,9 @@ type ReviewArtifact = {
   };
   decisions: Decision[];
   independentReview: {
+    authorRunId: string;
     reviewer: { agentTaskId: string; contextPolicy: "blind-no-proposed-class-or-reason" };
-    blindResults: Array<{ id: string; class: Exclude<ReasonClass, "UNCLASSIFIED">; reason: string; ownerEvidence?: string[]; criticalityRef?: string }>;
+    blindResults: Array<{ id: string; sourceHash: string; reviewerRunId: string; class: Exclude<ReasonClass, "UNCLASSIFIED">; reason: string; ownerEvidence?: string[]; criticalityRef?: string }>;
     calibrations: Array<{ class: Exclude<ReasonClass, "UNCLASSIFIED">; rowIds: string[]; adjacentClass: string; result: "agree" | "rule_changed" | "no_match" }>;
     mandatoryCohorts: Array<{ name: string; rowIds: string[]; comparison: "agree" | "rule_changed" }>;
     deterministicSample: { algorithm: "sha256-id-lowest-10-percent"; population: string[]; rowIds: string[]; comparison: "agree" | "rule_changed" };
@@ -121,10 +123,12 @@ type ReviewArtifact = {
     browserUpperForecastSeconds: number;
     grossAddedForecastSeconds: number;
     netGateForecastSeconds: number;
+    browserOwnerEquivalentRows: number;
+    replacementUnits: number;
+    replacementUnitCeiling: 46;
+    legacyDominatesFullUnitCeiling: boolean;
     scalableForecastPercent: number;
     netGateForecastPercent: number;
-    ceilingSeconds: number;
-    ceilingPercent: number;
   };
   acceptedLoss: { rows: number; assertionOrdinals: number; items: Array<{ id: string; assertionOrdinals: number[]; behavior: string }> };
 };
@@ -189,7 +193,7 @@ Closed-row bytes are `canonicalJson(baseLedger.rows.filter(row => !baseOpenIds.h
 
 - [ ] **Step 4: Write RED tests for the resolution allowlist and class ladder**
 
-Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, a reviewer result copied from or exposed to the author decision packet, and mechanically incorrect author/blind comparisons.
+Cover every mapping: D1--D5 to `delete`, A1 to `architecture`, T1 to `tool_owned`, and B1--B3 to `behavior`. Reject `UNCLASSIFIED`, class-code-only deletion text, replacement IDs on delete, absent replacement IDs on retained decisions, individual override fields, changed immutable row fields, any changed envelope field or `sourceReaderExceptions`, P0 digest drift, equal/missing `authorRunId` and reviewer `agentTaskId`, a decision whose `authorRunId` differs from the artifact author run, a blind result whose `reviewerRunId` differs from the reviewer task, blind `sourceHash` drift, an unsupported `contextPolicy`, and mechanically incorrect author/blind comparisons. The distinct recorded run IDs validate the observable consequence of separate executions; the harness-specific clean-context mechanism remains an execution precondition.
 
 ```ts
 expect(validateReview({ artifact: withDecision("SC-000001", {
@@ -205,7 +209,7 @@ Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `critic
 
 - [ ] **Step 6: Write RED tests for mixed rows and idempotent apply**
 
-Test exact ordinal partition, duplicate/missing/out-of-range ordinals, subgroup invariants, forbidden top-level resolution, mixed P0 deletion, stable row ordering, unchanged non-resolution bytes, and identical bytes after two applications.
+Test exact ordinal partition, duplicate/missing/out-of-range ordinals, subgroup invariants, forbidden top-level resolution, mixed P0 deletion, stable row ordering, unchanged non-resolution bytes, exactly one trailing newline in serialized output, and identical bytes after two applications.
 
 ```ts
 const first = applyReview({ artifact, baseLedger, currentLedger });
@@ -265,7 +269,7 @@ Expected: FAIL because the artifact does not exist.
 
 - [ ] **Step 2: Create the deterministic draft artifact**
 
-Populate `reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e"`, copy the ledger's exact `frozenAtCommit`, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash`, uses `class: "UNCLASSIFIED"`, and contains no fabricated resolution.
+Populate `reviewBaseCommit: "a54507d63420bb870c3870c91d7e22b050abae3e"`, copy the ledger's exact `frozenAtCommit`, record the current author task/run ID, calculate the closed-row digest through the carrier helper, declare all ten reason classes in ladder order, add exact normative citations, and add one decision per validator-open base row sorted by numeric SC ID. Each draft decision keeps the exact `sourceHash` and author run ID, uses `class: "UNCLASSIFIED"`, and contains no fabricated resolution.
 
 Run the focused integration test again.
 
@@ -320,12 +324,15 @@ scalableForecast = scalablePerRow * proposedNewJsdomRows
 browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
 grossAddedForecast = scalableForecast + browserUpperForecast
 netGateForecast = max(0, grossAddedForecast - Tlegacy)
-ceilingSeconds = max(0, T3B - Tstartup)
-ceilingPercent = ceilingSeconds / freshVerifySeconds * 100
+browserOwnerEquivalentRows = ceil(Tbrowser / scalablePerRow)
+replacementUnits = proposedNewJsdomRows
+  + browserOwnerEquivalentRows * proposedNewBrowserOwnerFiles
+replacementUnitCeiling = 46
 netGateForecastPercent = netGateForecast / freshVerifySeconds * 100
+legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * replacementUnitCeiling
 ```
 
-When no browser owner is proposed, require `browserOwner: null`, zero browser counts, and zero browser forecast. When at least one `test:playwright:` owner is proposed, require a measured browser owner and charge its full direct-file median once per distinct proposed owner file. Add tests that perturb every derived number, the legacy baseline listing, and the jsdom/browser owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
+When no browser owner is proposed, require `browserOwner: null`, zero browser counts, zero browser forecast, and zero browser-equivalent rows. When at least one `test:playwright:` owner is proposed, require a measured browser owner, charge its full direct-file median once per distinct proposed owner file, and round its jsdom-row equivalent up to at least one. If `scalablePerRow` is zero with a browser proposal, fail closed for a program amendment. Add tests that perturb every derived number, the 46-unit ceiling, the legacy-dominance disclosure, the baseline listing, and the jsdom/browser owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
 
 - [ ] **Step 7: Commit the measured draft**
 
@@ -352,7 +359,7 @@ Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 **Interfaces:**
 
 - Consumes the draft and class validator from Tasks 1--2.
-- Produces calibrated group rules plus reviewed decisions for all 26 large-contract rows, all 124 live manual rows, all P0/security/import/process rows, and all emerging B3/D5/mixed decisions.
+- Produces calibrated group rules plus reviewed decisions for all 26 large-contract rows, all P0/security/import/process rows, and all emerging B3/D5/mixed decisions. The 124 live manual rows are classified with their file families in Task 4 and enter blind review only through overlaps with these risk cohorts or the deterministic sample.
 - No decision is accepted solely because of its current ledger disposition.
 
 - [ ] **Step 1: Select adversarial calibration cases from the 410-row tail**
@@ -369,25 +376,19 @@ Record security, import-boundary, and process-lifecycle row IDs as explicit mand
 
 Freeze the complete P0 catalog at the end of this step and record its digest in the artifact. If any later tail inspection discovers a credible P0 candidate, stop tail work, return to this step, expand and independently review the protected catalog, rerun every affected group, update the digest, and only then resume. Never append P0 after a tail decision has been accepted without that rollback.
 
-- [ ] **Step 3: Classify and independently review all 124 live manual rows**
-
-Use each manual `sourceRange`, `reason`, and `runnerTitles` to inspect the actual declaration. `manual` is extraction metadata, not a reason class. Record one of the ten substantive classes or `UNCLASSIFIED`; if a repeated unmatched group appears, amend the approved design before proceeding instead of adding an individual exception.
-
-The separate clean-context reviewer receives the same 124 source declarations and candidate-owner inventories in bounded batches, but no author class or reason. The reviewer writes all 124 independent decisions before comparison. The carrier computes the cohort result from author versus blind decisions. Every disagreement changes the named group rule and reruns every decision in that group.
-
-- [ ] **Step 4: Classify and independently review the 26 large-contract rows**
+- [ ] **Step 3: Classify and independently review the 26 large-contract rows**
 
 Review all 16 open rows in `analysis-crate-boundary-contract.test.ts` and the 10 open rows in `crate-extraction-shell-cap-contract.test.ts`. SC-000355 remains closed and unchanged. Prefer completed-history deletion, existing repository-rule/Cargo owners, or focused Rust/Node seams before proposing a new behavior owner.
 
 Give the clean-context reviewer the complete 26-row input without proposed decisions. Record the independent output, then calculate the complete 26-ID cohort comparison. Do not give the large files a special class; the same ladder applies.
 
-- [ ] **Step 5: Validate the partial artifact without applying it**
+- [ ] **Step 4: Validate the partial artifact without applying it**
 
 Run: `node scripts/testing/source-contract-redisposition-review.mjs check`
 
 Expected: non-zero only because unreviewed tail decisions remain `UNCLASSIFIED`; there must be no schema, scope, P0, owner, mixed, timing, blind-review, or already-classified-row error.
 
-- [ ] **Step 6: Commit the calibrated mandatory pass**
+- [ ] **Step 5: Commit the calibrated mandatory pass**
 
 Run: `git diff --check`
 
@@ -412,23 +413,51 @@ If the unmatched-group stop condition occurs, leave Tasks 1--3 committed, keep `
 - Consumes the calibrated group rules from Task 3.
 - Produces zero `UNCLASSIFIED` rows, complete existing/future owner projections, a complete D5 acceptance table, exact new mixed evidence, and all mandated independent-review records.
 
-- [ ] **Step 1: Classify the 410-row tail by complete matching groups**
+- [ ] **Step 1: Freeze and validate the seven tail-family manifests**
 
-Process rows in stable `(path, numeric SC id)` order. For every row apply the ladder from the top and record the first matching class, row-specific reason, exact owner evidence or future replacement ID, and any normative citation. When only some ordinals match, emit a mixed resolution with exact subgroup invariants and a full ordinal partition.
+Derive families in this exact first-match order after excluding the 26 large-contract rows. Store every family's sorted paths and row IDs in the artifact and make the carrier recompute the base counts:
 
-Never use a generic `D1`, `D2`, or `D5` sentence. Each deletion reason must name the exact historical fact, implementation detail, unobservable visual, duplicate owner, or accepted behavior loss for that row.
+| Family | First-match path predicate | Rows | Files |
+| --- | --- | ---: | ---: |
+| testing/process infrastructure | starts with `scripts/` | 24 | 7 |
+| analysis | contains `analysis` | 152 | 24 |
+| projects/library | matches `research-projects`, `project-`, `projects/`, or `library` | 73 | 19 |
+| prompt packs/YouTube | matches `prompt-pack` or `youtube-summary` | 53 | 11 |
+| Gemini browser | matches `gemini-browser` or `provider-test-console` | 29 | 3 |
+| Rust/security boundaries | matches `crate`, `rust-workspace`, `tauri-security`, `external-process`, `hidden-child`, or `focused-rust` | 25 | 6 |
+| other product | every remaining tail path | 54 | 14 |
 
-- [ ] **Step 2: Build the deterministic ten-percent remainder sample**
+Expected: exactly 410 unique rows in 84 unique files, with no overlap or remainder.
 
-Construct the remainder after excluding the 26 large rows, 124 manual rows, all P0/security/import/process rows, all B3/D5 rows, all new mixed rows, and all calibration rows. Sort by `sha256(id)` ascending and take `ceil(population.length * 0.10)` IDs. Store both the complete population and selected IDs so the carrier can recompute the sample.
+- [ ] **Step 2: Classify testing/process infrastructure and Rust/security boundaries**
+
+Apply calibrated group rules to the 49 rows in these two families. Prefer existing structured/Cargo/process owners. Recheck all protected and normative citations; discovery of a new P0 candidate returns execution to Task 3 Step 2 before either family is accepted.
+
+- [ ] **Step 3: Classify the analysis family**
+
+Apply the ladder to the 152 rows in stable `(path, numeric SC id)` order. Reuse one named group rule for declarations with the same invariant shape and owner mechanism; expand the result to explicit per-row artifact decisions. Inspect ordinal-level exceptions before expanding a rule to avoid hiding mixed rows.
+
+- [ ] **Step 4: Classify projects/library and prompt-pack/YouTube families**
+
+Apply the same group-rule process to the 126 rows in these two families. Prefer existing component/unit/Rust behavior owners before B2/B3. Keep route, component, and Cargo owner identities explicit rather than merging them under a domain label.
+
+- [ ] **Step 5: Classify Gemini browser and other-product families**
+
+Apply the ladder to the remaining 83 rows. A browser-facing invariant does not imply Playwright: test B1/B2 and jsdom seams first. Any proposed Playwright owner must use `test:playwright:` and becomes part of the measured browser forecast.
+
+Across Steps 2--5, `manual` remains extraction metadata only. Process its 124 rows in their ordinary families; it neither supplies a class nor triggers automatic 100-percent blind review. Never use a generic D1, D2, or D5 sentence. Each deletion reason names the exact historical fact, implementation detail, unobservable visual, duplicate owner, or accepted behavior loss. When only some ordinals match, emit a mixed resolution with exact subgroup invariants and a full partition.
+
+- [ ] **Step 6: Build the deterministic ten-percent remainder sample**
+
+Construct the remainder after excluding the 26 large rows, all P0/security/import/process rows, all B3/D5 rows, all new mixed rows, and all calibration rows. Manual rows remain eligible unless excluded by one of those risk cohorts. Sort by `sha256(id)` ascending and take `ceil(population.length * 0.10)` IDs. Store both the complete population and selected IDs so the carrier can recompute the sample.
 
 Send the sampled declarations, invariants, ordinals, candidate owners, catalog, and normative sources to the same clean-context reviewer without author decisions. The reviewer returns its own class/reason list before seeing the artifact. The carrier compares outputs. A disagreement updates the group rule, reclassifies all matching rows, and is recorded under `disagreements`.
 
-- [ ] **Step 3: Complete 100-percent review of expensive/loss/mixed decisions**
+- [ ] **Step 7: Complete 100-percent review of expensive/loss/mixed decisions**
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
-- [ ] **Step 4: Calculate the final forecast and loss summaries**
+- [ ] **Step 8: Calculate the final forecast and loss summaries**
 
 Count proposed owners by class/mechanism in rows and assertion ordinals. Derive jsdom versus Playwright from the replacement namespace and owner path, and count distinct proposed browser owner files.
 
@@ -438,11 +467,13 @@ If any browser owner is proposed, run one unretained warm-up and three retained 
 
 Store the samples and median as `mechanisms.browserOwner`; charge the full median once per distinct future browser owner file. If none is proposed, preserve `browserOwner: null` and zero browser counts.
 
-Set `proposedNewJsdomRows`/ordinals and `proposedNewBrowserRows`/ordinals from their B3 rows and subgroups. Recalculate component, browser, gross, removable-legacy, and net fields. Require `netGateForecastSeconds <= ceilingSeconds`; the gross addition alone is disclosure and cannot reject a change whose measured net effect is smaller. If the net forecast exceeds the ceiling, keep Tasks 1--3 and the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
+Set `proposedNewJsdomRows`/ordinals and `proposedNewBrowserRows`/ordinals from their B3 rows and subgroups. Recalculate component, browser, gross, removable-legacy, and net fields. Convert each browser owner file to `ceil(Tbrowser / scalablePerRow)` jsdom-row equivalents, minimum one, and require `replacementUnits <= 46`. If `scalablePerRow` is zero with a browser owner, or the unit count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
+
+Publish `legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * 46` and the actual comparison of `Tlegacy` with `grossAddedForecastSeconds`. These are explicit diagnostics: net seconds remain disclosure and never determine whether the 46-unit constraint passes.
 
 Build `acceptedLoss.items` from every D5 simple or subgroup decision, sorted by ID then first ordinal. Require the summary's row count, ordinal count, and complete behavior list to equal the decisions mechanically.
 
-- [ ] **Step 5: Run full carrier check and focused tests**
+- [ ] **Step 9: Run full carrier check and focused tests**
 
 Run: `node scripts/testing/source-contract-redisposition-review.mjs check`
 
@@ -452,7 +483,7 @@ Run: `node scripts/run-vitest.mjs run --project unit-node scripts/testing/source
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the completed review artifact**
+- [ ] **Step 10: Commit the completed review artifact**
 
 Run: `git diff --check`
 
@@ -486,7 +517,7 @@ Expected: PASS with zero `UNCLASSIFIED` and an idempotent simulated ledger.
 Run the repository's exact carrier canonicalization over the current ledger without applying decisions:
 
 ```powershell
-node --input-type=module -e "import fs from 'node:fs'; import { canonicalJson } from './scripts/testing/source-contract-redisposition-review.mjs'; const p='testing/source-contract-ledger.json'; fs.writeFileSync(p, canonicalJson(JSON.parse(fs.readFileSync(p, 'utf8'))));"
+node --input-type=module -e "import fs from 'node:fs'; import { canonicalJson } from './scripts/testing/source-contract-redisposition-review.mjs'; const p='testing/source-contract-ledger.json'; fs.writeFileSync(p, canonicalJson(JSON.parse(fs.readFileSync(p, 'utf8'))) + '\n');"
 ```
 
 Compare `JSON.parse` of the pre-normalized Git bytes with the normalized working file:
@@ -563,7 +594,7 @@ Run: `git commit -m "test: apply pre-slice 3c ledger redisposition"`
 
 - [ ] **Step 1: Write the evidence record from artifact values**
 
-Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; browser owner-file upper forecast; removable legacy time/files; gross and net forecasts; ceiling seconds/percent; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
+Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; browser owner-file upper forecast and row equivalents; removable legacy time/files; gross and net forecasts; the binding 46-unit result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
 
 Add a dedicated `Accepted D5 Losses` table with one row per artifact item and columns `SC ID`, `ordinals`, and `lost behavior`. State total D5 row and ordinal counts immediately above it.
 

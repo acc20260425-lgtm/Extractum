@@ -670,6 +670,9 @@ scalableForecast = scalablePerRow * proposedNewJsdomRows
 browserUpperForecast = Tbrowser * proposedNewBrowserOwnerFiles
 grossAddedForecast = scalableForecast + browserUpperForecast
 netGateForecast = max(0, grossAddedForecast - Tlegacy)
+browserOwnerEquivalentRows = ceil(Tbrowser / scalablePerRow)
+replacementUnits = proposedNewJsdomRows
+  + browserOwnerEquivalentRows * proposedNewBrowserOwnerFiles
 ```
 
 `upperBoundPerRow` is explicitly a conservative upper bound: 59 declarations,
@@ -686,20 +689,28 @@ compare its gate inventory and conditions with the recorded 208.1, 321.3, and
 not a row-admissibility filter. B3 admissibility depends only on its normative
 criticality evidence.
 
-The checkpoint-level growth ceiling is derived from the measured Slice 3B
-precedent rather than an arbitrary percentage:
+The binding checkpoint ceiling is the 46-row Slice 3B precedent expressed as
+replacement units:
 
 ```text
-ceilingSeconds = max(0, T3B - Tstartup)
-ceilingPercent = ceilingSeconds / freshVerifySeconds * 100
+replacementUnitCeiling = 46
+replacementUnits <= replacementUnitCeiling
 ```
 
-All proposed 3C+ expensive replacements together must have
-`netGateForecast <= ceilingSeconds`. If they exceed that ceiling, their row
-classes remain valid, but the redisposition checkpoint cannot be approved
-without a separate program amendment. The artifact reports jsdom rows and
-ordinals, browser rows, ordinals, and owner files, removable legacy files,
-gross and net seconds, and percentage of the fresh complete gate.
+One jsdom row consumes one unit. Each proposed browser owner file consumes its
+measured whole-file cost converted to jsdom-row equivalents, rounded up and
+never below one. If `scalablePerRow` is zero while a browser owner is proposed,
+the conversion is undefined and requires a program amendment. This count is
+the binding guardrail. `netGateForecast` remains a disclosure of expected gate
+effect and cannot make the unit ceiling pass or fail. The artifact also reports
+whether `Tlegacy` exceeds the gross forecast at the full 46-unit ceiling so a
+vacuously zero net forecast is visible rather than celebrated as a constraint.
+
+If replacement units exceed 46, their row classes remain valid, but the
+redisposition checkpoint cannot be approved without a separate program
+amendment. The artifact reports jsdom rows and ordinals, browser rows,
+ordinals, owner files and equivalent units, removable legacy files, gross and
+net seconds, and percentage of the fresh complete gate.
 
 #### Independent review and reproducibility
 
@@ -708,13 +719,14 @@ its boundary with an adjacent class, including the D5/B3 boundary. Then review
 the following populations independently at 100 percent:
 
 - all 26 rows in the two large doc-reading contracts;
-- all 124 live `manual` rows;
 - every P0 row and every mandatory security, import, and process invariant;
 - every B3 and D5 decision;
 - every newly mixed row.
 
 A deterministic ten-percent sample of all remaining rows checks mechanical
-application. Each independent pass is performed by a separate reviewer with a
+application. The `manual` marker is an extraction limitation, not a risk
+class: manual rows participate in this sample unless they overlap another
+100-percent cohort above. Each independent pass is performed by a separate reviewer with a
 clean context. The reviewer receives the row declaration, invariant, assertion
 ordinals, candidate-owner inventory, class catalog, and normative sources, but
 does not receive the proposed class, proposed reason, or author discussion.
