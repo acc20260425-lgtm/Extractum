@@ -767,12 +767,37 @@ split it into contiguous deterministic shards of at most 24 rows. A clean
 reviewer processes one shard at a time; every shard packet and output is
 content-addressed and must pass schema, uniqueness, order, source-hash,
 candidate-owner, citation, and approved-Playwright validation before merge.
+Only the final accepted content-addressed shard packet/output pairs are copied
+under `testing/source-contract-redisposition-evidence/` and committed. The
+carrier reads those bytes, verifies their hashes and schemas, and reconstructs
+the merged result; ignored `.superpowers` files are audit scratch only and can
+never satisfy `check` or `apply`.
 An invalid shard output is review transport failure: preserve it, correct or
 rerun that shard without author decisions, and do not count it as a fixed-point
 iteration. Only a complete mechanically valid merged result may change group
 rules or the deterministic-sample population and consume one of the three
 allowed iterations. Earlier monolithic attempts remain superseded evidence;
 the amended sharded protocol starts its valid-iteration count at zero.
+
+The max-three review on 2026-08-07 approved one ordered-ladder boundary
+clarification instead of an iteration four:
+
+- D1 applies only when the invariant is exhausted by a completed event and no
+  future repository change can violate it as a defect. Exact current source,
+  symbol, file, or test topology without an independent contract is D2.
+- A resolved base-closed owner that exactly proves the full invariant makes the
+  legacy evidence D4 before A1.
+- B2/B3 is determined by the truthful observation seam, not the runner prefix;
+  real browser or OS-process observation is B3.
+- A retained owner must prove the complete frozen invariant. Adjacent behavior
+  evidence does not own a no-copy or placement topology assertion.
+
+This group amendment adjudicates exactly SC-000077, SC-000080, SC-000081,
+SC-000092, SC-000203, and SC-000449 as D2; SC-000356--SC-000358 as D4; and
+SC-000420 as B3. The artifact retains the third-pass blind results and records
+the four group adjudications plus their exact affected sets; these are not
+per-row overrides and do not authorize any other disagreement. No iteration
+four is run. Later reviewers receive the clarified boundary policy.
 
 After any group-rule change, recompute the risk-cohort exclusions and the
 ten-percent remainder population. If that population changes, reselect the

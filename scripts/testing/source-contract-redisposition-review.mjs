@@ -13,17 +13,52 @@ const APPROVED_PLAYWRIGHT_OWNERS = new Map([
   ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
 ]);
 const APPROVED_PLAYWRIGHT_CRITICALITY = "TESTING_BROWSER_COMPONENT_OWNERSHIP";
+const REQUIRED_D3_REASONS = new Map([
+  ["SC-000323", "Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam."],
+  ["SC-000352", "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam."],
+  ["SC-000353", "Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam."],
+]);
+const REVIEW_EVIDENCE_DIRECTORY = "testing/source-contract-redisposition-evidence";
+const REVIEW_PACKET_SCHEMA_VERSION = 3;
 const REASON_CLASS_CATALOG = [
-  { id: "D1_COMPLETED_HISTORY_ONLY", rule: "Completed historical evidence with no future-defect seam." },
-  { id: "D2_IMPLEMENTATION_SHAPE", rule: "Implementation-shape assertion with no durable behavioral obligation." },
-  { id: "D3_NON_OBSERVABLE_VISUAL", rule: "Non-normative visual detail with no truthful non-browser seam." },
-  { id: "D4_DUPLICATE_EVIDENCE", rule: "Duplicate behavior already owned by a base-closed exact owner." },
-  { id: "A1_EXISTING_STRUCTURED_OWNER", rule: "Existing repository rule owns the structured architecture invariant." },
-  { id: "T1_EXISTING_TOOL_OWNER", rule: "Existing tool owns the executable invariant." },
-  { id: "B1_EXISTING_BEHAVIOR_OWNER", rule: "Existing base-closed behavior owner proves the invariant." },
-  { id: "B2_NEW_CHEAP_BEHAVIOR", rule: "A new focused jsdom or Cargo behavior owner is cheap and truthful." },
-  { id: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", rule: "A protected behavior needs a future owner and normative criticality." },
-  { id: "D5_ACCEPTED_LOSS", rule: "Explicitly accepted non-protected behavior loss." },
+  { id: "D1_COMPLETED_HISTORY_ONLY", rule: "Completed historical evidence only; forbidden whenever a future code, configuration, or test change could violate the invariant as a defect." },
+  { id: "D2_IMPLEMENTATION_SHAPE", rule: "Exact names, source strings, statement order, formatting, or composition with no independent contract; apply before visual-only D3." },
+  { id: "D3_NON_OBSERVABLE_VISUAL", rule: "Non-normative CSS, DOM order, or rendered visual detail with no truthful non-browser seam; implementation shape remains D2." },
+  { id: "D4_DUPLICATE_EVIDENCE", rule: "A base-closed exact owner already proves the complete invariant, so the source-contract row is duplicate evidence; apply before retained-owner classes." },
+  { id: "A1_EXISTING_STRUCTURED_OWNER", rule: "An existing structured repository rule, compiler, or Cargo-metadata owner is the durable architecture replacement." },
+  { id: "T1_EXISTING_TOOL_OWNER", rule: "An existing maintained tool owns the generic executable invariant." },
+  { id: "B1_EXISTING_BEHAVIOR_OWNER", rule: "An existing executable test proves behavior through a public seam and the row must retain a behavior resolution; use D4 first when a base-closed owner makes the row wholly duplicate." },
+  { id: "B2_NEW_CHEAP_BEHAVIOR", rule: "A new focused Node/jsdom or Cargo test through a cheap public seam is required; P0 membership or a normative citation alone does not make the owner B3." },
+  { id: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", rule: "A real browser or OS-process runtime test is required, no cheaper truthful seam exists, and an approved normative criticality source requires retention." },
+  { id: "D5_ACCEPTED_LOSS", rule: "Real non-P0 behavior has only an expensive truthful mechanism and no normative source requires retention, so the enumerated loss is accepted." },
+];
+const APPROVED_RULE_ADJUDICATIONS = [
+  {
+    rule: "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
+    rowIds: ["SC-000077", "SC-000080", "SC-000081", "SC-000092", "SC-000203"],
+    finalClass: "D2_IMPLEMENTATION_SHAPE",
+  },
+  {
+    rule: "A resolved base-closed owner that exactly proves the full invariant makes the legacy evidence D4 before A1.",
+    rowIds: ["SC-000356", "SC-000357", "SC-000358"],
+    finalClass: "D4_DUPLICATE_EVIDENCE",
+  },
+  {
+    rule: "B2/B3 is determined by the truthful observation seam, not the runner prefix; real browser or OS-process observation is B3.",
+    rowIds: ["SC-000420"],
+    finalClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+  },
+  {
+    rule: "A retained owner must prove the complete frozen invariant. Adjacent behavior evidence does not own a no-copy or placement topology assertion.",
+    rowIds: ["SC-000449"],
+    finalClass: "D2_IMPLEMENTATION_SHAPE",
+  },
+];
+const APPROVED_RULE_DISAGREEMENTS = [
+  { rowIds: APPROVED_RULE_ADJUDICATIONS[0].rowIds, oldClass: "D1_COMPLETED_HISTORY_ONLY", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[0].rule },
+  { rowIds: APPROVED_RULE_ADJUDICATIONS[1].rowIds, oldClass: "A1_EXISTING_STRUCTURED_OWNER", newClass: "D4_DUPLICATE_EVIDENCE", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[1].rule },
+  { rowIds: APPROVED_RULE_ADJUDICATIONS[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[2].rule },
+  { rowIds: APPROVED_RULE_ADJUDICATIONS[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[3].rule },
 ];
 const CRITICALITY_CATALOG = [
   { id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md \u00a72" },
@@ -34,6 +69,14 @@ const CRITICALITY_CATALOG = [
   { id: "TESTING_COVERAGE_FLAKE_QUARANTINE", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy" },
 ];
 const CRITICALITY_SOURCES = new Map(CRITICALITY_CATALOG.map((source) => [source.id, source.citation]));
+const NORMATIVE_SOURCE_CATALOG = [
+  { id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md \u00a72", scope: "Windows commands, Tauri MCP development, actual Vite URL discovery, sandbox fallback, and expected missing-IPC browser-console behavior." },
+  { id: "AGENTS_DATABASE_OWNERSHIP", citation: "AGENTS.md \u00a76", scope: "Additive SQLite migrations, one backend-owned connection strategy, and no frontend sql:* permissions." },
+  { id: "AGENTS_SECURITY", citation: "AGENTS.md \u00a77", scope: "OS secure storage for saved LLM keys with profile and provider-plus-normalized-origin binding." },
+  { id: "TESTING_SOURCE_CONTRACT_REPLACEMENT", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement", scope: "Replace valuable invariants with public behavior, structured architecture, or maintained tools; retire implementation text with specific reviewed decisions." },
+  { id: "TESTING_BROWSER_COMPONENT_OWNERSHIP", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership", scope: "Chromium ownership belongs to Playwright, while component behavior belongs to jsdom; critical browser scenarios and navigation/error rendering remain explicit." },
+  { id: "TESTING_COVERAGE_FLAKE_QUARANTINE", citation: "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy", scope: "Critical process-cleanup modules require deterministic cleanup and explicit Windows capability failures." },
+];
 const CLASS_DISPOSITIONS = new Map([
   ["D1_COMPLETED_HISTORY_ONLY", "delete"],
   ["D2_IMPLEMENTATION_SHAPE", "delete"],
@@ -49,6 +92,9 @@ const CLASS_DISPOSITIONS = new Map([
 const OWNER_CLASSES = new Set(["D4_DUPLICATE_EVIDENCE", "A1_EXISTING_STRUCTURED_OWNER", "T1_EXISTING_TOOL_OWNER", "B1_EXISTING_BEHAVIOR_OWNER"]);
 const DELETE_CLASSES = new Set([...CLASS_DISPOSITIONS].filter(([, disposition]) => disposition === "delete").map(([reasonClass]) => reasonClass));
 const RESOLUTION_KEYS = new Set(["disposition", "replacementIds", "deletionReason", "subgroups"]);
+const BLIND_RESULT_KEYS = new Set(["id", "sourceHash", "class", "reason", "ownerEvidence", "criticalityRef"]);
+const BLIND_OWNER_CLASSES = new Set(["D4_DUPLICATE_EVIDENCE", "A1_EXISTING_STRUCTURED_OWNER", "T1_EXISTING_TOOL_OWNER", "B1_EXISTING_BEHAVIOR_OWNER"]);
+const BLIND_FUTURE_CLASSES = new Set(["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"]);
 
 const compareText = (left, right) => String(left).localeCompare(String(right));
 const compareId = (left, right) => Number(String(left).slice(3)) - Number(String(right).slice(3)) || compareText(left, right);
@@ -65,6 +111,51 @@ export function canonicalJson(value) {
 
 export function sha256Text(value) {
   return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function evidenceReferences(artifact) {
+  const references = [];
+  const reviewer = artifact?.independentReview?.reviewer;
+  references.push({ label: "merged packet", path: reviewer?.packetPath });
+  references.push({ label: "merged output", path: reviewer?.outputPath });
+  for (const [index, shard] of (artifact?.independentReview?.shards ?? []).entries()) {
+    references.push({ label: `shard ${index} packet`, path: shard?.packetPath });
+    references.push({ label: `shard ${index} output`, path: shard?.outputPath });
+  }
+  return references;
+}
+
+function confinedEvidencePath(value) {
+  if (typeof value !== "string" || !value || value.includes("\\") || path.isAbsolute(value)) return false;
+  const normalized = path.posix.normalize(value);
+  return normalized === value
+    && path.posix.dirname(normalized) === REVIEW_EVIDENCE_DIRECTORY
+    && !path.posix.basename(normalized).startsWith(".");
+}
+
+/** Load only artifact-referenced evidence after proving every path stays in the committed evidence directory. */
+export async function loadReviewEvidence({ repoRoot, artifact }) {
+  const evidenceBytes = new Map();
+  const issues = [];
+  for (const reference of evidenceReferences(artifact)) {
+    if (!confinedEvidencePath(reference.path)) {
+      issues.push(`independentReview: ${reference.label} path must be confined to ${REVIEW_EVIDENCE_DIRECTORY}`);
+      continue;
+    }
+    const absolute = path.resolve(repoRoot, ...reference.path.split("/"));
+    const evidenceRoot = path.resolve(repoRoot, ...REVIEW_EVIDENCE_DIRECTORY.split("/"));
+    if (path.dirname(absolute) !== evidenceRoot) {
+      issues.push(`independentReview: ${reference.label} path must be confined to ${REVIEW_EVIDENCE_DIRECTORY}`);
+      continue;
+    }
+    try {
+      evidenceBytes.set(reference.path, await readFile(absolute, "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") issues.push(`independentReview: ${reference.label} evidence file is missing`);
+      else issues.push(`independentReview: ${reference.label} evidence could not be read: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  return { evidenceBytes, issues: issueList(issues) };
 }
 
 /** Return only fields that are allowed to be copied into a ledger resolution. */
@@ -104,6 +195,37 @@ function issueList(issues) {
   return [...new Set(issues)].sort(compareText);
 }
 
+/** Validate the sole approved max-three group-boundary adjudication. */
+export function validateRuleAdjudications({ independentReview, decisions } = {}) {
+  const issues = [];
+  const adjudications = independentReview?.ruleAdjudications ?? [];
+  const hasAdjudications = Array.isArray(adjudications) && adjudications.length > 0;
+  if (independentReview?.validIterations === 3 || hasAdjudications) {
+    if (canonicalJson(adjudications) !== canonicalJson(APPROVED_RULE_ADJUDICATIONS)) {
+      issues.push("independentReview: ruleAdjudications must equal the approved max-three allowlist");
+    }
+    if (independentReview?.validIterations !== 3) {
+      issues.push("independentReview: ruleAdjudications require validIterations 3");
+    }
+    if (canonicalJson(independentReview?.disagreements ?? []) !== canonicalJson(APPROVED_RULE_DISAGREEMENTS)) {
+      issues.push("independentReview: retained adjudication disagreements must equal the approved groups");
+    }
+    const decisionsById = new Map((decisions ?? []).map((decision) => [decision.id, decision]));
+    const blindsById = new Map((independentReview?.blindResults ?? []).map((blind) => [blind.id, blind]));
+    for (const adjudication of APPROVED_RULE_ADJUDICATIONS) {
+      for (const id of adjudication.rowIds) {
+        if (decisionsById.get(id)?.class !== adjudication.finalClass) {
+          issues.push(`${id}: adjudicated final class must be ${adjudication.finalClass}`);
+        }
+        if (blindsById.get(id)?.class !== adjudication.finalClass) {
+          issues.push(`${id}: retained blind fingerprint must equal adjudicated final class ${adjudication.finalClass}`);
+        }
+      }
+    }
+  }
+  return issueList(issues);
+}
+
 function exactIds(items) {
   return Array.isArray(items) ? items.map((item) => item?.id).filter((id) => typeof id === "string") : [];
 }
@@ -118,6 +240,7 @@ function resolutionIds(row) {
 
 function validateResolution(decision, row, protectedIds, resolvedOwners, issues) {
   const prefix = `${decision.id}:`;
+  const requiredD3Reason = REQUIRED_D3_REASONS.get(decision.id);
   const resolution = decision.resolution;
   const requiredDisposition = CLASS_DISPOSITIONS.get(decision.class);
   if (!requiredDisposition) {
@@ -154,7 +277,7 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
     if (subgroup.disposition === "delete") {
       if (own(subgroup, "replacementIds")) issues.push(`${prefix} delete resolution must not include replacementIds`);
       if (typeof subgroup.deletionReason !== "string" || !subgroup.deletionReason.trim()) issues.push(`${prefix} delete resolution requires a deletionReason`);
-      if (typeof subgroup.deletionReason === "string" && (subgroup.deletionReason.trim() === decision.class || !subgroup.deletionReason.includes(decision.class))) issues.push(`${prefix} deletion reason must contain row-specific text`);
+      if (typeof subgroup.deletionReason === "string" && (subgroup.deletionReason.trim() === decision.class || (!subgroup.deletionReason.includes(decision.class) && !requiredD3Reason))) issues.push(`${prefix} deletion reason must contain row-specific text`);
       for (const ordinal of isMixed ? subgroup.assertionOrdinals ?? [] : Array.from({ length: row.assertionCount }, (_, index) => index + 1)) deletedOrdinals.add(ordinal);
     } else {
       if (!Array.isArray(subgroup.replacementIds) || !subgroup.replacementIds.length) issues.push(`${prefix} retained resolution requires replacementIds`);
@@ -172,6 +295,11 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
     }
   }
   if (isMixed) for (let ordinal = 1; ordinal <= row.assertionCount; ordinal++) if (!ownedOrdinals.has(ordinal)) issues.push(`${prefix} incomplete subgroup assertion ordinals`);
+  if (requiredD3Reason && (decision.class !== "D3_NON_OBSERVABLE_VISUAL"
+    || decision.reason !== requiredD3Reason
+    || resolution?.deletionReason !== `D3 non-observable-visual: ${requiredD3Reason}`)) {
+    issues.push(`${prefix} must use the exact approved D3 reason and deletion prefix`);
+  }
   if (protectedIds.has(decision.id) && DELETE_CLASSES.has(decision.class)) issues.push(`${prefix} protected row cannot use a deletion class`);
   if (OWNER_CLASSES.has(decision.class)) {
     const replacements = (Array.isArray(groups) ? groups : []).flatMap((group) => group?.replacementIds ?? []);
@@ -397,11 +525,158 @@ function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrac
   return issueList(issues);
 }
 
+function parseEvidenceJson({ bytes, label, issues }) {
+  if (typeof bytes !== "string") {
+    issues.push(`independentReview: ${label} evidence file is missing`);
+    return undefined;
+  }
+  try {
+    return JSON.parse(bytes);
+  } catch {
+    issues.push(`independentReview: ${label} is malformed JSON`);
+    return undefined;
+  }
+}
+
+function validateEvidencePath({ value, hash, label, issues }) {
+  if (!confinedEvidencePath(value)) {
+    issues.push(`independentReview: ${label}Path must be confined to ${REVIEW_EVIDENCE_DIRECTORY}`);
+    return;
+  }
+  if (!value.includes(hash ?? "")) issues.push(`independentReview: ${label}Path must contain its SHA-256`);
+}
+
+function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners, requiredBlindIdsNumeric, evidenceBytes, issues }) {
+  if (!(evidenceBytes instanceof Map)) return;
+  const independent = artifact.independentReview;
+  const reviewer = independent?.reviewer;
+  const decisionById = new Map((artifact.decisions ?? []).map((decision) => [decision.id, decision]));
+  const baseRowById = new Map((baseLedger.rows ?? []).map((row) => [row.id, row]));
+  const expectedPopulationDigest = sha256Text(canonicalJson(requiredBlindIdsNumeric));
+  const packetTopKeys = ["normativeSourceCatalog", "orderedClassCatalog", "packetSchemaVersion", "requiredPopulationDigest", "reviewerRunId", "rows", "shardCount", "shardIndex"];
+  const packetRowKeys = ["assertionOrdinals", "candidateOwners", "declaration", "id", "invariant", "sourceHash"];
+  const candidateKeys = new Set(["capability", "closedRowIds", "id", "mechanism", "normativeSource", "resolvedByBaseClosedRow", "status"]);
+  const outputTopKeys = ["packetSha256", "results", "reviewerRunId", "stopConditions"];
+
+  const validatePair = ({ label, packetPath, packetSha256, outputPath, outputSha256, expectedIndex, expectedRowIds }) => {
+    validateEvidencePath({ value: packetPath, hash: packetSha256, label: `${label} packet`, issues });
+    validateEvidencePath({ value: outputPath, hash: outputSha256, label: `${label} output`, issues });
+    const packetBytes = evidenceBytes.get(packetPath);
+    const outputBytes = evidenceBytes.get(outputPath);
+    if (typeof packetBytes === "string" && sha256Text(packetBytes) !== packetSha256) issues.push(`independentReview: ${label} packet byte hash mismatch`);
+    if (typeof outputBytes === "string" && sha256Text(outputBytes) !== outputSha256) issues.push(`independentReview: ${label} output byte hash mismatch`);
+    const packet = parseEvidenceJson({ bytes: packetBytes, label: `${label} packet`, issues });
+    const output = parseEvidenceJson({ bytes: outputBytes, label: `${label} output`, issues });
+    if (!packet || !output) return { packet, output, rows: [], results: [] };
+
+    if (canonicalJson(Object.keys(packet).sort(compareText)) !== canonicalJson(packetTopKeys)) issues.push(`independentReview: ${label} packet top-level schema mismatch`);
+    if (packet.packetSchemaVersion !== REVIEW_PACKET_SCHEMA_VERSION) issues.push(`independentReview: ${label} packetSchemaVersion must be ${REVIEW_PACKET_SCHEMA_VERSION}`);
+    if (packet.reviewerRunId !== reviewer?.reviewerRunId) issues.push(`independentReview: ${label} packet reviewerRunId mismatch`);
+    if (packet.shardIndex !== expectedIndex) issues.push(`independentReview: ${label} packet shardIndex mismatch`);
+    if (packet.shardCount !== independent.shards.length) issues.push(`independentReview: ${label} packet shardCount mismatch`);
+    if (packet.requiredPopulationDigest !== expectedPopulationDigest) issues.push(`independentReview: ${label} packet population digest mismatch`);
+    if (canonicalJson(packet.orderedClassCatalog) !== canonicalJson(REASON_CLASS_CATALOG)) issues.push(`independentReview: ${label} packet class catalog mismatch`);
+    if (canonicalJson(packet.normativeSourceCatalog) !== canonicalJson(NORMATIVE_SOURCE_CATALOG)) issues.push(`independentReview: ${label} packet normative catalog mismatch`);
+    const rows = Array.isArray(packet.rows) ? packet.rows : [];
+    if (!Array.isArray(packet.rows)) issues.push(`independentReview: ${label} packet rows must be an array`);
+    if (canonicalJson(rows.map((row) => row?.id)) !== canonicalJson(expectedRowIds)) issues.push(`independentReview: ${label} packet row coverage/order mismatch`);
+    if (typeof expectedIndex === "number" && (rows.length < 1 || rows.length > 24)) issues.push(`independentReview: ${label} packet must contain 1..24 rows`);
+
+    const packetRowsById = new Map();
+    for (const row of rows) {
+      if (canonicalJson(Object.keys(row ?? {}).sort(compareText)) !== canonicalJson(packetRowKeys)) issues.push(`${row?.id}: blind packet row schema mismatch`);
+      if (packetRowsById.has(row?.id)) issues.push(`${row?.id}: duplicate blind packet row`);
+      packetRowsById.set(row?.id, row);
+      const decision = decisionById.get(row?.id);
+      const baseRow = baseRowById.get(row?.id);
+      if (!decision || !baseRow || row?.sourceHash !== decision.sourceHash || row?.sourceHash !== baseRow.sourceHash) issues.push(`${row?.id}: blind packet sourceHash binding mismatch`);
+      if (row?.invariant !== baseRow?.invariant) issues.push(`${row?.id}: blind packet invariant binding mismatch`);
+      const expectedOrdinals = Array.from({ length: baseRow?.assertionCount ?? 0 }, (_, index) => index + 1);
+      if (canonicalJson(row?.assertionOrdinals) !== canonicalJson(expectedOrdinals)) issues.push(`${row?.id}: blind packet assertion ordinals mismatch`);
+      if (typeof row?.declaration !== "string" || !row.declaration.trim()) issues.push(`${row?.id}: blind packet declaration is required`);
+      if (!Array.isArray(row?.candidateOwners)) issues.push(`${row?.id}: blind packet candidateOwners must be an array`);
+      const candidateIds = new Set();
+      for (const candidate of row?.candidateOwners ?? []) {
+        if (!candidate || typeof candidate !== "object" || Object.keys(candidate).some((key) => !candidateKeys.has(key))) issues.push(`${row?.id}: blind packet candidate owner schema mismatch`);
+        if (typeof candidate?.id !== "string" || !candidate.id.trim() || candidateIds.has(candidate.id)) issues.push(`${row?.id}: blind packet candidate owner IDs must be unique non-empty strings`);
+        candidateIds.add(candidate?.id);
+        if (candidate?.closedRowIds !== undefined && (!Array.isArray(candidate.closedRowIds)
+          || !candidate.closedRowIds.length
+          || new Set(candidate.closedRowIds).size !== candidate.closedRowIds.length
+          || candidate.closedRowIds.some((id) => typeof id !== "string" || !baseRowById.has(id) || decisionById.has(id)))) {
+          issues.push(`${row?.id}: blind packet candidate closedRowIds must name unique base-closed rows`);
+        }
+        if (candidate?.normativeSource !== undefined && !CRITICALITY_SOURCES.has(candidate.normativeSource)) issues.push(`${row?.id}: blind packet candidate owner has an invented citation`);
+        const resolved = candidate?.resolvedByBaseClosedRow === true || candidate?.status === "resolved" || candidate?.status === undefined;
+        if (resolved && !resolvedOwners.has(candidate?.id)) issues.push(`${row?.id}: blind packet candidate owner falsely claims base-closed resolution`);
+        if (candidate?.id?.startsWith("test:playwright:") && (APPROVED_PLAYWRIGHT_OWNERS.get(row.id) !== candidate.id || candidate.normativeSource !== APPROVED_PLAYWRIGHT_CRITICALITY)) issues.push(`${row?.id}: blind packet Playwright candidate is not allowlisted`);
+      }
+    }
+
+    if (canonicalJson(Object.keys(output).sort(compareText)) !== canonicalJson(outputTopKeys)) issues.push(`independentReview: ${label} output top-level schema mismatch`);
+    if (output.reviewerRunId !== reviewer?.reviewerRunId) issues.push(`independentReview: ${label} output reviewerRunId mismatch`);
+    if (output.packetSha256 !== packetSha256) issues.push(`independentReview: ${label} output packet binding mismatch`);
+    if (!Array.isArray(output.stopConditions) || output.stopConditions.length) issues.push(`independentReview: ${label} output stopConditions must be empty`);
+    const results = Array.isArray(output.results) ? output.results : [];
+    if (!Array.isArray(output.results) || results.length !== rows.length) issues.push(`independentReview: ${label} output result count mismatch`);
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const result = results[index] ?? {};
+      if (Object.keys(result).some((key) => !BLIND_RESULT_KEYS.has(key))) issues.push(`${result?.id}: blind output result schema mismatch`);
+      if (result.id !== row.id || result.sourceHash !== row.sourceHash) issues.push(`independentReview: ${label} output result order/source binding mismatch`);
+      if (!CLASS_DISPOSITIONS.has(result.class)) issues.push(`${result?.id}: blind output class is unsupported`);
+      if (typeof result.reason !== "string" || !result.reason.trim()) issues.push(`${result?.id}: blind output reason is required`);
+      if (result.criticalityRef !== undefined && !CRITICALITY_SOURCES.has(result.criticalityRef)) issues.push(`${result?.id}: blind output has an invented citation`);
+      const candidates = new Map((row.candidateOwners ?? []).map((candidate) => [candidate.id, candidate]));
+      const selected = Array.isArray(result.ownerEvidence) ? result.ownerEvidence : [];
+      if (result.ownerEvidence !== undefined && (!selected.length || selected.some((owner) => typeof owner !== "string" || !owner.trim()))) issues.push(`${result?.id}: blind output ownerEvidence is invalid`);
+      if (selected.some((owner) => !candidates.has(owner))) issues.push(`${result?.id}: blind output selected an invented candidate owner`);
+      if (BLIND_OWNER_CLASSES.has(result.class) && (!selected.length || selected.some((owner) => {
+        const candidate = candidates.get(owner);
+        return !(candidate?.resolvedByBaseClosedRow === true || candidate?.status === "resolved" || candidate?.status === undefined);
+      }))) issues.push(`${result?.id}: blind output existing-owner class requires resolved candidate membership`);
+      if (BLIND_FUTURE_CLASSES.has(result.class) && (!selected.length || selected.some((owner) => !["future", "unresolved", "approved-future"].includes(candidates.get(owner)?.status)))) issues.push(`${result?.id}: blind output future-owner class requires future candidate membership`);
+      if (result.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && !CRITICALITY_SOURCES.has(result.criticalityRef)) issues.push(`${result?.id}: blind output B3 requires a valid criticalityRef`);
+      const requiredSources = [...new Set(selected.map((owner) => candidates.get(owner)?.normativeSource).filter(Boolean))];
+      if (requiredSources.length === 1 && result.criticalityRef !== requiredSources[0]) issues.push(`${result?.id}: blind output owner requires its exact citation`);
+      const selectedPlaywright = selected.filter((owner) => owner.startsWith("test:playwright:"));
+      if (selectedPlaywright.length && (selectedPlaywright.length !== 1 || selectedPlaywright[0] !== APPROVED_PLAYWRIGHT_OWNERS.get(result.id) || result.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" || result.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY)) issues.push(`${result?.id}: blind output Playwright mapping/class/citation mismatch`);
+    }
+    return { packet, output, rows, results };
+  };
+
+  const shardPairs = independent.shards.map((shard, index) => validatePair({
+    label: `shard ${index}`,
+    packetPath: shard.packetPath,
+    packetSha256: shard.packetSha256,
+    outputPath: shard.outputPath,
+    outputSha256: shard.outputSha256,
+    expectedIndex: index,
+    expectedRowIds: shard.rowIds,
+  }));
+  const mergedRows = shardPairs.flatMap((pair) => pair.rows);
+  const mergedResults = shardPairs.flatMap((pair) => pair.results);
+  const mergedPair = validatePair({
+    label: "merged",
+    packetPath: reviewer.packetPath,
+    packetSha256: reviewer.packetSha256,
+    outputPath: reviewer.outputPath,
+    outputSha256: reviewer.outputSha256,
+    expectedIndex: "merged",
+    expectedRowIds: requiredBlindIdsNumeric,
+  });
+  if (canonicalJson(mergedPair.rows) !== canonicalJson(mergedRows)) issues.push("independentReview: merged packet does not reconstruct the accepted shard packets");
+  if (canonicalJson(mergedPair.results) !== canonicalJson(mergedResults)) issues.push("independentReview: merged output does not reconstruct the accepted shard outputs");
+  const reconstructedBlindResults = mergedResults.map((result) => ({ ...result, reviewerRunId: reviewer.reviewerRunId }));
+  if (canonicalJson(reconstructedBlindResults) !== canonicalJson(independent.blindResults)) issues.push("independentReview: committed shard outputs do not reconstruct blindResults");
+  if (sha256Text(canonicalJson(reconstructedBlindResults)) !== independent.mergedOutputSha256) issues.push("independentReview: committed shard outputs do not match mergedOutputSha256");
+}
+
 /**
  * Validate a proposed artifact against its immutable review-base ledger.
  * The base-open set is derived from the review-base tracked paths, never from decisions.
  */
-export function validateReview({ artifact, baseLedger, currentLedger, baseTrackedPaths } = {}) {
+export function validateReview({ artifact, baseLedger, currentLedger, baseTrackedPaths, evidenceBytes } = {}) {
   const issues = [];
   if (!artifact || !baseLedger || !currentLedger || !Array.isArray(baseLedger.rows) || !Array.isArray(currentLedger.rows)) return ["invalid review input"];
   if (artifact.schemaVersion !== 1) issues.push("artifact: schemaVersion must be 1");
@@ -489,6 +764,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   validateTimingAndForecast(artifact, baseLedger, issues);
 
   const independent = artifact.independentReview;
+  issues.push(...validateRuleAdjudications({ independentReview: independent, decisions }));
   if (!independent || typeof independent !== "object") issues.push("independentReview: missing");
   else {
     if (!independent.authorRunId || !independent.reviewer?.agentTaskId || independent.authorRunId === independent.reviewer.agentTaskId) issues.push("independentReview: authorRunId and reviewer agentTaskId must differ");
@@ -557,6 +833,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       || canonicalJson(blinds.map((blind) => blind?.id)) !== canonicalJson(requiredBlindIdsNumeric)) {
       issues.push("independentReview: shard rows must exactly cover required blind IDs in numeric order");
     }
+    validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners, requiredBlindIdsNumeric, evidenceBytes, issues });
     if (!sha256Pattern.test(independent.mergedOutputSha256 ?? "")
       || independent.mergedOutputSha256 !== sha256Text(canonicalJson(blinds))) {
       issues.push("independentReview: merged output digest mismatch");
@@ -568,12 +845,23 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (canonicalJson(sample.rowIds) !== canonicalJson(expected.rowIds)) issues.push("independentReview: deterministic sample IDs are not deterministic");
       if (!Number.isInteger(sample.iterations) || sample.iterations < 0 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 0..3");
     }
+    const calibrationClasses = new Set();
     for (const cohort of Array.isArray(independent.calibrations) ? independent.calibrations : []) {
       if (!Array.isArray(cohort?.rowIds)) {
         issues.push("calibrations: rowIds must be an array");
         continue;
       }
+      if (!CLASS_DISPOSITIONS.has(cohort?.class)) issues.push(`calibrations: unsupported class ${cohort?.class}`);
+      if (calibrationClasses.has(cohort?.class)) issues.push(`calibrations: duplicate class ${cohort?.class}`);
+      calibrationClasses.add(cohort?.class);
       const rowIds = cohort.rowIds;
+      for (const id of rowIds) {
+        const decision = decisions.find((item) => item.id === id);
+        if (decision && decision.class !== cohort.class) issues.push(`calibrations: ${id} is ${decision.class}, not ${cohort.class}`);
+      }
+      if (!rowIds.length && decisions.some((decision) => decision.class === cohort.class)) {
+        issues.push(`calibrations: ${cohort.class} cannot record no_match while classified examples exist`);
+      }
       const expectedComparisonValue = rowIds.length ? expectedComparison(rowIds, fingerprintMatches) : "no_match";
       if (!rowIds.length && cohort?.result !== expectedComparisonValue) {
         issues.push("calibrations: empty calibration must record no_match");
@@ -581,7 +869,18 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       }
       if (cohort?.result !== expectedComparisonValue) issues.push(`calibrations: recorded comparison must be ${expectedComparisonValue}`);
     }
-    for (const cohort of Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : []) {
+    const mandatoryCohorts = Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : [];
+    const emergingExpectations = new Map([
+      ["emerging-b3", decisions.filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId)],
+      ["emerging-d5", decisions.filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId)],
+      ["emerging-mixed", decisions.filter((decision) => Array.isArray(decision.resolution?.subgroups)).map((decision) => decision.id).sort(compareId)],
+    ]);
+    for (const [name, expectedIds] of emergingExpectations) {
+      const cohorts = mandatoryCohorts.filter((cohort) => cohort?.name === name);
+      if (artifact.scope?.openRows === 436 && cohorts.length !== 1) issues.push(`mandatoryCohorts: ${name} must appear exactly once`);
+      for (const cohort of cohorts) if (canonicalJson(cohort?.rowIds) !== canonicalJson(expectedIds)) issues.push(`mandatoryCohorts: ${name} must exactly equal the classified ${name === "emerging-b3" ? "B3 rows" : name === "emerging-d5" ? "D5 rows" : "mixed rows"}`);
+    }
+    for (const cohort of mandatoryCohorts) {
       const expectedComparisonValue = expectedComparison(Array.isArray(cohort?.rowIds) ? cohort.rowIds : [], fingerprintMatches);
       if (cohort?.comparison !== expectedComparisonValue) issues.push(`mandatoryCohorts: recorded comparison must be ${expectedComparisonValue}`);
     }
@@ -600,7 +899,14 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
         issues.push("independentReview: invalid disagreement");
       }
     }
-    if (canonicalJson(disagreementIds) !== canonicalJson(mismatchIds)) issues.push("independentReview: disagreements must equal fingerprint mismatch IDs");
+    const approvedAdjudication = independent.validIterations === 3
+      && canonicalJson(independent.ruleAdjudications) === canonicalJson(APPROVED_RULE_ADJUDICATIONS);
+    if (!approvedAdjudication && canonicalJson(disagreementIds) !== canonicalJson(mismatchIds)) {
+      issues.push("independentReview: disagreements must equal fingerprint mismatch IDs");
+    }
+    if (approvedAdjudication && mismatchIds.length) {
+      issues.push("independentReview: adjudicated final decisions must match retained blind fingerprints");
+    }
   }
   return issueList(issues);
 }
@@ -674,12 +980,18 @@ async function runCli() {
     process.exitCode = 1;
     return;
   }
-  const [baseLedger, baseTrackedPaths, currentLedger] = await Promise.all([
+  const [baseLedger, baseTrackedPaths, currentLedger, evidence] = await Promise.all([
     loadBaseLedger({ repoRoot, commit: artifact.reviewBaseCommit }),
     loadBaseTrackedPaths({ repoRoot, commit: artifact.reviewBaseCommit }),
     readFile(ledgerPath, "utf8").then(JSON.parse),
+    loadReviewEvidence({ repoRoot, artifact }),
   ]);
-  const input = { artifact, baseLedger, currentLedger, baseTrackedPaths };
+  if (evidence.issues.length) {
+    for (const issue of evidence.issues) process.stderr.write(`${issue}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const input = { artifact, baseLedger, currentLedger, baseTrackedPaths, evidenceBytes: evidence.evidenceBytes };
   const issues = validateReview(input);
   if (issues.length) {
     for (const issue of issues) process.stderr.write(`${issue}\n`);

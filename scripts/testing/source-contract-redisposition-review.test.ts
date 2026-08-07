@@ -8,8 +8,10 @@ import {
   canonicalJson,
   loadBaseLedger,
   loadBaseTrackedPaths,
+  loadReviewEvidence,
   resolutionForDecision,
   sha256Text,
+  validateRuleAdjudications,
   validateReview,
 } from "./source-contract-redisposition-review.mjs";
 
@@ -24,6 +26,34 @@ const approvedPlaywrightOwners = new Map([
   ["SC-000344", "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"],
   ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
 ]);
+const approvedRuleAdjudications = [
+  {
+    rule: "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
+    rowIds: ["SC-000077", "SC-000080", "SC-000081", "SC-000092", "SC-000203"],
+    finalClass: "D2_IMPLEMENTATION_SHAPE",
+  },
+  {
+    rule: "A resolved base-closed owner that exactly proves the full invariant makes the legacy evidence D4 before A1.",
+    rowIds: ["SC-000356", "SC-000357", "SC-000358"],
+    finalClass: "D4_DUPLICATE_EVIDENCE",
+  },
+  {
+    rule: "B2/B3 is determined by the truthful observation seam, not the runner prefix; real browser or OS-process observation is B3.",
+    rowIds: ["SC-000420"],
+    finalClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+  },
+  {
+    rule: "A retained owner must prove the complete frozen invariant. Adjacent behavior evidence does not own a no-copy or placement topology assertion.",
+    rowIds: ["SC-000449"],
+    finalClass: "D2_IMPLEMENTATION_SHAPE",
+  },
+];
+const approvedRuleDisagreements = [
+  { rowIds: approvedRuleAdjudications[0].rowIds, oldClass: "D1_COMPLETED_HISTORY_ONLY", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: approvedRuleAdjudications[0].rule },
+  { rowIds: approvedRuleAdjudications[1].rowIds, oldClass: "A1_EXISTING_STRUCTURED_OWNER", newClass: "D4_DUPLICATE_EVIDENCE", groupRuleChange: approvedRuleAdjudications[1].rule },
+  { rowIds: approvedRuleAdjudications[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: approvedRuleAdjudications[2].rule },
+  { rowIds: approvedRuleAdjudications[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: approvedRuleAdjudications[3].rule },
+];
 
 function row(id: string, path: string, resolution: Record<string, unknown> = { disposition: "behavior", replacementIds: ["test:vitest:src/existing.test.ts#existing"] }) {
   return {
@@ -317,18 +347,35 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      A1_EXISTING_STRUCTURED_OWNER: 3,
-      B1_EXISTING_BEHAVIOR_OWNER: 3,
-      B2_NEW_CHEAP_BEHAVIOR: 47,
-      B3_PROTECTED_EXPENSIVE_BEHAVIOR: 7,
-      D1_COMPLETED_HISTORY_ONLY: 7,
-      D2_IMPLEMENTATION_SHAPE: 25,
-      D3_NON_OBSERVABLE_VISUAL: 5,
-      D4_DUPLICATE_EVIDENCE: 1,
+      B2_NEW_CHEAP_BEHAVIOR: 45,
+      B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
+      D1_COMPLETED_HISTORY_ONLY: 6,
+      D2_IMPLEMENTATION_SHAPE: 29,
+      D3_NON_OBSERVABLE_VISUAL: 4,
+      D4_DUPLICATE_EVIDENCE: 6,
       UNCLASSIFIED: 338,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
-    expect(reviewArtifact.independentReview.blindResults).toHaveLength(96);
+    expect(reviewArtifact.independentReview.blindResults).toHaveLength(95);
+    expect(reviewArtifact.independentReview.mandatoryCohorts.find((item) => item.name === "emerging-b3")?.rowIds).toEqual([
+      "SC-000015", "SC-000023", "SC-000312", "SC-000344", "SC-000385", "SC-000387", "SC-000389", "SC-000420",
+    ]);
+    expect(reviewArtifact.independentReview.calibrations.find((item) => item.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR")?.rowIds).toEqual([
+      "SC-000312", "SC-000344", "SC-000385",
+    ]);
+    expect(reviewArtifact.independentReview.calibrations.find((item) => item.class === "D3_NON_OBSERVABLE_VISUAL")?.rowIds).toEqual([
+      "SC-000323", "SC-000352", "SC-000353",
+    ]);
+    expect(reviewArtifact.independentReview.calibrations.find((item) => item.class === "B1_EXISTING_BEHAVIOR_OWNER")?.rowIds).toEqual([]);
+    expect(decisions.find((item) => item.id === "SC-000323")?.resolution?.deletionReason).toBe(
+      "D3 non-observable-visual: Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam.",
+    );
+    expect(decisions.find((item) => item.id === "SC-000352")?.resolution?.deletionReason).toBe(
+      "D3 non-observable-visual: Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam.",
+    );
+    expect(decisions.find((item) => item.id === "SC-000353")?.resolution?.deletionReason).toBe(
+      "D3 non-observable-visual: Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam.",
+    );
   });
 
   it("derives timing forecasts from retained measurements and rejects invalid baseline or jsdom proposals", () => {
@@ -697,6 +744,130 @@ describe("source-contract redisposition review", () => {
       }];
       expect(validateReview(review({ artifact: invalid }))).toContain("calibrations: rowIds must be an array");
     }
+
+    const wrongMembership = artifactFor();
+    wrongMembership.independentReview.calibrations = [{
+      class: "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      rowIds: ["SC-000001"],
+      adjacentClass: "B2_NEW_CHEAP_BEHAVIOR",
+      result: "agree",
+    }];
+    expect(validateReview(review({ artifact: wrongMembership }))).toContain(
+      "calibrations: SC-000001 is B2_NEW_CHEAP_BEHAVIOR, not B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+    );
+
+    const falseNoMatch = artifactFor();
+    falseNoMatch.independentReview.calibrations = [{
+      class: "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      rowIds: [],
+      adjacentClass: "B2_NEW_CHEAP_BEHAVIOR",
+      result: "no_match",
+    }];
+    expect(validateReview(review({ artifact: falseNoMatch }))).toContain(
+      "calibrations: B3_PROTECTED_EXPENSIVE_BEHAVIOR cannot record no_match while classified examples exist",
+    );
+  });
+
+  it("requires exact emerging cohort membership", () => {
+    const missing = artifactFor();
+    missing.independentReview.mandatoryCohorts.push({
+      name: "emerging-b3",
+      rowIds: [],
+      comparison: "agree",
+    });
+    expect(validateReview(review({ artifact: missing }))).toContain(
+      "mandatoryCohorts: emerging-b3 must exactly equal the classified B3 rows",
+    );
+  });
+
+  it("accepts valid iteration three only through the exact max-three rule adjudication allowlist", () => {
+    const finalClassById = new Map(approvedRuleAdjudications.flatMap((item) => item.rowIds.map((id) => [id, item.finalClass])));
+    const exact: any = {
+      independentReview: {
+        validIterations: 3,
+        ruleAdjudications: clone(approvedRuleAdjudications),
+        disagreements: clone(approvedRuleDisagreements),
+        blindResults: [...finalClassById].map(([id, reasonClass]) => ({ id, class: reasonClass })),
+      },
+      decisions: [...finalClassById].map(([id, reasonClass]) => ({ id, class: reasonClass })),
+    };
+    expect(validateRuleAdjudications(exact)).toEqual([]);
+
+    for (const mutate of [
+      (value: any) => value.independentReview.ruleAdjudications.pop(),
+      (value: any) => value.independentReview.ruleAdjudications.push(clone(value.independentReview.ruleAdjudications[0])),
+      (value: any) => { value.independentReview.ruleAdjudications[0].rule += " changed"; },
+      (value: any) => value.independentReview.ruleAdjudications[0].rowIds.pop(),
+      (value: any) => { value.independentReview.ruleAdjudications[0].finalClass = "D1_COMPLETED_HISTORY_ONLY"; },
+    ]) {
+      const invalid = clone(exact);
+      mutate(invalid);
+      expect(validateRuleAdjudications(invalid)).toContain("independentReview: ruleAdjudications must equal the approved max-three allowlist");
+    }
+
+    const wrongDecision = clone(exact);
+    wrongDecision.decisions[0].class = "D1_COMPLETED_HISTORY_ONLY";
+    expect(validateRuleAdjudications(wrongDecision)).toContain("SC-000077: adjudicated final class must be D2_IMPLEMENTATION_SHAPE");
+
+    const wrongBlind = clone(exact);
+    wrongBlind.independentReview.blindResults[0].class = "D1_COMPLETED_HISTORY_ONLY";
+    expect(validateRuleAdjudications(wrongBlind)).toContain("SC-000077: retained blind fingerprint must equal adjudicated final class D2_IMPLEMENTATION_SHAPE");
+
+    const missingDisagreement = clone(exact);
+    missingDisagreement.independentReview.disagreements.pop();
+    expect(validateRuleAdjudications(missingDisagreement)).toContain("independentReview: retained adjudication disagreements must equal the approved groups");
+
+    const wrongIteration = clone(exact);
+    wrongIteration.independentReview.validIterations = 2;
+    expect(validateRuleAdjudications(wrongIteration)).toContain("independentReview: ruleAdjudications require validIterations 3");
+
+    expect(validateRuleAdjudications({ independentReview: { validIterations: 3, ruleAdjudications: [], disagreements: [], blindResults: [] }, decisions: [] })).toContain(
+      "independentReview: ruleAdjudications must equal the approved max-three allowlist",
+    );
+  });
+
+  it("loads and validates the exact committed content-addressed review evidence", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    expect(loaded.issues).toEqual([]);
+    const realInput = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger: realBaseLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    } as any;
+    expect(validateReview(realInput).filter((issue) => !issue.endsWith("UNCLASSIFIED blocks apply"))).toEqual([]);
+
+    const firstPacketPath = reviewArtifact.independentReview.shards[0].packetPath;
+    const tamperedBytes = new Map(loaded.evidenceBytes);
+    tamperedBytes.set(firstPacketPath, `${tamperedBytes.get(firstPacketPath)} `);
+    expect(validateReview({ ...realInput, evidenceBytes: tamperedBytes })).toContain(
+      "independentReview: shard 0 packet byte hash mismatch",
+    );
+
+    const traversal = clone(reviewArtifact) as any;
+    traversal.independentReview.shards[0].packetPath = `testing/source-contract-redisposition-evidence/../${traversal.independentReview.shards[0].packetPath.split("/").at(-1)}`;
+    expect(validateReview({ ...realInput, artifact: traversal })).toContain(
+      "independentReview: shard 0 packetPath must be confined to testing/source-contract-redisposition-evidence",
+    );
+
+    const missingBytes = new Map(loaded.evidenceBytes);
+    missingBytes.delete(firstPacketPath);
+    expect(validateReview({ ...realInput, evidenceBytes: missingBytes })).toContain(
+      "independentReview: shard 0 packet evidence file is missing",
+    );
+
+    const malformedBytes = new Map(loaded.evidenceBytes);
+    malformedBytes.set(firstPacketPath, "{\n");
+    expect(validateReview({ ...realInput, evidenceBytes: malformedBytes })).toEqual(expect.arrayContaining([
+      "independentReview: shard 0 packet byte hash mismatch",
+      "independentReview: shard 0 packet is malformed JSON",
+    ]));
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {

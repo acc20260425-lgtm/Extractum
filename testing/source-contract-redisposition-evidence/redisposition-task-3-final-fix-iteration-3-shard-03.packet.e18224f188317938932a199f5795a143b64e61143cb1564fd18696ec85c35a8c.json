@@ -1,0 +1,685 @@
+{
+  "packetSchemaVersion": 3,
+  "reviewerRunId": "redisposition-task-3-final-fix-valid-iteration-3",
+  "shardIndex": 3,
+  "shardCount": 4,
+  "requiredPopulationDigest": "7a1cea1097037d7a55d686fb14a25694dea8b6f7f4eed64b0bf9b580ea17d844",
+  "orderedClassCatalog": [
+    {
+      "id": "D1_COMPLETED_HISTORY_ONLY",
+      "rule": "Completed historical evidence only; forbidden whenever a future code, configuration, or test change could violate the invariant as a defect."
+    },
+    {
+      "id": "D2_IMPLEMENTATION_SHAPE",
+      "rule": "Exact names, source strings, statement order, formatting, or composition with no independent contract; apply before visual-only D3."
+    },
+    {
+      "id": "D3_NON_OBSERVABLE_VISUAL",
+      "rule": "Non-normative CSS, DOM order, or rendered visual detail with no truthful non-browser seam; implementation shape remains D2."
+    },
+    {
+      "id": "D4_DUPLICATE_EVIDENCE",
+      "rule": "A base-closed exact owner already proves the complete invariant, so the source-contract row is duplicate evidence; apply before retained-owner classes."
+    },
+    {
+      "id": "A1_EXISTING_STRUCTURED_OWNER",
+      "rule": "An existing structured repository rule, compiler, or Cargo-metadata owner is the durable architecture replacement."
+    },
+    {
+      "id": "T1_EXISTING_TOOL_OWNER",
+      "rule": "An existing maintained tool owns the generic executable invariant."
+    },
+    {
+      "id": "B1_EXISTING_BEHAVIOR_OWNER",
+      "rule": "An existing executable test proves behavior through a public seam and the row must retain a behavior resolution; use D4 first when a base-closed owner makes the row wholly duplicate."
+    },
+    {
+      "id": "B2_NEW_CHEAP_BEHAVIOR",
+      "rule": "A new focused Node/jsdom or Cargo test through a cheap public seam is required; P0 membership or a normative citation alone does not make the owner B3."
+    },
+    {
+      "id": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "rule": "A real browser or OS-process runtime test is required, no cheaper truthful seam exists, and an approved normative criticality source requires retention."
+    },
+    {
+      "id": "D5_ACCEPTED_LOSS",
+      "rule": "Real non-P0 behavior has only an expensive truthful mechanism and no normative source requires retention, so the enumerated loss is accepted."
+    }
+  ],
+  "normativeSourceCatalog": [
+    {
+      "id": "AGENTS_WINDOWS_SANDBOX",
+      "citation": "AGENTS.md §2",
+      "scope": "Windows commands, Tauri MCP development, actual Vite URL discovery, sandbox fallback, and expected missing-IPC browser-console behavior."
+    },
+    {
+      "id": "AGENTS_DATABASE_OWNERSHIP",
+      "citation": "AGENTS.md §6",
+      "scope": "Additive SQLite migrations, one backend-owned connection strategy, and no frontend sql:* permissions."
+    },
+    {
+      "id": "AGENTS_SECURITY",
+      "citation": "AGENTS.md §7",
+      "scope": "OS secure storage for saved LLM keys with profile and provider-plus-normalized-origin binding."
+    },
+    {
+      "id": "TESTING_SOURCE_CONTRACT_REPLACEMENT",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement",
+      "scope": "Replace valuable invariants with public behavior, structured architecture, or maintained tools; retire implementation text with specific reviewed decisions."
+    },
+    {
+      "id": "TESTING_BROWSER_COMPONENT_OWNERSHIP",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership",
+      "scope": "Chromium ownership belongs to Playwright, while component behavior belongs to jsdom; critical browser scenarios and navigation/error rendering remain explicit."
+    },
+    {
+      "id": "TESTING_COVERAGE_FLAKE_QUARANTINE",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy",
+      "scope": "Critical process-cleanup modules require deterministic cleanup and explicit Windows capability failures."
+    }
+  ],
+  "rows": [
+    {
+      "id": "SC-000423",
+      "sourceHash": "5f85ce4400bf4c7b7fedd335536f8bc7b6dc942ad12599f8ad5ffc30eb5f3a82",
+      "declaration": "it(\"keeps YouTube mode tabs inside the YouTube panel\", () => {\r\n    expect(youtubePanelSource).toContain(\"Smart import\");\r\n    expect(youtubePanelSource).toContain(\"From existing data\");\r\n    expect(youtubePanelSource).toContain(\"LibraryYoutubeSmartImport\");\r\n    expect(youtubePanelSource).toContain(\"LibraryYoutubePlaylistImport\");\r\n  })",
+      "invariant": "Keeps YouTube mode tabs inside the YouTube panel.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-analysis::corpus::tests::live::youtube_corpus_mode_parses_wire_values_and_defaults",
+          "closedRowIds": [
+            "SC-000048"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::store::tests::read_model::map_run_detail_exposes_youtube_corpus_mode",
+          "closedRowIds": [
+            "SC-000045"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum::analysis::corpus::tests::live::load_corpus_messages_includes_youtube_comment_only_in_comments_mode",
+          "closedRowIds": [
+            "SC-000048"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum::projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds",
+          "closedRowIds": [
+            "SC-000041"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps live YouTube video comments sync status and CTAs in transcript reader",
+          "closedRowIds": [
+            "SC-000246"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps provider tabs to contextual CTAs instead of detailed job cards",
+          "closedRowIds": [
+            "SC-000248"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps run snapshot YouTube readers detached from live video detail",
+          "closedRowIds": [
+            "SC-000245"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps YouTube live sync actions out of readonly snapshot transcript readers",
+          "closedRowIds": [
+            "SC-000244"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/LibraryYoutubeAddPanel.behavior.test.ts#library add source contract > keeps YouTube mode tabs inside the YouTube panel",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000441",
+      "sourceHash": "093561de910b2cd887cc9a23796094020d13d9fa1c1d234af875a01276b58700",
+      "declaration": "it(\"exposes only the curated API and keeps credentials non-serializable\", () => {\n    expect(crateLib).toBe(curatedRoot);\n    expect(crateLib).not.toMatch(/pub mod|pub use .*\\*|#\\[cfg\\(test\\)\\]|test_helper/);\n    const types = read(`${crateDir}/src/types.rs`);\n    for (const typeName of [\"LlmProviderAccess\", \"ResolvedLlmProfile\"]) {\n      expect(types).toMatch(new RegExp(`#\\\\[derive\\\\(Clone\\\\)\\\\]\\\\npub struct ${typeName}`));\n      expect(types).not.toMatch(new RegExp(`derive\\\\([^)]*(?:Serialize|Deserialize|Debug)[^)]*\\\\)\\\\npub struct ${typeName}`));\n      expect(types).not.toMatch(new RegExp(`impl (?:serde::)?(?:Serialize|Deserialize) for ${typeName}`));\n    }\n    expect(types).not.toMatch(/pub(?:\\(crate\\))?\\s+(?:fn\\s+api_key|api_key\\s*:)|pub\\s+fn\\s+\\w+\\([^)]*\\)\\s*->\\s*&?SecretString/);\n    expect(crateLib).not.toContain(\"ExposeSecret\");\n    expect(publicMethods(types, \"LlmProviderAccess\")).toEqual([\"new\"]);\n    expect(publicMethods(types, \"ResolvedLlmProfile\")).toEqual([\"base_url\", \"default_model\", \"new\", \"profile_id\", \"provider\"]);\n    expect(publicMethods(read(`${crateDir}/src/scheduler.rs`), \"LlmRequestControl\")).toEqual([\"run_cancellable\"]);\n    expect(publicMethods(read(`${crateDir}/src/provider.rs`), \"ProviderKind\")).toEqual([\"as_str\", \"parse\"]);\n    expect(publicMethods(read(`${crateDir}/src/scheduler.rs`), \"LlmSchedulerState\")).toEqual([\n      \"active_owner_run_ids\", \"cancel_request\", \"cancel_run_requests\", \"new\",\n      \"request_snapshots\", \"run_request\",\n    ]);\n    expect(crateLib).not.toMatch(/display_name|list_provider_models_without_timeout|list_gemini_models|list_openai_compat_models|parse_sse_data|find_event_boundary/);\n  })",
+      "invariant": "The LLM crate exposes a curated API and keeps credentials non-serializable and inaccessible.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-llm::public_api_tests::credentials_are_non_serializable_and_inaccessible",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    },
+    {
+      "id": "SC-000443",
+      "sourceHash": "27d6d2b8f4b3100d03b6a3e425fbd8187315bcce27448f3ab731cbdc855f6484",
+      "declaration": "it(\"keeps commands, events, profiles, diagnostics, and frontend payloads app-owned\", () => {\n    const commandMatches = [...appMod.matchAll(/#\\[tauri::command\\][\\s\\S]*?pub async fn (\\w+)/g)].map((match) => match[1]);\n    expect(commandMatches.sort()).toEqual([...commandNames].sort());\n    const llmImport = rustBlock(appLib, \"use llm::\");\n    const handlerStart = appLib.indexOf(\"tauri::generate_handler![\");\n    const handler = handlerStart < 0\n      ? \"\"\n      : appLib.slice(handlerStart, appLib.indexOf(\"])\" , handlerStart) + 2);\n    for (const name of commandNames) {\n      expect((llmImport.match(new RegExp(`\\\\b${name}\\\\b`, \"g\")) ?? []).length).toBe(1);\n      expect((handler.match(new RegExp(`\\\\b${name}\\\\b`, \"g\")) ?? []).length).toBe(1);\n    }\n    expect(appMod).toContain('const LLM_RESPONSE_EVENT: &str = \"llm://response\";');\n    expect(frontendApi).toContain('export const LLM_RESPONSE_EVENT = \"llm://response\";');\n    expect(frontendTypes).toMatch(/type LlmStreamEventKind\\s*=\\s*\\|\\s*\"queued\"\\s*\\|\\s*\"started\"\\s*\\|\\s*\"delta\"\\s*\\|\\s*\"completed\"\\s*\\|\\s*\"failed\"\\s*\\|\\s*\"cancelled\"/);\n    expect(frontendTypes).toContain(\"kind: LlmStreamEventKind;\");\n    for (const field of [\"queue_position: number | null\", \"delta: string | null\", \"text: string | null\", \"usage: LlmUsage | null\", \"error: string | null\"]) expect(frontendTypes).toContain(field);\n    expect(profiles).toMatch(/llm\\.active_provider_profile/);\n    expect(profiles).toMatch(/llm\\.profile\\.\\{profile_id\\}\\.provider/);\n    expect(profiles).toMatch(/llm\\.profile\\.\\{profile_id\\}\\.default_model/);\n    expect(profiles).toMatch(/llm\\.profile\\.\\{profile_id\\}\\.base_url/);\n    expect(profiles).toContain(\"llm_profile_api_key_secret\");\n    expect(read(\"src-tauri/src/secret_store.rs\")).toContain(\"fn llm_profile_api_key_secret\");\n    expect(crateSource).not.toMatch(/app_settings|SecretStoreState|llm_profile_api_key_secret|StreamEvent|LlmProviderDiagnostic/);\n    expect(appSource).toMatch(/sqlx|SecretStoreState|struct StreamEvent|LlmProviderDiagnostic/);\n    expect(frontendApi).toContain('invoke<LlmProfilesState>(\"get_llm_profiles\")');\n    expect(frontendApi).toContain('invoke<LlmProfilesState>(\"save_llm_profile\", { ...input })');\n    expect(frontendApi).toContain('invoke<LlmProviderModel[]>(\"list_llm_provider_models\", { ...input })');\n    expect(frontendApi).toContain('invoke<void>(\"ask_llm_stream\", { ...input })');\n    for (const wrapper of [\"clear_llm_profile_api_key\", \"delete_llm_profile\", \"set_active_llm_profile\"]) expect(frontendApi).toContain(`invoke<LlmProfilesState>(\"${wrapper}\", { profileId })`);\n    expect(frontendApi).toContain('invoke<void>(\"cancel_llm_request\", { requestId })');\n    const askBody = rustBlock(appMod, \"pub async fn ask_llm_stream\");\n    expect(askBody.indexOf(\"tokio::spawn\")).toBeGreaterThanOrEqual(0);\n    expect(askBody.lastIndexOf(\"Ok(())\")).toBeGreaterThan(askBody.indexOf(\"tokio::spawn\"));\n    expect(askBody).toMatch(/run_request[\\s\\S]*\"queued\"[\\s\\S]*\"started\"[\\s\\S]*run_cancellable[\\s\\S]*run_llm_stream_with_profile[\\s\\S]*\"delta\"/);\n    expect(askBody).toMatch(/Ok\\(completion\\)[\\s\\S]*LlmRequestError::Failed[\\s\\S]*LlmRequestError::Cancelled/);\n    expect(askBody).not.toMatch(/tokio::spawn\\([\\s\\S]*?\\)\\.await/);\n  })",
+      "invariant": "LLM commands, secure profiles, diagnostics, and frontend transport remain application-owned.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::llm::tests::secure_profile_and_transport_ownership_remains_application_scoped",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000449",
+      "sourceHash": "89777577926813797e004d7ad97ac3f4ab72b9eeda717a480abe23c244192ab9",
+      "declaration": "it(\"moves rather than copies all pure metadata tests\", () => {\n    for (const testName of [\n      \"media_label_covers_known_and_fallback_kinds\",\n      \"media_metadata_roundtrip_through_zstd\",\n      \"media_metadata_decode_failures_are_typed_internal_errors\",\n      \"absent_media_metadata_decodes_to_default\",\n    ]) {\n      expect(appMedia).not.toContain(`fn ${testName}()`);\n      expect(coreMedia).toContain(`fn ${testName}()`);\n    }\n  })",
+      "invariant": "Pure media metadata tests have one domain owner rather than copied application tests.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-core::media_metadata::tests::media_label_covers_known_and_fallback_kinds",
+          "status": "unresolved",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Proves media-label behavior in extractum-core but not the absence of copied application test declarations."
+        },
+        {
+          "id": "test:cargo:extractum-core::media_metadata::tests::media_metadata_roundtrip_through_zstd",
+          "status": "unresolved",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Proves metadata round-trip behavior in extractum-core but not the absence of copied application test declarations."
+        },
+        {
+          "id": "test:cargo:extractum-core::media_metadata::tests::media_metadata_decode_failures_are_typed_internal_errors",
+          "status": "unresolved",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Proves typed decode failures in extractum-core but not the absence of copied application test declarations."
+        },
+        {
+          "id": "test:cargo:extractum-core::media_metadata::tests::absent_media_metadata_decodes_to_default",
+          "status": "unresolved",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Proves absent metadata defaults in extractum-core but not the absence of copied application test declarations."
+        }
+      ]
+    },
+    {
+      "id": "SC-000453",
+      "sourceHash": "a05611f7d9315e05d445cbced34e420f3f21deb2cabd24437ee3b3757ea62107",
+      "declaration": "it(\"uses the shared confirm modal before deleting or cancelling prompt-pack runs\", () => {\n    const screenSource = readProjectFile(\"src/lib/components/research-projects/ProjectRunsScreen.svelte\");\n\n    expect(screenSource).toContain(\"openConfirmModal\");\n    expect(screenSource).toContain('title: \"Delete Prompt Pack run?\"');\n    expect(screenSource).toContain('title: \"Cancel active Prompt Pack run?\"');\n    expect(screenSource).toContain('confirmLabel: \"Delete\"');\n    expect(screenSource).toContain('confirmLabel: \"Cancel run\"');\n    expect(screenSource).not.toContain(\"window.confirm\");\n  })",
+      "invariant": "Uses the shared confirm modal before deleting or cancelling prompt-pack runs.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector",
+          "closedRowIds": [
+            "SC-000522"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/ProjectRunsScreen.behavior.test.ts#project runs screen > uses the shared confirm modal before deleting or cancelling prompt-pack runs",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000465",
+      "sourceHash": "4da2eabf9c8180ede43532ab9fa6a9a12bb8df7e7792df10990e74c70de5437f",
+      "declaration": "it(\"keeps startup seed and interrupted-run cleanup wiring\", () => {\r\n    const seedIndex = appLibSource.indexOf(\"seed_builtin_prompt_packs(handle.clone())\");\r\n    const cleanupIndex = appLibSource.indexOf(\"cleanup_interrupted_prompt_pack_runs(handle.clone())\");\r\n\r\n    expect(seedIndex).toBeGreaterThanOrEqual(0);\r\n    expect(cleanupIndex).toBeGreaterThan(seedIndex);\r\n  })",
+      "invariant": "Keeps startup seed and interrupted-run cleanup wiring.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::tests::startup_seeds_prompt_packs_before_interrupted_run_cleanup",
+          "status": "future",
+          "mechanism": "cargo",
+          "capability": "An application startup coordinator seam with recording fakes can prove seed-before-cleanup call order."
+        }
+      ]
+    },
+    {
+      "id": "SC-000471",
+      "sourceHash": "2a7abe20116908676dfe427198015f3268d6a1f193647d584538b1f5a68132cb",
+      "declaration": "it(\"keeps orchestration and lifecycle responsibilities out of transport\", () => {\r\n    const transport = normalized(completionTransportSource);\r\n    const forbidden = [\r\n      \"#[tauri::command]\",\r\n      \"start_youtube_summary_run\",\r\n      \"preflight_youtube_summary_run\",\r\n      \"browser_runtime_start_blocking_failure\",\r\n      \"cleanup_interrupted_prompt_pack_runs\",\r\n      \"seed_prompt_pack_cancellation_smoke_fixture\",\r\n      \"clear_prompt_pack_cancellation_smoke_fixture\",\r\n      \"load_run_runtime_config\",\r\n    ];\r\n\r\n    for (const marker of forbidden) {\r\n      expect(transport).not.toContain(marker);\r\n    }\r\n  })",
+      "invariant": "Completion transport excludes command, lifecycle, and run-orchestration responsibilities.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": []
+    },
+    {
+      "id": "SC-000474",
+      "sourceHash": "3f2522d69529f9f3d11c04319bf26d9ff3c9baf97f75e7bd82c79a499b5bd0ee",
+      "declaration": "it(\"keeps cancellation smoke fixture services out of the production crate API\", () => {\n    if (!crateExtracted) return;\n\n    const devGate = '#[cfg(any(test, feature = \"dev-fixtures\"))]';\n    const runtime = read(`${crateRoot}/src/runtime.rs`);\n    const crateLib = read(`${crateRoot}/src/lib.rs`);\n    const appRuntime = read(`${appRoot}/runtime_commands.rs`);\n    const appFacade = read(`${appRoot}/mod.rs`);\n    for (const symbol of [\n      \"seed_prompt_pack_cancellation_smoke_fixture_in_pool\",\n      \"clear_prompt_pack_cancellation_smoke_fixture_in_pool\",\n    ]) {\n      expect(runtime).toContain(`${devGate}\\npub async fn ${symbol}`);\n    }\n    expect(crateLib).toMatch(\n      /#\\[cfg\\(any\\(test, feature = \"dev-fixtures\"\\)\\)\\]\\npub use runtime::\\{\\s*clear_prompt_pack_cancellation_smoke_fixture_in_pool,\\s*seed_prompt_pack_cancellation_smoke_fixture_in_pool,\\s*\\};/s,\n    );\n    expect(appRuntime).toMatch(\n      /#\\[cfg\\(all\\(dev, feature = \"prompt-pack-dev-fixtures\"\\)\\)\\]\\nuse extractum_prompt_packs::\\{\\s*clear_prompt_pack_cancellation_smoke_fixture_in_pool,\\s*seed_prompt_pack_cancellation_smoke_fixture_in_pool,\\s*\\};/s,\n    );\n    for (const symbol of [\n      \"seed_prompt_pack_cancellation_smoke_fixture\",\n      \"clear_prompt_pack_cancellation_smoke_fixture\",\n    ]) {\n      expect(appRuntime).toContain(\n        `#[cfg(all(dev, feature = \"prompt-pack-dev-fixtures\"))]\\n#[tauri::command]\\npub async fn ${symbol}`,\n      );\n    }\n    expect(appFacade).toMatch(\n      /#\\[cfg\\(all\\(dev, feature = \"prompt-pack-dev-fixtures\"\\)\\)\\]\\npub use runtime_commands::\\{\\s*clear_prompt_pack_cancellation_smoke_fixture,\\s*seed_prompt_pack_cancellation_smoke_fixture,\\s*\\};/s,\n    );\n  })",
+      "invariant": "Cancellation smoke fixture services remain test-only and outside the production crate API.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-prompt-packs::public_api_tests::cancellation_smoke_services_remain_test_only",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000481",
+      "sourceHash": "ccbf643116c720ee96ecb81aefae7b270d0fcb4b417c32b264a4da761102c6f8",
+      "declaration": "it(\"registers a private run_control sibling module\", () => {\r\n    const source = normalized(promptPacksModuleSource);\r\n\r\n    expect(source).toMatch(/^mod run_control;$/m);\r\n    expect(source).not.toMatch(/pub(?:\\([^)]*\\))?\\s+mod run_control;/);\r\n  })",
+      "invariant": "The run-control module remains a private prompt-pack implementation detail.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": []
+    },
+    {
+      "id": "SC-000484",
+      "sourceHash": "26952ec253e32e9d11d0fa3676d2c6f5512ac289ec3ef156aa4677ca436ccf47",
+      "declaration": "it(\"keeps the exact terminal event cleanup set\", () => {\r\n    const control = normalized(runControlSource);\r\n\r\n    expect(control).toMatch(\r\n      /\"completed\"\\s*\\|\\s*\"partial\"\\s*\\|\\s*\"failed\"\\s*\\|\\s*\"cancelled\"\\s*\\|\\s*\"interrupted\"/,\r\n    );\r\n  })",
+      "invariant": "Run control clears the terminal event state required by completed runs.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-prompt-packs::run_control::tests::terminal_events_clear_required_run_state",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000492",
+      "sourceHash": "45f88cee99cdf739706958af9341ca97246fa2b1142588a920ca77794d8bf1cb",
+      "declaration": "it(\"owns the persisted runtime-config query and decoding errors\", () => {\r\n    const runtime = productionPart(runtimeSource);\r\n    const runtimeConfig = normalized(runtimeConfigSource);\r\n    const selectMarker =\r\n      \"SELECT provider_profile_id, model, runtime_provider, browser_provider_config_json\";\r\n\r\n    expect(runtimeConfig).toContain(selectMarker);\r\n    expect(runtimeConfig).toContain(\"serde_json::from_str\");\r\n    expect(runtimeConfig).toContain(\r\n      \"Unsupported prompt-pack runtime provider: {other}\",\r\n    );\r\n    expect(runtimeConfig).toContain(\r\n      \"parse Browser Provider config snapshot: {error}\",\r\n    );\r\n    expect(runtime).not.toContain(selectMarker);\r\n  })",
+      "invariant": "Runtime config owns persisted configuration decoding and reports invalid stored configuration clearly.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-prompt-packs::runtime_config::tests::invalid_persisted_runtime_configuration_is_reported",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant."
+        }
+      ]
+    },
+    {
+      "id": "SC-000509",
+      "sourceHash": "b6f48745ef92e10aba35f640834853417353b75b2d4b93135c6083b138afcba7",
+      "declaration": "it(\"keeps shadcn generated primitives in lower-case ui folders beside legacy PascalCase ui files\", () => {\n    expect(existsSync(path.join(repoRoot, \"src/lib/components/ui/Button.svelte\"))).toBe(true);\n    expect(existsSync(path.join(repoRoot, \"src/lib/components/ui/button/index.ts\"))).toBe(true);\n    expect(existsSync(path.join(repoRoot, \"src/lib/components/ui/sheet/index.ts\"))).toBe(true);\n    expect(existsSync(path.join(repoRoot, \"src/lib/components/ui/tabs/index.ts\"))).toBe(true);\n    expect(read(\"components.json\")).toContain('\"ui\": \"$lib/components/ui\"');\n  })",
+      "invariant": "Generated UI primitives use lower-case wrapper locations without replacing legacy components.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": []
+    },
+    {
+      "id": "SC-000511",
+      "sourceHash": "8f6854a67363da20b84dd795a08442c49dc78f854e6de9b0920e7df464b23919",
+      "declaration": "it(\"keeps new feature screens behind Extractum UI wrappers\", () => {\n    const featureFiles = [\n      ...collectFiles(\"src/lib/components/research-projects\"),\n      ...collectFiles(\"src/routes/projects\"),\n    ].filter((file) => file.endsWith(\".svelte\") || file.endsWith(\".ts\"));\n\n    const offenders = featureFiles\n      .map((file) => [path.relative(repoRoot, file).replaceAll(\"\\\\\", \"/\"), sourceOf(file)] as const)\n      .filter(([, source]) =>\n        source.includes(\"@svar-ui/\") ||\n        source.includes(\"bits-ui\") ||\n        source.includes(\"$lib/components/ui/\"),\n      )\n      .map(([file]) => file);\n\n    expect(offenders).toEqual([]);\n  })",
+      "invariant": "Research-project feature screens depend on UI libraries through Extractum wrappers.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires project source Library delete through the list projects route",
+          "closedRowIds": [
+            "SC-000529"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires project source Library delete through the main projects route",
+          "closedRowIds": [
+            "SC-000528"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires the project Add source dialog through the current ProjectsShell",
+          "closedRowIds": [
+            "SC-000526"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires the project Add source dialog through the next Projects route",
+          "closedRowIds": [
+            "SC-000531"
+          ]
+        },
+        {
+          "id": "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#feature screens use Extractum UI wrappers",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+        }
+      ]
+    },
+    {
+      "id": "SC-000512",
+      "sourceHash": "f8e1f024fcfe969c1e21c02c176e8e32bdfcdffa2dcec33751c00f0ad90533c7",
+      "declaration": "it(\"allows lower-level library imports only in the product wrapper layer\", () => {\n    const wrapperFiles = collectFiles(\"src/lib/components/extractum-ui\");\n    const wrapperSources = wrapperFiles.map(sourceOf).join(\"\\n\");\n\n    expect(wrapperSources).toContain(\"$lib/components/ui/button/index.js\");\n    expect(wrapperSources).toContain(\"$lib/components/ui/sheet/index.js\");\n    expect(wrapperSources).toContain(\"$lib/components/ui/dialog/index.js\");\n    expect(wrapperSources).toContain(\"$lib/components/ui/StatusMessage.svelte\");\n    expect(wrapperSources).toContain(\"ExtractumDialog\");\n    expect(wrapperSources).toContain(\"ExtractumStatusMessage\");\n    expect(wrapperSources).not.toContain(\"src/lib/new-ui\");\n  })",
+      "invariant": "Only the Extractum wrapper layer imports lower-level UI libraries.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#lower-level UI imports stay in wrapper modules",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+        }
+      ]
+    },
+    {
+      "id": "SC-000513",
+      "sourceHash": "efc92ba1f80ae9f29a449e5dd92b47ee079dbc7619798f18b416967fbd44c070",
+      "declaration": "it(\"keeps Library route and feature screens out of direct shadcn and SVAR imports\", () => {\n    const libraryFiles = [\n      path.join(repoRoot, \"src/routes/projects/library/+page.svelte\"),\n      ...collectFiles(\"src/lib/components/research-projects\")\n        .filter((file) => path.basename(file).startsWith(\"Library\")),\n    ];\n\n    const offenders = libraryFiles\n      .map((file) => [path.relative(repoRoot, file).replaceAll(\"\\\\\", \"/\"), sourceOf(file)] as const)\n      .filter(([, source]) =>\n        source.includes(\"@svar-ui/\") ||\n        source.includes(\"bits-ui\") ||\n        source.includes(\"$lib/components/ui/\"),\n      )\n      .map(([file]) => file);\n\n    expect(libraryFiles.some((file) => path.basename(file) === \"LibraryAddSourceDialog.svelte\")).toBe(true);\n    expect(offenders).toEqual([]);\n  })",
+      "invariant": "Library routes and feature screens do not bypass Extractum UI wrappers.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#Library screens do not bypass Extractum wrappers",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+        }
+      ]
+    },
+    {
+      "id": "SC-000514",
+      "sourceHash": "94c1677b8908e0e64bc9f31967abd628ccee6b7d1a5b9acdda2f8c85fa179dea",
+      "declaration": "it(\"marks research project data grid date columns for wrapper formatting\", () => {\n    const sourcesTabSource = readFileSync(\n      path.join(repoRoot, \"src/lib/components/research-projects/SourcesTab.svelte\"),\n      \"utf8\",\n    );\n    const connectFromLibrarySource = readFileSync(\n      path.join(repoRoot, \"src/lib/components/research-projects/ConnectFromLibrary.svelte\"),\n      \"utf8\",\n    );\n    const projectSourceGridSource = readFileSync(\n      path.join(repoRoot, \"src/lib/ui/research-projects-project-source-grid.ts\"),\n      \"utf8\",\n    );\n\n    expect(sourcesTabSource).toContain(\"projectSourceGridColumns\");\n    expect(projectSourceGridSource).toMatch(\n      /id: \"addedAt\"[\\s\\S]*header: \"Added to project at\"[\\s\\S]*dateTimeFormat: \"datetime\"/,\n    );\n    expect(connectFromLibrarySource).toContain(\n      '{ id: \"lastCollectedAt\", header: \"Последний сбор\", width: 140, dateTimeFormat: \"datetime\" }',\n    );\n  })",
+      "invariant": "Project-source date columns use the shared grid date-time formatter.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/testing/research-projects-grid-date-formatting.behavior.test.ts#project source date columns use the shared formatter",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+        }
+      ]
+    },
+    {
+      "id": "SC-000515",
+      "sourceHash": "0cc9cdec2930890158b1319e0ed68aa871a1d70d384b3d5d231a8b1b00c5f4d5",
+      "declaration": "it(\"routes SVAR Grid through Extractum grid wrappers only\", () => {\n    const dataGridSource = readFileSync(\n      path.join(repoRoot, \"src/lib/components/extractum-ui/DataGrid.svelte\"),\n      \"utf8\",\n    );\n    expect(dataGridSource).toContain('from \"@svar-ui/svelte-grid\"');\n    expect(dataGridSource).toContain(\"selectedRows\");\n    expect(dataGridSource).toContain(\"rowStyle\");\n    expect(dataGridSource).toContain(\"Locale\");\n    expect(dataGridSource).toContain(\"Willow\");\n    expect(dataGridSource).toContain(\"fonts={false}\");\n    expect(dataGridSource).toContain(\"visibleOverlay\");\n    expect(dataGridSource).toContain(\"rows.length === 0 ? overlay : undefined\");\n    expect(dataGridSource).toContain(\"enhanceDateTimeColumns\");\n    expect(dataGridSource).toContain(\"enhancedColumns\");\n\n    const treeGridSource = readFileSync(\n      path.join(repoRoot, \"src/lib/components/extractum-ui/TreeDataGrid.svelte\"),\n      \"utf8\",\n    );\n    expect(treeGridSource).toContain('from \"@svar-ui/svelte-grid\"');\n    expect(treeGridSource).toContain(\"tree\");\n    expect(treeGridSource).toContain(\"treetoggle\");\n    expect(treeGridSource).toContain(\"selectedRows\");\n    expect(treeGridSource).toContain(\"onselectrow\");\n    expect(treeGridSource).toContain(\"Willow\");\n    expect(treeGridSource).toContain(\"Locale\");\n    expect(treeGridSource).toContain(\"fonts={false}\");\n    expect(treeGridSource).toContain(\".extractum-tree-data-grid :global(.wx-\");\n\n    const selectCellSource = readFileSync(\n      path.join(repoRoot, \"src/lib/components/extractum-ui/GridSelectCell.svelte\"),\n      \"utf8\",\n    );\n    expect(selectCellSource).toContain('data-action=\"ignore-click\"');\n    expect(selectCellSource).toContain('api.exec(\"select-row\"');\n  })",
+      "invariant": "SVAR grid APIs stay inside the approved Extractum grid wrappers.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+        }
+      ]
+    },
+    {
+      "id": "SC-000555",
+      "sourceHash": "05e9d424fbc2a99e68362a7fa6ef5f995e9362567463a1789dca3052ad93f732",
+      "declaration": "it(\"keeps the base configuration production-safe\", () => {\n    const config = readJson(\"src-tauri/tauri.conf.json\");\n    const build = config.build as Record<string, unknown>;\n    const app = config.app as Record<string, unknown>;\n    const security = app.security as Record<string, unknown>;\n    const csp = security.csp as string;\n\n    expect(app.withGlobalTauri).toBe(false);\n    expect((build.features as string[] | undefined) ?? []).not.toContain(\n      \"prompt-pack-dev-fixtures\",\n    );\n    expect(csp).toContain(\"default-src 'self'\");\n    expect(csp).toContain(\"connect-src 'self' ipc: http://ipc.localhost\");\n    expect(csp).toContain(\"img-src 'self' asset: http://asset.localhost data: blob:\");\n    expect(csp).toContain(\"style-src 'self' 'unsafe-inline'\");\n    expect(csp).toContain(\"font-src 'self' data:\");\n    expect(csp).toContain(\"script-src 'self'\");\n    expect(security.dangerousDisableAssetCspModification).toBe(false);\n  })",
+      "invariant": "The base Tauri configuration keeps production CSP and global API settings restrictive.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::security_config_tests::base_tauri_configuration_is_production_restrictive",
+          "status": "future",
+          "mechanism": "cargo",
+          "capability": "Tauri production configuration resolution can prove global API, feature, CSP, and asset-CSP restrictions.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    },
+    {
+      "id": "SC-000556",
+      "sourceHash": "ac61de784efdb85a134fa8b4e761c98a2429d9a54b96c224ab6506c557b93636",
+      "declaration": "it(\"does not allow remote image origins\", () => {\n    const config = readJson(\"src-tauri/tauri.conf.json\");\n    const app = config.app as Record<string, unknown>;\n    const security = app.security as Record<string, unknown>;\n    const csp = security.csp as string;\n    const imageDirective = csp\n      .split(\";\")\n      .map((directive) => directive.trim())\n      .find((directive) => directive.startsWith(\"img-src \"));\n\n    expect(imageDirective).toBeDefined();\n    const remoteImageOrigins = imageDirective!\n      .split(/\\s+/)\n      .slice(1)\n      .filter((source) => /^https?:\\/\\//.test(source) && source !== \"http://asset.localhost\");\n\n    expect(remoteImageOrigins).toEqual([]);\n  })",
+      "invariant": "The production image CSP permits no remote image origin.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::security_config_tests::production_image_csp_rejects_remote_origins",
+          "status": "future",
+          "mechanism": "cargo",
+          "capability": "Tauri production configuration resolution can prove that img-src admits no remote HTTP image origin.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    },
+    {
+      "id": "SC-000557",
+      "sourceHash": "9315b6377120eacb727cd5485b52760c5b1c01fc38029126058b7ce0fd686ba4",
+      "declaration": "it(\"limits the MCP overlay to dev-only capabilities\", () => {\n    expect(readJson(\"src-tauri/tauri.mcp.conf.json\")).toEqual({\n      build: { features: [\"prompt-pack-dev-fixtures\"] },\n      app: { withGlobalTauri: true },\n    });\n  })",
+      "invariant": "The MCP overlay enables elevated capabilities only in development.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/tauri-security-config.behavior.test.ts#MCP capabilities are development only",
+          "status": "future",
+          "mechanism": "jsdom",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    },
+    {
+      "id": "SC-000558",
+      "sourceHash": "8d013a717623984fa266a48cd8b3f7234185b5e63434406f508fa4cfe23f2c33",
+      "declaration": "it(\"does not grant frontend SQL permissions\", () => {\n    const capability = readJson(\"src-tauri/capabilities/default.json\");\n    const permissions = capability.permissions as string[];\n\n    expect(permissions.filter((permission) => permission.startsWith(\"sql:\"))).toEqual([]);\n  })",
+      "invariant": "The default Tauri capability grants no frontend SQL permission.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::security_config_tests::frontend_capabilities_contain_no_sql_permission",
+          "status": "future",
+          "mechanism": "cargo",
+          "capability": "Tauri capability resolution can prove that the default frontend ACL grants no sql:* permission.",
+          "normativeSource": "AGENTS_DATABASE_OWNERSHIP"
+        }
+      ]
+    },
+    {
+      "id": "SC-000559",
+      "sourceHash": "6cfb2dc2bb8ef37452ec20d96c3bfd1190cf890f4364102d63d34fec5a0c17a1",
+      "declaration": "it(\"limits MCP and fixture commands to dev builds on localhost\", () => {\n    const source = readSource(\"src-tauri/src/lib.rs\");\n    const promptPackFixtureCommands = [\n      \"seed_prompt_pack_cancellation_smoke_fixture\",\n      \"clear_prompt_pack_cancellation_smoke_fixture\",\n    ];\n    const fixtureCommands = [\n      \"seed_takeout_cancellation_smoke_fixture\",\n      \"clear_takeout_cancellation_smoke_fixture\",\n      \"seed_source_job_cancellation_smoke_fixture\",\n      \"clear_source_job_cancellation_smoke_fixture\",\n      \"seed_analysis_redesign_fixtures\",\n      \"clear_analysis_redesign_fixture_active_runs\",\n      \"clear_analysis_redesign_fixtures\",\n    ];\n\n    expect(source).toMatch(\n      /#\\[cfg\\(dev\\)\\]\\s*let builder = builder\\.plugin\\(\\s*tauri_plugin_mcp_bridge::Builder::new\\(\\)\\s*\\.bind_address\\(\"127\\.0\\.0\\.1\"\\)\\s*\\.build\\(\\),\\s*\\);/s,\n    );\n    expect(source).not.toMatch(/#\\[cfg\\(debug_assertions\\)\\][\\s\\S]{0,300}tauri_plugin_mcp_bridge/);\n\n    for (const command of promptPackFixtureCommands) {\n      expect(\n        source.match(\n          new RegExp(\n            `#\\\\[cfg\\\\(all\\\\(dev, feature = \"prompt-pack-dev-fixtures\"\\\\)\\\\)\\\\][\\\\s\\\\S]{0,400}\\\\b${command}\\\\b`,\n            \"g\",\n          ),\n        ),\n      ).toHaveLength(2);\n      expect(source).not.toMatch(\n        new RegExp(`#\\\\[cfg\\\\(debug_assertions\\\\)\\\\]\\\\s*${command}`),\n      );\n    }\n\n    for (const command of fixtureCommands) {\n      expect(\n        source.match(new RegExp(`#\\\\[cfg\\\\(dev\\\\)\\\\][\\\\s\\\\S]{0,400}\\\\b${command}\\\\b`, \"g\")),\n      ).toHaveLength(2);\n      expect(source).not.toMatch(\n        new RegExp(`#\\\\[cfg\\\\(debug_assertions\\\\)\\\\]\\\\s*${command}`),\n      );\n    }\n  })",
+      "invariant": "MCP and fixture commands compile only for approved localhost development configurations.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::security_config_tests::mcp_and_fixture_commands_are_localhost_dev_only",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    },
+    {
+      "id": "SC-000560",
+      "sourceHash": "6f9a5f62cc8a46d07ea4559a813a3017cb7627dd4778847f4a94d59e2ba5a60e",
+      "declaration": "it(\"keeps production DevTools behind the CSP verification feature\", () => {\n    const cargoToml = readSource(\"src-tauri/Cargo.toml\");\n    const source = readSource(\"src-tauri/src/lib.rs\");\n\n    expect(cargoToml).toContain('csp-verification = [\"tauri/devtools\"]');\n    expect(source).toMatch(\n      /#\\[cfg\\(feature = \"csp-verification\"\\)\\]\\s*if let Some\\(window\\) = app\\.get_webview_window\\(\"main\"\\)\\s*\\{\\s*window\\.open_devtools\\(\\);\\s*\\}/s,\n    );\n  })",
+      "invariant": "Production DevTools are reachable only through the CSP-verification feature.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum::security_config_tests::production_devtools_require_csp_verification",
+          "status": "future",
+          "mechanism": "cargo",
+          "resolvedByBaseClosedRow": false,
+          "capability": "Concrete candidate-owner inventory item; independently assess whether this seam truthfully preserves the supplied invariant.",
+          "normativeSource": "AGENTS_SECURITY"
+        }
+      ]
+    }
+  ]
+}

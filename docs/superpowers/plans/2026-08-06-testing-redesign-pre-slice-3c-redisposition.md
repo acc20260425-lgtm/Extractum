@@ -15,6 +15,7 @@
 - Change ledger resolution decisions only. Do not remove or rewrite tests, change product code, Vitest projects, RepositoryIndex, repository rules, public npm commands, verify scheduling, completed 3A/3B evidence, or the program index `Current Detailed Plan`.
 - Keep every open row's identity, path, title/manual metadata, `sourceHash`, `authorityHash`, `assertionCount`, lineage, and invariant text unchanged. A factual invariant correction requires another approved specification amendment and is not part of this plan.
 - Apply the approved class order exactly: P0; D1; D2; D3; D4; A1; T1; B1; B2; B3; D5; otherwise `UNCLASSIFIED`. Never introduce a per-row override.
+- Apply the user-approved max-three boundary clarification: completed-event D1 excludes future-defect topology; exact current source/symbol/file/test topology without an independent contract is D2; an exact resolved base-closed owner makes evidence D4 before A1; real browser/OS-process observation is B3 regardless of runner prefix; and retained owners must prove the complete invariant rather than adjacent behavior. The approved affected sets are D2 SC-000077/080/081/092/203/449, D4 SC-000356--358, and B3 SC-000420. Record these as four group adjudications over retained blind disagreements, never as individual overrides; no other disagreement is authorized.
 - D1 uses the operational future-defect test. D1 is forbidden when any future code, configuration, or test change could violate the invariant as a defect.
 - P0 contains at least SC-000555--SC-000560, SC-000511--SC-000515, and SC-000420. Add a row only with an exact citation to `AGENTS.md` section 2, 6, or 7, or an approved program-specification section.
 - P0 membership and normative criticality are separate. B3 requires an exact normative `criticalityRef`; a P0 row with no A1/T1/B1/B2 owner terminates at B3.
@@ -342,6 +343,7 @@ Run: `git commit -m "test: pin redisposition scope and timing evidence"`
 - Modify: `testing/source-contract-redisposition-review.json`
 - Modify: `scripts/testing/source-contract-redisposition-review.mjs` (only the approved empty-calibration `no_match` schema correction)
 - Modify: `scripts/testing/source-contract-redisposition-review.test.ts` (RED/GREEN coverage for that correction)
+- Create: `testing/source-contract-redisposition-evidence/` (only final accepted content-addressed shard packet/output pairs)
 - Reference: `AGENTS.md`
 - Reference: `testing/source-contract-ledger.json`
 - Reference: `scripts/testing/repository-rules.mjs`
@@ -397,7 +399,7 @@ Expected: non-zero only because unreviewed tail decisions remain `UNCLASSIFIED`;
 
 Run: `git diff --check`
 
-Run: `git add testing/source-contract-redisposition-review.json scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts docs/superpowers/plans/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md`
+Run: `git add testing/source-contract-redisposition-review.json testing/source-contract-redisposition-evidence scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md docs/superpowers/plans/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md`
 
 Run: `git commit -m "test: calibrate mandatory redisposition cohorts"`
 
@@ -462,7 +464,7 @@ Send the sampled declarations, invariants, ordinals, candidate owners, catalog, 
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
-After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Process every blind population as deterministic contiguous shards of at most 24 rows. Preserve a mechanically invalid shard output, but do not compare or adopt it and do not increment `iterations`; correct or rerun only that shard without author data. Continue until one complete valid merged iteration changes neither the group rules nor the sample population; record the final population digest and count of valid merged iterations. Permit at most three valid merged iterations, starting at zero for this amended protocol. If the third valid merged result still changes rules or population, keep `apply` blocked and stop for explicit rule review. The carrier rejects more than three valid iterations, incomplete or overlapping shard coverage, and any comparison whose sample was derived from an earlier population.
+After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Process every blind population as deterministic contiguous shards of at most 24 rows. Preserve a mechanically invalid shard output, but do not compare or adopt it and do not increment `iterations`; correct or rerun only that shard without author data. Continue until one complete valid merged iteration changes neither the group rules nor the sample population; record the final population digest and count of valid merged iterations. Permit at most three valid merged iterations, starting at zero for this amended protocol. If the third valid merged result still changes rules or population, keep `apply` blocked and stop for explicit rule review. The user-approved 2026-08-07 explicit review resolved that stop through the four group adjudications in Global Constraints; retain the iteration-three disagreements and raw evidence, apply only those exact group outcomes, and do not run iteration four. The carrier rejects more than three valid iterations, incomplete or overlapping shard coverage, a non-allowlisted adjudication, and any comparison whose sample was derived from an earlier population.
 
 - [ ] **Step 8: Calculate the final forecast and loss summaries**
 

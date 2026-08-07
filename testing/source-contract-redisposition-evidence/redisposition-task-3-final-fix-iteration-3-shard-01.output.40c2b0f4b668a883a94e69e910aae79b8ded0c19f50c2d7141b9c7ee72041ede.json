@@ -1,0 +1,196 @@
+{
+  "reviewerRunId": "redisposition-task-3-final-fix-valid-iteration-3",
+  "packetSha256": "8e3f9cf95bc82d19c64103dedcd6f47ed781ef9323baa3b66f16b04799f6985e",
+  "stopConditions": [],
+  "results": [
+    {
+      "id": "SC-000092",
+      "sourceHash": "6a6898de7f435ba780208dbeb493c238d1b92f6b859c2c21a1aee0460b04588c",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The row freezes the absence of exact extraction-era identifier names in exact files, which is implementation composition without an independent contract owner."
+    },
+    {
+      "id": "SC-000118",
+      "sourceHash": "61b6efb1bc2236d1b7d63eaa382a01565cae1676c8e64016c1d44e6899b25b8e",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The two base-closed Cargo owners exactly prove that completed-run corpus and trace evidence do not fall back to live source rows, making the source-contract row duplicate evidence.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows",
+        "test:cargo:extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot"
+      ]
+    },
+    {
+      "id": "SC-000121",
+      "sourceHash": "0cb00961ac2c7e0dca37eed1d5e1b88490ebb5f0eb70e1b06c18dfe747435de6",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The base-closed jsdom owner exactly proves the metadata-rich Telegram timeline and absence of binary previews, so the source-string row is duplicate evidence.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders Telegram as a metadata-rich timeline without binary previews"
+      ]
+    },
+    {
+      "id": "SC-000130",
+      "sourceHash": "38541383ae101e3a6c1b58b033acf10229740ac7d95817e7370099cddee092a8",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Route wiring of persisted canvas mode, source basis, and transition callbacks is observable through a focused jsdom seam; the listed future route test is the exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes persisted canvas mode and source basis from workspace UI state"
+      ]
+    },
+    {
+      "id": "SC-000136",
+      "sourceHash": "87f823f39a97d06c7bca7705273c60cd417bd34f15dd535a143096064b72c1b2",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Passing source metrics and the derived disabled reason into launch preflight is cheap route behavior that the listed future jsdom test can prove truthfully.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes source metrics into report launch preflight"
+      ]
+    },
+    {
+      "id": "SC-000165",
+      "sourceHash": "a8c6ec6f91227bd96d9b70933262cfaa7bec6e348e931881b145e3a0776b5716",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Eager snapshot-availability probing for an opened run is observable through the route effect without a browser, and the listed future jsdom candidate is exact.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > probes opened-run snapshot availability before the user switches to Source mode"
+      ]
+    },
+    {
+      "id": "SC-000171",
+      "sourceHash": "e07d278c936c576fb1f4736878d465f8b8d9f859e3f933bedbdcecc9cfd1c98c",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Matching focused-load requests against current route scope and source basis is cheap route-effect behavior covered truthfully by the listed future jsdom candidate.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > compares focused-load requests against current route scope and source basis"
+      ]
+    },
+    {
+      "id": "SC-000176",
+      "sourceHash": "9f1def0b061ef13d530155fe02f9ef2015d6cb32232ec0e51422017027e8af72",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The declaration checks exact imported helper names while the invariant explicitly identifies those names as implementation detail with behavior covered elsewhere."
+    },
+    {
+      "id": "SC-000192",
+      "sourceHash": "2ce78fef53aed2cc67566fb4839cd49a03a048668c78c4ecde92383a843cf132",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Durable Runs filters and exclusion of source-ingest jobs are observable companion-route behavior that the listed future jsdom test can cover through a cheap seam.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-run-companion-route.behavior.test.ts#analysis route run companion wiring > keeps Runs filters durable and source ingest jobs out of Runs"
+      ]
+    },
+    {
+      "id": "SC-000194",
+      "sourceHash": "241616928cceb2a3fa9c65fcf7b979344c128266adf205cdea5209e712af3266",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact patch property names and removal of the obsolete inspector-mode token are implementation shape; the invariant states navigation behavior remains independently covered."
+    },
+    {
+      "id": "SC-000203",
+      "sourceHash": "2db29d1f74260998d771ef9bf0b30aed40dda153c7b260e9ba4ccda0371ab986",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Absence of exact temporary-chat component and callback strings from ReportCanvas is source composition with no listed independent owner."
+    },
+    {
+      "id": "SC-000210",
+      "sourceHash": "0b08eafc7bc27cf82fc8cc122a159b292a585094325e755b5e53fa976edb458a",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Forwarding source-reader data and callbacks into ReportSourceSurface is cheap route wiring that the listed future jsdom candidate can prove through rendered props and interactions.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers-route.behavior.test.ts#analysis source reader route wiring > passes source reader props into ReportSourceSurface"
+      ]
+    },
+    {
+      "id": "SC-000289",
+      "sourceHash": "59ffe63c0fbbccb1df99d777454502cb53fdbfd654e7797971310294a9c5d85b",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Workspace action button types are observable in rendered component semantics through jsdom, and the listed future component test is the exact cheap owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-workspace-tools.behavior.test.ts#analysis workspace tools component contract > uses explicit button types for workspace actions"
+      ]
+    },
+    {
+      "id": "SC-000297",
+      "sourceHash": "9479b66bf53d907bf016be038b67ea692000adeb006c4db1300ab82c0e79ae61",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Jobs navigation availability and routing in both modes are rendered component behavior that the listed future jsdom candidate can truthfully cover without a real browser.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/apalis-jobs-route-contract.behavior.test.ts#apalis jobs inspector frontend source contracts > adds Jobs as a separate top-level navigation item in both modes"
+      ]
+    },
+    {
+      "id": "SC-000298",
+      "sourceHash": "6133207b3cd0d7d194aa722a9138c72c21fcfe9798c71c9b6f1470fa17dfa719",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact import placement and absence of invoke strings in page and panel sources prescribe the API-boundary implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000304",
+      "sourceHash": "68c2d8a1cf6513652290d2def746c8ed37e0751a2d89cea2f603c575afec59ef",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Forbidding exact logging, serialization, promise, and filtering source strings constrains wrapper statement composition without an independent contract owner."
+    },
+    {
+      "id": "SC-000305",
+      "sourceHash": "e349ec77c4eff9d28b3161273dfa3ea479197b963dd75e4b01d61794262643ba",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The row checks absence of exact logging and transformation source strings rather than independently observable wrapper behavior, with no candidate owner listed."
+    },
+    {
+      "id": "SC-000312",
+      "sourceHash": "58f368ffa463e9253fc309d831f63e2232db8316136bd59dd2aaa89dd9ee09b1",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Computed visibility across desktop and mobile viewports requires a real browser, and the packet explicitly approves the exact Playwright owner under the browser-ownership policy.",
+      "ownerEvidence": [
+        "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000316",
+      "sourceHash": "8a2542834a462d3dfcacfd6fa974cb47c9e242c1d11347b895626d0494bb387e",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Rendering source-group sources, metadata, and activity tabs from route-owned data is component behavior that the listed future jsdom candidate can cover cheaply and truthfully.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-browser-shell.behavior.test.ts#source browser shell > renders source-group tabs from route-owned data"
+      ]
+    },
+    {
+      "id": "SC-000323",
+      "sourceHash": "3a365dd43a846f82eb9e36df96ba2877fbc653c1e733434bea8311e2820a3a8f",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The exact focus-ring shadows are non-normative rendered styling, and the packet provides no truthful non-browser owner for the visible affordance."
+    },
+    {
+      "id": "SC-000333",
+      "sourceHash": "c8de76024f284ed0eb55fe865eed998b865783e98b96c7ca7eb3645f868250e0",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "Highlighting an open trigger through a CSS data-state selector is a non-normative visual detail with no listed truthful non-browser owner."
+    },
+    {
+      "id": "SC-000335",
+      "sourceHash": "9f5ea67a1d856c87137c0b00c038f67ea958017f652b744b64a6c337283bba9f",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Forwarding row activation from the project shell to the grid is cheap component interaction behavior that the listed future jsdom candidate can prove.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/research-projects/ResearchProjectsShell.behavior.test.ts#ResearchProjectsShell > forwards source row activation to the grid"
+      ]
+    },
+    {
+      "id": "SC-000344",
+      "sourceHash": "6e33f0cdc0cd45ad19034a693eb7a80010f35a00fc2b55140471bd5d6b878b09",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Filter availability across responsive layouts requires real Chromium layout at multiple breakpoints, and the packet explicitly approves the exact Playwright owner under the browser-ownership policy.",
+      "ownerEvidence": [
+        "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000349",
+      "sourceHash": "14af1dda1db6f9d06231d7945b7ca15a0d04f8f87bd72f0372eaa28898b35068",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The invariant explicitly identifies the exact columnStyle, column key, and CSS-class alignment mechanism as styling implementation detail without an independent contract."
+    }
+  ]
+}
