@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -371,10 +370,11 @@ describe("source-contract redisposition review", () => {
   it("validates the packet-only tail shards without author decisions", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const realBaseLedger = await loadBaseLedger({ repoRoot, commit: REVIEW_BASE });
-    const packetBytes = new Map(await Promise.all((reviewArtifact as any).tailReview.packetShards.map(async (shard: any) => [
+    const { evidenceBytes } = await loadReviewEvidence({ repoRoot, artifact: reviewArtifact });
+    const packetBytes = new Map((reviewArtifact as any).tailReview.packetShards.map((shard: any) => [
       shard.packetPath,
-      await readFile(fileURLToPath(new URL(`../../${shard.packetPath}`, import.meta.url)), "utf8"),
-    ])));
+      evidenceBytes.get(shard.packetPath),
+    ]));
     expect(validateTailPacketScaffold({ artifact: reviewArtifact, baseLedger: realBaseLedger, packetBytes })).toEqual([]);
 
     const tampered = new Map(packetBytes);
