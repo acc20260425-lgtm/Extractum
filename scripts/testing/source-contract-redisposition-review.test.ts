@@ -54,6 +54,8 @@ const approvedRuleDisagreements = [
   { rowIds: approvedRuleAdjudications[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: approvedRuleAdjudications[2].rule },
   { rowIds: approvedRuleAdjudications[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: approvedRuleAdjudications[3].rule },
 ];
+const approvedCalibrationPairs = reviewArtifact.independentReview.calibrations.map(({ class: reasonClass, adjacentClass }) => ({ class: reasonClass, adjacentClass }));
+const approvedMandatoryCohortNames = reviewArtifact.independentReview.mandatoryCohorts.map(({ name }) => name);
 
 function row(id: string, path: string, resolution: Record<string, unknown> = { disposition: "behavior", replacementIds: ["test:vitest:src/existing.test.ts#existing"] }) {
   return {
@@ -768,6 +770,41 @@ describe("source-contract redisposition review", () => {
     );
   });
 
+  it("requires the complete ordered calibration registry and mandatory cohort names", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+    ]);
+    const validateMutation = (mutate: (artifact: any) => void) => {
+      const artifact = clone(reviewArtifact) as any;
+      mutate(artifact);
+      return validateReview({ artifact, baseLedger: realBaseLedger, currentLedger: realBaseLedger, baseTrackedPaths: realBaseTrackedPaths });
+    };
+
+    expect(approvedCalibrationPairs).toHaveLength(10);
+    expect(approvedMandatoryCohortNames).toEqual([
+      "protected-p0", "security", "import-boundary", "process-lifecycle", "large-contract-26",
+      "emerging-b3", "emerging-d5", "emerging-mixed", "known-browser-five",
+    ]);
+    for (const mutate of [
+      (artifact: any) => artifact.independentReview.calibrations.splice(5, 1),
+      (artifact: any) => artifact.independentReview.calibrations.push(clone(artifact.independentReview.calibrations[0])),
+      (artifact: any) => artifact.independentReview.calibrations.push({ class: "EXTRA", adjacentClass: "D1_COMPLETED_HISTORY_ONLY", rowIds: [], result: "no_match" }),
+      (artifact: any) => { artifact.independentReview.calibrations[0].adjacentClass = "D3_NON_OBSERVABLE_VISUAL"; },
+    ]) {
+      expect(validateMutation(mutate)).toContain("calibrations: class/adjacentClass pairs must equal the approved ordered registry");
+    }
+    for (const mutate of [
+      (artifact: any) => artifact.independentReview.mandatoryCohorts.pop(),
+      (artifact: any) => { artifact.independentReview.mandatoryCohorts[4].name = "large-contract"; },
+      (artifact: any) => artifact.independentReview.mandatoryCohorts.push(clone(artifact.independentReview.mandatoryCohorts[0])),
+      (artifact: any) => artifact.independentReview.mandatoryCohorts.push({ name: "extra", rowIds: [], comparison: "agree" }),
+    ]) {
+      expect(validateMutation(mutate)).toContain("mandatoryCohorts: names must equal the approved ordered registry");
+    }
+  });
+
   it("requires exact emerging cohort membership", () => {
     const missing = artifactFor();
     missing.independentReview.mandatoryCohorts.push({
@@ -868,6 +905,37 @@ describe("source-contract redisposition review", () => {
       "independentReview: shard 0 packet byte hash mismatch",
       "independentReview: shard 0 packet is malformed JSON",
     ]));
+
+    const declarationArtifact = clone(reviewArtifact) as any;
+    const declarationBytes = new Map(loaded.evidenceBytes);
+    const rewritePair = (packetReference: any, outputReference: any, mutatePacket: (packet: any) => void) => {
+      const packet = JSON.parse(declarationBytes.get(packetReference.packetPath) as string);
+      mutatePacket(packet);
+      const packetBody = `${JSON.stringify(packet, null, 2)}\n`;
+      const packetHash = sha256Text(packetBody);
+      const packetPath = packetReference.packetPath.replace(/[0-9a-f]{64}\.json$/, `${packetHash}.json`);
+      const output = JSON.parse(declarationBytes.get(outputReference.outputPath) as string);
+      output.packetSha256 = packetHash;
+      const outputBody = `${JSON.stringify(output, null, 2)}\n`;
+      const outputHash = sha256Text(outputBody);
+      const outputPath = outputReference.outputPath.replace(/[0-9a-f]{64}\.json$/, `${outputHash}.json`);
+      declarationBytes.set(packetPath, packetBody);
+      declarationBytes.set(outputPath, outputBody);
+      packetReference.packetPath = packetPath;
+      packetReference.packetSha256 = packetHash;
+      outputReference.outputPath = outputPath;
+      outputReference.outputSha256 = outputHash;
+    };
+    const targetId = declarationArtifact.independentReview.shards[0].rowIds[0];
+    rewritePair(declarationArtifact.independentReview.shards[0], declarationArtifact.independentReview.shards[0], (packet) => {
+      packet.rows.find((row: any) => row.id === targetId).declaration += " /* tampered */";
+    });
+    rewritePair(declarationArtifact.independentReview.reviewer, declarationArtifact.independentReview.reviewer, (packet) => {
+      packet.rows.find((row: any) => row.id === targetId).declaration += " /* tampered */";
+    });
+    expect(validateReview({ ...realInput, artifact: declarationArtifact, evidenceBytes: declarationBytes })).toContain(
+      `${targetId}: blind packet declaration hash must equal sourceHash`,
+    );
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {

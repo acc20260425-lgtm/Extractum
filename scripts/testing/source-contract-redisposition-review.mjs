@@ -60,6 +60,22 @@ const APPROVED_RULE_DISAGREEMENTS = [
   { rowIds: APPROVED_RULE_ADJUDICATIONS[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[2].rule },
   { rowIds: APPROVED_RULE_ADJUDICATIONS[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[3].rule },
 ];
+const APPROVED_CALIBRATION_PAIRS = [
+  { class: "D1_COMPLETED_HISTORY_ONLY", adjacentClass: "D2_IMPLEMENTATION_SHAPE" },
+  { class: "D2_IMPLEMENTATION_SHAPE", adjacentClass: "D1_COMPLETED_HISTORY_ONLY" },
+  { class: "D3_NON_OBSERVABLE_VISUAL", adjacentClass: "D5_ACCEPTED_LOSS/B3_PROTECTED_EXPENSIVE_BEHAVIOR" },
+  { class: "D4_DUPLICATE_EVIDENCE", adjacentClass: "A1_EXISTING_STRUCTURED_OWNER/B1_EXISTING_BEHAVIOR_OWNER" },
+  { class: "A1_EXISTING_STRUCTURED_OWNER", adjacentClass: "D4_DUPLICATE_EVIDENCE/T1_EXISTING_TOOL_OWNER" },
+  { class: "T1_EXISTING_TOOL_OWNER", adjacentClass: "A1_EXISTING_STRUCTURED_OWNER" },
+  { class: "B1_EXISTING_BEHAVIOR_OWNER", adjacentClass: "D4_DUPLICATE_EVIDENCE/B2_NEW_CHEAP_BEHAVIOR" },
+  { class: "B2_NEW_CHEAP_BEHAVIOR", adjacentClass: "B1_EXISTING_BEHAVIOR_OWNER/B3_PROTECTED_EXPENSIVE_BEHAVIOR" },
+  { class: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", adjacentClass: "D3_NON_OBSERVABLE_VISUAL/B2_NEW_CHEAP_BEHAVIOR/D5_ACCEPTED_LOSS" },
+  { class: "D5_ACCEPTED_LOSS", adjacentClass: "D3_NON_OBSERVABLE_VISUAL/B3_PROTECTED_EXPENSIVE_BEHAVIOR" },
+];
+const APPROVED_MANDATORY_COHORT_NAMES = [
+  "protected-p0", "security", "import-boundary", "process-lifecycle", "large-contract-26",
+  "emerging-b3", "emerging-d5", "emerging-mixed", "known-browser-five",
+];
 const CRITICALITY_CATALOG = [
   { id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md \u00a72" },
   { id: "AGENTS_DATABASE_OWNERSHIP", citation: "AGENTS.md \u00a76" },
@@ -594,6 +610,7 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
       const expectedOrdinals = Array.from({ length: baseRow?.assertionCount ?? 0 }, (_, index) => index + 1);
       if (canonicalJson(row?.assertionOrdinals) !== canonicalJson(expectedOrdinals)) issues.push(`${row?.id}: blind packet assertion ordinals mismatch`);
       if (typeof row?.declaration !== "string" || !row.declaration.trim()) issues.push(`${row?.id}: blind packet declaration is required`);
+      else if (sha256Text(row.declaration.replace(/\r\n?/g, "\n")) !== row.sourceHash) issues.push(`${row?.id}: blind packet declaration hash must equal sourceHash`);
       if (!Array.isArray(row?.candidateOwners)) issues.push(`${row?.id}: blind packet candidateOwners must be an array`);
       const candidateIds = new Set();
       for (const candidate of row?.candidateOwners ?? []) {
@@ -846,6 +863,12 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (!Number.isInteger(sample.iterations) || sample.iterations < 0 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 0..3");
     }
     const calibrationClasses = new Set();
+    if (artifact.scope?.openRows === 436 && canonicalJson((independent.calibrations ?? []).map((cohort) => ({
+      class: cohort?.class,
+      adjacentClass: cohort?.adjacentClass,
+    }))) !== canonicalJson(APPROVED_CALIBRATION_PAIRS)) {
+      issues.push("calibrations: class/adjacentClass pairs must equal the approved ordered registry");
+    }
     for (const cohort of Array.isArray(independent.calibrations) ? independent.calibrations : []) {
       if (!Array.isArray(cohort?.rowIds)) {
         issues.push("calibrations: rowIds must be an array");
@@ -870,6 +893,10 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (cohort?.result !== expectedComparisonValue) issues.push(`calibrations: recorded comparison must be ${expectedComparisonValue}`);
     }
     const mandatoryCohorts = Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : [];
+    if (artifact.scope?.openRows === 436
+      && canonicalJson(mandatoryCohorts.map((cohort) => cohort?.name)) !== canonicalJson(APPROVED_MANDATORY_COHORT_NAMES)) {
+      issues.push("mandatoryCohorts: names must equal the approved ordered registry");
+    }
     const emergingExpectations = new Map([
       ["emerging-b3", decisions.filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId)],
       ["emerging-d5", decisions.filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId)],
