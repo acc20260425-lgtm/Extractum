@@ -76,6 +76,16 @@ const APPROVED_MANDATORY_COHORT_NAMES = [
   "protected-p0", "security", "import-boundary", "process-lifecycle", "large-contract-26",
   "emerging-b3", "emerging-d5", "emerging-mixed", "known-browser-five",
 ];
+const APPROVED_MANDATORY_COHORT_MEMBERS = new Map([
+  ["security", ["SC-000441", "SC-000443", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"]],
+  ["import-boundary", ["SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515"]],
+  ["process-lifecycle", ["SC-000015", "SC-000017", "SC-000018", "SC-000023", "SC-000386", "SC-000387", "SC-000388", "SC-000389", "SC-000390", "SC-000420"]],
+  ["large-contract-26", [
+    ...Array.from({ length: 16 }, (_, index) => `SC-${String(index + 77).padStart(6, "0")}`),
+    ...Array.from({ length: 10 }, (_, index) => `SC-${String(index + 356).padStart(6, "0")}`),
+  ]],
+  ["known-browser-five", ["SC-000312", "SC-000323", "SC-000352", "SC-000353", "SC-000385"]],
+]);
 const CRITICALITY_CATALOG = [
   { id: "AGENTS_WINDOWS_SANDBOX", citation: "AGENTS.md \u00a72" },
   { id: "AGENTS_DATABASE_OWNERSHIP", citation: "AGENTS.md \u00a76" },
@@ -896,6 +906,16 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (artifact.scope?.openRows === 436
       && canonicalJson(mandatoryCohorts.map((cohort) => cohort?.name)) !== canonicalJson(APPROVED_MANDATORY_COHORT_NAMES)) {
       issues.push("mandatoryCohorts: names must equal the approved ordered registry");
+    }
+    if (artifact.scope?.openRows === 436) {
+      const exactMemberships = new Map(APPROVED_MANDATORY_COHORT_MEMBERS);
+      exactMemberships.set("protected-p0", protectedRows.map((row) => row.id).sort(compareId));
+      for (const [name, expectedIds] of exactMemberships) {
+        const cohort = mandatoryCohorts.find((item) => item?.name === name);
+        if (canonicalJson(cohort?.rowIds) !== canonicalJson(expectedIds)) {
+          issues.push(`mandatoryCohorts: ${name} rowIds must equal approved sorted membership`);
+        }
+      }
     }
     const emergingExpectations = new Map([
       ["emerging-b3", decisions.filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId)],

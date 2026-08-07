@@ -803,6 +803,19 @@ describe("source-contract redisposition review", () => {
     ]) {
       expect(validateMutation(mutate)).toContain("mandatoryCohorts: names must equal the approved ordered registry");
     }
+
+    for (const [name, mutateRows] of [
+      ["known-browser-five", (rowIds: string[]) => rowIds.splice(0)],
+      ["protected-p0", (rowIds: string[]) => rowIds.splice(0, 1)],
+      ["security", (rowIds: string[]) => rowIds.push(rowIds[0])],
+      ["import-boundary", (rowIds: string[]) => rowIds.reverse()],
+      ["process-lifecycle", (rowIds: string[]) => rowIds.push("SC-999999")],
+      ["large-contract-26", (rowIds: string[]) => rowIds.splice(10, 1)],
+    ] as const) {
+      expect(validateMutation((artifact) => {
+        mutateRows(artifact.independentReview.mandatoryCohorts.find((cohort: any) => cohort.name === name).rowIds);
+      })).toContain(`mandatoryCohorts: ${name} rowIds must equal approved sorted membership`);
+    }
   });
 
   it("requires exact emerging cohort membership", () => {
