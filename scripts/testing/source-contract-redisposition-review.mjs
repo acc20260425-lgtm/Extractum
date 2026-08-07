@@ -1252,7 +1252,6 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       continue;
     }
     if (canonicalJson(resolutionless(baseRow)) !== canonicalJson(resolutionless(currentRow))) issues.push(`${baseRow.id}: immutable row field drift`);
-    if (baseOpenIds.has(baseRow.id) && canonicalJson(resolutionOnly(baseRow)) !== canonicalJson(resolutionOnly(currentRow))) issues.push(`${baseRow.id}: current resolution drift from review base`);
   }
   const currentClosedRows = currentLedger.rows.filter((row) => !baseOpenIds.has(row?.id));
   if (canonicalJson(currentClosedRows) !== canonicalJson(closedRows)) issues.push("scope: closed rows changed");
@@ -1277,6 +1276,15 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   }
   if (decisionIds.size !== baseOpenIds.size) issues.push("scope: expected one decision for every base-open row");
   for (const id of baseOpenIds) if (!decisionIds.has(id)) issues.push(`scope: missing decision: ${id}`);
+
+  const baseOpenResolutions = baseLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
+  const currentOpenResolutions = baseLedger.rows.filter((row) => baseOpenIds.has(row.id)).map((row) => resolutionOnly(currentById.get(row.id)));
+  const fullyAppliedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger, baseTrackedPaths: tracked }).ledger;
+  const fullyAppliedOpenResolutions = fullyAppliedLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
+  if (canonicalJson(currentOpenResolutions) !== canonicalJson(baseOpenResolutions)
+    && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)) {
+    issues.push("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
+  }
 
   if (canonicalJson(artifact.reasonClasses) !== canonicalJson(REASON_CLASS_CATALOG)) issues.push("reasonClasses: must equal the approved catalog");
 

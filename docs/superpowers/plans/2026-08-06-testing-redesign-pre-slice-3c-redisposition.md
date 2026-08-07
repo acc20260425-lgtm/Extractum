@@ -505,6 +505,9 @@ Run: `git commit -m "test: complete source-contract redisposition review"`
 **Files:**
 
 - Modify: `testing/source-contract-ledger.json`
+- Modify (user-authorized Task 5 amendment): `scripts/testing/source-contract-redisposition-review.mjs`
+- Modify (user-authorized Task 5 amendment): `scripts/testing/source-contract-redisposition-review.test.ts`
+- Modify (user-authorized Task 5 amendment): this Task 5 Files/Interfaces brief
 - Reference: `testing/source-contract-redisposition-review.json`
 - Reference: `scripts/testing/source-contract-redisposition-review.mjs`
 
@@ -512,6 +515,7 @@ Run: `git commit -m "test: complete source-contract redisposition review"`
 
 - Consumes the fully checked artifact from Task 4.
 - Produces one canonical ledger edit limited to the approved resolution paths; source files remain present, so the transition validator still reports 436 open rows.
+- User-authorized Task 5 carrier amendment: `check` accepts exactly either the review-base open-row resolutions or the all-at-once `applyReview` result. It rejects every mixed, partial, or hybrid open-row resolution state while preserving all envelope, immutable-row, source-reader-exception, row-order, and closed-row checks.
 
 - [ ] **Step 1: Prove the pre-apply artifact is green**
 

@@ -989,13 +989,13 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ currentLedger: badEnvelope }))).toContain("ledger: sourceReaderExceptions changed");
   });
 
-  it("requires current open resolutions to remain frozen before apply", () => {
+  it("requires current open resolutions to remain all-or-nothing before or after apply", () => {
     const reordered = clone(baseLedger); [reordered.rows[0], reordered.rows[1]] = [reordered.rows[1], reordered.rows[0]];
     expect(validateReview(review({ currentLedger: reordered }))).toContain("ledger: current row ID order drift from review base");
     const mutated = clone(baseLedger); mutated.rows[0].replacementIds = ["test:vitest:src/mutated.test.ts#owner"];
-    expect(validateReview(review({ currentLedger: mutated }))).toContain("SC-000001: current resolution drift from review base");
+    expect(validateReview(review({ currentLedger: mutated }))).toContain("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
     const replaced = clone(baseLedger); replaced.rows[0].subgroups = [{ assertionOrdinals: [1, 2], invariant: "replacement", disposition: "behavior", replacementIds: ["test:vitest:src/replaced.test.ts#owner"] }]; delete (replaced.rows[0] as any).disposition; delete (replaced.rows[0] as any).replacementIds;
-    expect(validateReview(review({ currentLedger: replaced }))).toContain("SC-000001: current resolution drift from review base");
+    expect(validateReview(review({ currentLedger: replaced }))).toContain("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
 
     const d3 = artifactFor(); d3.decisions[0] = {
       ...d3.decisions[0], class: "D3_NON_OBSERVABLE_VISUAL", reason: "D3_NON_OBSERVABLE_VISUAL removes this visual-only assertion.",
@@ -1441,5 +1441,17 @@ describe("source-contract redisposition review", () => {
     expect(applyReview(review({ currentLedger: mixedCurrent })).changedPaths.filter((item) => item.includes("SC-000001") || item.includes("SC-000002"))).toEqual([
       "rows[SC-000001].disposition", "rows[SC-000001].replacementIds", "rows[SC-000001].subgroups", "rows[SC-000002].replacementIds",
     ]);
+  });
+
+  it("accepts only the exact review-base or fully-applied open resolution state", () => {
+    const input = review();
+    const applied = applyReview(input).ledger;
+    expect(validateReview({ ...input, currentLedger: applied })).toEqual([]);
+
+    const hybrid = clone(input.currentLedger);
+    hybrid.rows[0] = clone(applied.rows[0]);
+    expect(validateReview({ ...input, currentLedger: hybrid })).toContain(
+      "ledger: base-open resolutions must collectively equal either the review-base or fully-applied state",
+    );
   });
 });
