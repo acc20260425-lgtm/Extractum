@@ -121,12 +121,40 @@ const RESOLUTION_KEYS = new Set(["disposition", "replacementIds", "deletionReaso
 const BLIND_RESULT_KEYS = new Set(["id", "sourceHash", "class", "reason", "ownerEvidence", "criticalityRef"]);
 const BLIND_OWNER_CLASSES = new Set(["D4_DUPLICATE_EVIDENCE", "A1_EXISTING_STRUCTURED_OWNER", "T1_EXISTING_TOOL_OWNER", "B1_EXISTING_BEHAVIOR_OWNER"]);
 const BLIND_FUTURE_CLASSES = new Set(["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"]);
+const LARGE_CONTRACT_IDS = new Set(APPROVED_MANDATORY_COHORT_MEMBERS.get("large-contract-26"));
+const TAIL_FAMILY_RULES = [
+  { name: "testing/process infrastructure", matches: (value) => value.startsWith("scripts/") },
+  { name: "analysis", matches: (value) => value.includes("analysis") },
+  { name: "projects/library", matches: (value) => /research-projects|project-|projects\/|library/.test(value) },
+  { name: "prompt packs/YouTube", matches: (value) => /prompt-pack|youtube-summary/.test(value) },
+  { name: "Gemini browser", matches: (value) => /gemini-browser|provider-test-console/.test(value) },
+  { name: "Rust/security boundaries", matches: (value) => /crate|rust-workspace|tauri-security|external-process|hidden-child|focused-rust/.test(value) },
+  { name: "other product", matches: () => true },
+];
 
 const compareText = (left, right) => String(left).localeCompare(String(right));
 const compareId = (left, right) => Number(String(left).slice(3)) - Number(String(right).slice(3)) || compareText(left, right);
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value ?? {}, key);
 const normalizedPath = (value) => String(value ?? "").replaceAll("\\", "/").replace(/^\.\//, "");
 const clone = (value) => structuredClone(value);
+
+/** Derive the frozen Task 4 tail-family manifests in first-match order. */
+export function deriveTailFamilyManifests({ baseLedger, baseTrackedPaths } = {}) {
+  const openIds = baseOpenIdsFor(baseLedger, baseTrackedPaths);
+  const families = TAIL_FAMILY_RULES.map(({ name }) => ({ name, paths: [], rowIds: [] }));
+  for (const row of baseLedger?.rows ?? []) {
+    if (!openIds.has(row?.id) || LARGE_CONTRACT_IDS.has(row.id)) continue;
+    const normalized = normalizedPath(row.path).toLowerCase();
+    const index = TAIL_FAMILY_RULES.findIndex(({ matches }) => matches(normalized));
+    families[index].rowIds.push(row.id);
+    families[index].paths.push(normalizedPath(row.path));
+  }
+  return families.map((family) => ({
+    name: family.name,
+    paths: [...new Set(family.paths)].sort(compareText),
+    rowIds: [...family.rowIds].sort(compareId),
+  }));
+}
 
 /** Serialize JSON deterministically without whitespace or a trailing newline. */
 export function canonicalJson(value) {
@@ -139,6 +167,22 @@ export function sha256Text(value) {
   return createHash("sha256").update(String(value)).digest("hex");
 }
 
+function evidenceBuffer(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (typeof value === "string") return Buffer.from(value, "utf8");
+  return undefined;
+}
+
+function evidenceText(value) {
+  return evidenceBuffer(value)?.toString("utf8");
+}
+
+function sha256Evidence(value) {
+  const bytes = evidenceBuffer(value);
+  return bytes ? createHash("sha256").update(bytes).digest("hex") : undefined;
+}
+
 function evidenceReferences(artifact) {
   const references = [];
   const reviewer = artifact?.independentReview?.reviewer;
@@ -147,6 +191,25 @@ function evidenceReferences(artifact) {
   for (const [index, shard] of (artifact?.independentReview?.shards ?? []).entries()) {
     references.push({ label: `shard ${index} packet`, path: shard?.packetPath });
     references.push({ label: `shard ${index} output`, path: shard?.outputPath });
+  }
+  if (artifact?.tailReview?.status === "accepted") {
+    const tailReviewer = artifact.tailReview.reviewer;
+    references.push({ label: "tail merged packet", path: tailReviewer?.packetPath });
+    references.push({ label: "tail merged output", path: tailReviewer?.outputPath });
+    for (const [index, shard] of (artifact.tailReview.packetShards ?? []).entries()) {
+      references.push({ label: `tail shard ${index} packet`, path: shard?.packetPath });
+      references.push({ label: `tail shard ${index} output`, path: shard?.outputPath });
+    }
+  }
+  if (["accepted", "blocked"].includes(artifact?.tailReview?.status)) {
+    for (const entry of artifact.tailReview.iterationHistory ?? []) {
+      references.push({ label: `tail iteration ${entry?.iteration} merged packet`, path: entry?.reviewer?.packetPath });
+      references.push({ label: `tail iteration ${entry?.iteration} merged output`, path: entry?.reviewer?.outputPath });
+      for (const [index, shard] of (entry?.packetShards ?? []).entries()) {
+        references.push({ label: `tail iteration ${entry?.iteration} shard ${index} packet`, path: shard?.packetPath });
+        references.push({ label: `tail iteration ${entry?.iteration} shard ${index} output`, path: shard?.outputPath });
+      }
+    }
   }
   return references;
 }
@@ -175,7 +238,7 @@ export async function loadReviewEvidence({ repoRoot, artifact }) {
       continue;
     }
     try {
-      evidenceBytes.set(reference.path, await readFile(absolute, "utf8"));
+      evidenceBytes.set(reference.path, await readFile(absolute));
     } catch (error) {
       if (error?.code === "ENOENT") issues.push(`independentReview: ${reference.label} evidence file is missing`);
       else issues.push(`independentReview: ${reference.label} evidence could not be read: ${error instanceof Error ? error.message : error}`);
@@ -465,6 +528,20 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
     if (!forecast || typeof forecast !== "object") issues.push("forecast: missing");
     return;
   }
+  if (artifact.scope?.openRows === 436) {
+    const baseRowById = new Map((baseLedger?.rows ?? []).map((row) => [row.id, row]));
+    const beforeByDisposition = {};
+    const afterByDisposition = {};
+    for (const decision of artifact.decisions ?? []) {
+      const before = baseRowById.get(decision.id)?.subgroups ? "mixed" : baseRowById.get(decision.id)?.disposition;
+      if (before) beforeByDisposition[before] = (beforeByDisposition[before] ?? 0) + 1;
+      const after = decision.resolution?.subgroups ? "mixed" : decision.resolution?.disposition;
+      if (after) afterByDisposition[after] = (afterByDisposition[after] ?? 0) + 1;
+    }
+    if (canonicalJson(forecast.beforeByDisposition) !== canonicalJson(beforeByDisposition)) issues.push("forecast: beforeByDisposition does not match frozen decisions");
+    if (canonicalJson(forecast.afterByDisposition) !== canonicalJson(afterByDisposition)) issues.push("forecast: afterByDisposition does not match review decisions");
+    if (forecast.removableLegacyFiles !== baseFiles?.length) issues.push("forecast: removableLegacyFiles must equal the pinned legacy file count");
+  }
   const proposedRows = forecast.proposedNewJsdomRows;
   const ownerSummary = futureOwnerSummary(artifact.decisions, baseLedger);
   if (canonicalJson(forecast.futureOwnersByMechanism) !== canonicalJson(ownerSummary.futureOwnersByMechanism)) issues.push("forecast: futureOwnersByMechanism does not match owner grouping");
@@ -507,6 +584,22 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
   }
 }
 
+function validateAcceptedLoss(artifact, issues) {
+  if (artifact.scope?.openRows !== 436) return;
+  const d5 = (artifact.decisions ?? []).filter((decision) => decision.class === "D5_ACCEPTED_LOSS").sort((left, right) => compareId(left.id, right.id));
+  const items = d5.flatMap((decision) => (decision.lostBehavior ?? []).map((item) => ({
+    id: decision.id,
+    assertionOrdinals: item.assertionOrdinals,
+    behavior: item.behavior,
+  }))).sort((left, right) => compareId(left.id, right.id) || (left.assertionOrdinals?.[0] ?? 0) - (right.assertionOrdinals?.[0] ?? 0));
+  const expected = {
+    rows: d5.length,
+    assertionOrdinals: items.reduce((total, item) => total + (item.assertionOrdinals?.length ?? 0), 0),
+    items,
+  };
+  if (canonicalJson(artifact.acceptedLoss) !== canonicalJson(expected)) issues.push("acceptedLoss: summary does not match D5 decisions");
+}
+
 function expectedSample(decisions, protectedIds) {
   const population = decisions
     .filter((decision) => decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && decision.class !== "D5_ACCEPTED_LOSS" && !protectedIds.has(decision.id) && !decision.resolution?.subgroups)
@@ -514,9 +607,426 @@ function expectedSample(decisions, protectedIds) {
   return { population, rowIds: [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1)) };
 }
 
-function reviewFingerprint(item, protectedRow = false) {
-  const ownerEvidence = OWNER_CLASSES.has(item?.class)
-    ? [...new Set(Array.isArray(item?.ownerEvidence) ? item.ownerEvidence : [])].sort(compareText)
+function expectedTailReviewPopulation(artifact) {
+  const tailIds = new Set((artifact.tailFamilies ?? []).flatMap((family) => family?.rowIds ?? []));
+  const excluded = new Set([
+    ...LARGE_CONTRACT_IDS,
+    ...(artifact.protectedRows ?? []).map((row) => row.id),
+    ...(artifact.independentReview?.calibrations ?? []).flatMap((cohort) => cohort?.rowIds ?? []),
+    ...(artifact.independentReview?.mandatoryCohorts ?? [])
+      .filter((cohort) => ["security", "import-boundary", "process-lifecycle"].includes(cohort?.name))
+      .flatMap((cohort) => cohort?.rowIds ?? []),
+  ]);
+  const b3RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId);
+  const d5RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId);
+  const mixedRowIds = (artifact.decisions ?? []).filter((decision) => Array.isArray(decision.resolution?.subgroups)).map((decision) => decision.id).sort(compareId);
+  for (const id of [...b3RowIds, ...d5RowIds, ...mixedRowIds]) excluded.add(id);
+  const population = (artifact.decisions ?? []).map((decision) => decision.id).filter((id) => tailIds.has(id) && !excluded.has(id)).sort(compareId);
+  const rowIds = [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1));
+  const requiredBlindRowIds = [...new Set([...rowIds, ...b3RowIds, ...d5RowIds, ...mixedRowIds])].sort(compareId);
+  return { population, rowIds, b3RowIds, d5RowIds, mixedRowIds, requiredBlindRowIds };
+}
+
+function validateTailReviewScaffold(artifact, issues) {
+  if (artifact.scope?.openRows !== 436) return;
+  const tail = artifact.tailReview;
+  if (!tail || typeof tail !== "object") {
+    issues.push("tailReview: missing");
+    return;
+  }
+  const expected = expectedTailReviewPopulation(artifact);
+  if (!tail.authorRunId || tail.authorRunId === artifact.independentReview?.authorRunId || tail.authorRunId === tail.reviewerRunId) issues.push("tailReview: separate author and reviewer run IDs are required");
+  if (!Number.isInteger(tail.tailValidIterations) || tail.tailValidIterations < 0 || tail.tailValidIterations > 3 || tail.tailValidIterations !== tail.deterministicSample?.iterations) issues.push("tailReview: tailValidIterations must be 0..3 and equal sample iterations");
+  const sample = tail.deterministicSample;
+  if (sample?.algorithm !== "sha256-id-lowest-10-percent"
+    || canonicalJson(sample?.population) !== canonicalJson(expected.population)
+    || sample?.populationDigest !== sha256Text(canonicalJson(expected.population))
+    || canonicalJson(sample?.rowIds) !== canonicalJson(expected.rowIds)) issues.push("tailReview: deterministic sample must equal the current tail population");
+  if (canonicalJson(tail.riskCohorts) !== canonicalJson({ b3RowIds: expected.b3RowIds, d5RowIds: expected.d5RowIds, mixedRowIds: expected.mixedRowIds })) issues.push("tailReview: risk cohorts must equal all B3, D5, and mixed decisions");
+  if (canonicalJson(tail.requiredBlindRowIds) !== canonicalJson(expected.requiredBlindRowIds)
+    || tail.requiredPopulationDigest !== sha256Text(canonicalJson(expected.requiredBlindRowIds))) issues.push("tailReview: required blind population is stale");
+  const shards = Array.isArray(tail.packetShards) ? tail.packetShards : [];
+  const covered = [];
+  const hashPattern = /^[0-9a-f]{64}$/;
+  for (let index = 0; index < shards.length; index += 1) {
+    const shard = shards[index];
+    if (shard?.index !== index || !Array.isArray(shard?.rowIds) || shard.rowIds.length < 1 || shard.rowIds.length > 24) issues.push(`tailReview: packet shard ${index} must be contiguous and contain 1..24 rows`);
+    covered.push(...(shard?.rowIds ?? []));
+    if (!hashPattern.test(shard?.packetSha256 ?? "") || typeof shard?.packetPath !== "string" || !shard.packetPath.includes(shard.packetSha256)) issues.push(`tailReview: packet shard ${index} requires content-addressed evidence`);
+    if (["accepted", "blocked"].includes(tail.status)) {
+      validateEvidencePath({ value: shard?.outputPath, hash: shard?.outputSha256, label: `output shard ${index} output`, scope: "tailReview", issues });
+    }
+  }
+  if (canonicalJson(covered) !== canonicalJson(expected.requiredBlindRowIds)) issues.push("tailReview: packet shards must exactly cover required blind IDs in numeric order");
+  if (tail.status === "awaiting_blind_review") issues.push("tailReview: awaiting independent review");
+  else if (!["accepted", "blocked"].includes(tail.status)) issues.push("tailReview: unsupported status");
+  issues.push(...validateTailIterationProtocol({ tailReview: tail }));
+}
+
+/** Validate the standalone, bounded Task 4 tail fixed-point history. */
+export function validateTailIterationProtocol({ tailReview: tail } = {}) {
+  const issues = [];
+  const count = tail?.tailValidIterations;
+  const history = Array.isArray(tail?.iterationHistory) ? tail.iterationHistory : [];
+  const hashPattern = /^[0-9a-f]{64}$/;
+  if (!Number.isInteger(count) || count < 0 || count > 3 || count !== tail?.deterministicSample?.iterations) issues.push("tailReview: tailValidIterations must be 0..3 and equal sample iterations");
+  if (count > 3 || history.length > 3) issues.push("tailReview: a fourth valid tail iteration is forbidden");
+  if (!Number.isInteger(count) || count < 0 || count > 3 || history.length !== count
+    || history.some((entry, index) => entry?.iteration !== index + 1)) {
+    issues.push("tailReview: iteration history must be contiguous and complete");
+  }
+  for (const [index, entry] of history.entries()) {
+    const setIsNumericStable = (items) => Array.isArray(items)
+      && items.every((id) => typeof id === "string" && /^SC-[0-9]{6}$/.test(id))
+      && new Set(items).size === items.length
+      && canonicalJson(items) === canonicalJson([...items].sort(compareId));
+    const sampleSelectionFor = (population) => [...population]
+      .sort((left, right) => compareText(sha256Text(left), sha256Text(right)))
+      .slice(0, Math.ceil(population.length * 0.1));
+    const populationSetsComplete = setIsNumericStable(entry?.requiredBlindRowIds)
+      && setIsNumericStable(entry?.samplePopulation)
+      && Array.isArray(entry?.sampleRowIds)
+      && setIsNumericStable(entry?.resultingRequiredBlindRowIds)
+      && setIsNumericStable(entry?.resultingSamplePopulation)
+      && Array.isArray(entry?.resultingSampleRowIds);
+    if (!populationSetsComplete) issues.push(`tailReview: iteration ${index + 1} population sets metadata is incomplete`);
+    const inputSampleSelection = populationSetsComplete ? sampleSelectionFor(entry.samplePopulation) : [];
+    const resultSampleSelection = populationSetsComplete ? sampleSelectionFor(entry.resultingSamplePopulation) : [];
+    if (populationSetsComplete && canonicalJson(entry.sampleRowIds) !== canonicalJson(inputSampleSelection)) issues.push(`tailReview: iteration ${index + 1} input sample selection must equal deterministic ten percent`);
+    if (populationSetsComplete && canonicalJson(entry.resultingSampleRowIds) !== canonicalJson(resultSampleSelection)) issues.push(`tailReview: iteration ${index + 1} resulting sample selection must equal deterministic ten percent`);
+    if (populationSetsComplete && entry.requiredPopulationDigest !== sha256Text(canonicalJson(entry.requiredBlindRowIds))) issues.push(`tailReview: iteration ${index + 1} required population digest mismatch`);
+    if (populationSetsComplete && entry.samplePopulationDigest !== sha256Text(canonicalJson(entry.samplePopulation))) issues.push(`tailReview: iteration ${index + 1} sample population digest mismatch`);
+    if (populationSetsComplete && entry.resultingRequiredPopulationDigest !== sha256Text(canonicalJson(entry.resultingRequiredBlindRowIds))) issues.push(`tailReview: iteration ${index + 1} resulting required population digest mismatch`);
+    if (populationSetsComplete && entry.resultingSamplePopulationDigest !== sha256Text(canonicalJson(entry.resultingSamplePopulation))) issues.push(`tailReview: iteration ${index + 1} resulting sample population digest mismatch`);
+    const requiredSetChanged = populationSetsComplete && canonicalJson(entry.requiredBlindRowIds) !== canonicalJson(entry.resultingRequiredBlindRowIds);
+    const sampleSetChanged = populationSetsComplete && (canonicalJson(entry.samplePopulation) !== canonicalJson(entry.resultingSamplePopulation)
+      || canonicalJson(entry.sampleRowIds) !== canonicalJson(entry.resultingSampleRowIds));
+    const populationChangeSupported = sampleSetChanged;
+    const changed = entry?.task4RuleChanged === true || entry?.samplePopulationChanged === true;
+    if (!hashPattern.test(entry?.requiredPopulationDigest ?? "") || !hashPattern.test(entry?.samplePopulationDigest ?? "")
+      || typeof entry?.task4RuleChanged !== "boolean" || typeof entry?.samplePopulationChanged !== "boolean"
+      || entry?.result !== (changed ? "rule_changed" : "fixed_point")) {
+      issues.push(`tailReview: iteration ${index + 1} record is incomplete or inconsistent`);
+    }
+    if (entry?.samplePopulationChanged !== populationChangeSupported) issues.push(`tailReview: iteration ${index + 1} samplePopulationChanged is not supported by resulting population digests`);
+    if (entry?.result === "fixed_point" && (entry?.task4RuleChanged || entry?.samplePopulationChanged || requiredSetChanged || sampleSetChanged
+      || entry?.requiredPopulationDigest !== entry?.resultingRequiredPopulationDigest || entry?.samplePopulationDigest !== entry?.resultingSamplePopulationDigest)) {
+      issues.push(`tailReview: iteration ${index + 1} fixed point must preserve all input population sets`);
+    }
+    if (index < history.length - 1) {
+      if (!changed) issues.push("tailReview: only the final valid iteration may be a fixed point");
+      const next = history[index + 1];
+      if (canonicalJson(next?.requiredBlindRowIds) !== canonicalJson(entry?.resultingRequiredBlindRowIds)
+        || canonicalJson(next?.samplePopulation) !== canonicalJson(entry?.resultingSamplePopulation)
+        || canonicalJson(next?.sampleRowIds) !== canonicalJson(entry?.resultingSampleRowIds)
+        || next?.samplePopulationDigest !== entry?.resultingSamplePopulationDigest || next?.requiredPopulationDigest !== entry?.resultingRequiredPopulationDigest) {
+        issues.push(`tailReview: iteration ${index + 2} input population sets must equal iteration ${index + 1} results`);
+      }
+    }
+  }
+  const final = history.at(-1);
+  if (final && (final.requiredPopulationDigest !== tail?.requiredPopulationDigest
+    || final.samplePopulationDigest !== tail?.deterministicSample?.populationDigest)) {
+    issues.push("tailReview: final iteration must compare the current tail population");
+  }
+  const finalChanged = final?.task4RuleChanged === true || final?.samplePopulationChanged === true;
+  if (tail?.status === "accepted" && (!final || finalChanged || final.result !== "fixed_point")) issues.push("tailReview: accepted tail history must end at an unchanged fixed point");
+  if (tail?.status === "blocked") {
+    if (count !== 3 || !finalChanged || final?.result !== "rule_changed") issues.push("tailReview: blocked state requires a changing third valid iteration");
+    else issues.push("tailReview: third valid tail iteration changed rules or population; explicit rule amendment required");
+  }
+  if (Array.isArray(tail?.ruleAdjudications) && tail.ruleAdjudications.length) issues.push("tailReview: Task 3 adjudications cannot authorize tail disagreements");
+  if (!Array.isArray(tail?.invalidAttempts) || tail.invalidAttempts.some((attempt) => !Number.isInteger(attempt?.shardIndex)
+    || attempt.shardIndex < 0 || !hashPattern.test(attempt?.sha256 ?? "") || typeof attempt?.reason !== "string" || !attempt.reason.trim())) {
+    issues.push("tailReview: invalid attempts must be well-formed non-counting evidence");
+  }
+  return issueList(issues);
+}
+
+/** Keep blind coverage of Task 3 rows non-authoritative while enforcing Task 4 convergence. */
+export function validateTailFingerprints({ tailReview, decisions, protectedIds = new Set() } = {}) {
+  const issues = [];
+  const decisionById = new Map((decisions ?? []).map((decision) => [decision.id, decision]));
+  const blindById = new Map((tailReview?.blindResults ?? []).map((blind) => [blind.id, blind]));
+  const requiredIds = tailReview?.requiredBlindRowIds ?? [...blindById.keys()].sort(compareId);
+  const mismatches = [];
+  const task4Mismatches = [];
+  for (const id of requiredIds) {
+    const decision = decisionById.get(id);
+    const blind = blindById.get(id);
+    if (!decision || !blind) {
+      issues.push(`${id}: tail fingerprint requires both author and blind decisions`);
+      continue;
+    }
+    const task4Authored = decision.authorRunId === tailReview?.authorRunId;
+    if (reviewFingerprint(decision, protectedIds.has(id), task4Authored) !== reviewFingerprint(blind, protectedIds.has(id), task4Authored)) {
+      mismatches.push(id);
+      if (task4Authored) task4Mismatches.push(id);
+    }
+  }
+  const coverageOnly = mismatches.filter((id) => !task4Mismatches.includes(id)).sort(compareId);
+  if (canonicalJson(tailReview?.coverageOnlyTask3MismatchIds ?? []) !== canonicalJson(coverageOnly)) {
+    issues.push("tailReview: coverage-only Task 3 mismatch IDs must equal the derived non-authoritative set");
+  }
+  if (task4Mismatches.length) issues.push(`tailReview: Task 4-authored fingerprint mismatches are not accepted: ${task4Mismatches.sort(compareId).join(", ")}`);
+  return issueList(issues);
+}
+
+/** Validate ignored author-side tail packets before any blind reviewer sees them. */
+export function validateTailPacketScaffold({ artifact, baseLedger, packetBytes } = {}) {
+  const issues = [];
+  if (!(packetBytes instanceof Map) || !baseLedger || !artifact?.tailReview) return ["tailReview: invalid packet scaffold input"];
+  const tail = artifact.tailReview;
+  const openIds = new Set((artifact.decisions ?? []).map((decision) => decision.id));
+  const baseRowById = new Map((baseLedger.rows ?? []).map((row) => [row.id, row]));
+  const resolvedOwnerRows = new Map();
+  for (const row of baseLedger.rows ?? []) {
+    if (openIds.has(row.id)) continue;
+    for (const owner of resolutionIds(row)) {
+      const ids = resolvedOwnerRows.get(owner) ?? [];
+      ids.push(row.id);
+      resolvedOwnerRows.set(owner, ids);
+    }
+  }
+  const topKeys = ["normativeSourceCatalog", "orderedClassCatalog", "packetSchemaVersion", "requiredPopulationDigest", "reviewerRunId", "rows", "shardCount", "shardIndex"];
+  const rowKeys = ["assertionOrdinals", "candidateOwners", "declaration", "id", "invariant", "sourceHash"];
+  const candidateKeys = new Set(["capability", "closedRowIds", "id", "mechanism", "normativeSource", "resolvedByBaseClosedRow", "status"]);
+  const mechanismFor = (id) => id?.startsWith("test:vitest:") ? "jsdom"
+    : id?.startsWith("test:cargo:") ? "cargo"
+      : id?.startsWith("test:playwright:") ? "playwright"
+        : id?.startsWith("rule:") ? "structured-rule"
+          : id?.startsWith("tool:") ? "tool" : "unknown";
+
+  for (const [index, reference] of (tail.packetShards ?? []).entries()) {
+    const bytes = packetBytes.get(reference.packetPath);
+    const text = evidenceText(bytes);
+    if (text === undefined) {
+      issues.push(`tailReview: packet shard ${index} bytes are missing`);
+      continue;
+    }
+    if (sha256Evidence(bytes) !== reference.packetSha256) issues.push(`tailReview: packet shard ${index} byte hash mismatch`);
+    let packet;
+    try { packet = JSON.parse(text); } catch { issues.push(`tailReview: packet shard ${index} is malformed JSON`); continue; }
+    if (canonicalJson(Object.keys(packet).sort(compareText)) !== canonicalJson(topKeys)) issues.push(`tailReview: packet shard ${index} top-level schema mismatch`);
+    if (packet.packetSchemaVersion !== REVIEW_PACKET_SCHEMA_VERSION || packet.reviewerRunId !== tail.reviewerRunId
+      || packet.shardIndex !== index || packet.shardCount !== tail.packetShards.length
+      || packet.requiredPopulationDigest !== tail.requiredPopulationDigest) issues.push(`tailReview: packet shard ${index} metadata mismatch`);
+    if (canonicalJson(packet.orderedClassCatalog) !== canonicalJson(REASON_CLASS_CATALOG)
+      || canonicalJson(packet.normativeSourceCatalog) !== canonicalJson(NORMATIVE_SOURCE_CATALOG)) issues.push(`tailReview: packet shard ${index} catalog mismatch`);
+    const rows = Array.isArray(packet.rows) ? packet.rows : [];
+    if (canonicalJson(rows.map((row) => row?.id)) !== canonicalJson(reference.rowIds)) issues.push(`tailReview: packet shard ${index} row coverage/order mismatch`);
+    const seen = new Set();
+    for (const row of rows) {
+      if (canonicalJson(Object.keys(row ?? {}).sort(compareText)) !== canonicalJson(rowKeys)) issues.push(`${row?.id}: tail packet row schema leaks author/reviewer fields`);
+      if (seen.has(row?.id)) issues.push(`${row?.id}: duplicate tail packet row`);
+      seen.add(row?.id);
+      const baseRow = baseRowById.get(row?.id);
+      if (!baseRow || row.sourceHash !== baseRow.sourceHash || row.invariant !== baseRow.invariant) issues.push(`${row?.id}: tail packet frozen row binding mismatch`);
+      const ordinals = Array.from({ length: baseRow?.assertionCount ?? 0 }, (_, ordinal) => ordinal + 1);
+      if (canonicalJson(row.assertionOrdinals) !== canonicalJson(ordinals)) issues.push(`${row?.id}: tail packet assertion ordinals mismatch`);
+      if (typeof row.declaration !== "string" || sha256Text(row.declaration.replace(/\r\n?/g, "\n")) !== row.sourceHash) issues.push(`${row?.id}: tail packet declaration hash mismatch`);
+      const expectedOwnerIds = [...new Set(baseRow?.replacementIds ?? [])];
+      const candidates = Array.isArray(row.candidateOwners) ? row.candidateOwners : [];
+      if (canonicalJson(candidates.map((candidate) => candidate?.id)) !== canonicalJson(expectedOwnerIds)) issues.push(`${row?.id}: tail packet candidate inventory mismatch`);
+      for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== "object" || Object.keys(candidate).some((key) => !candidateKeys.has(key))) issues.push(`${row?.id}: tail packet candidate schema mismatch`);
+        const closedRowIds = resolvedOwnerRows.get(candidate?.id);
+        const expected = {
+          id: candidate?.id,
+          mechanism: mechanismFor(candidate?.id),
+          capability: baseRow?.invariant,
+          status: closedRowIds?.length ? "resolved" : candidate?.id?.startsWith("test:playwright:") ? "approved-future" : "future",
+          ...(closedRowIds?.length ? { resolvedByBaseClosedRow: true, closedRowIds } : {}),
+          ...(candidate?.id?.startsWith("test:playwright:") ? { normativeSource: APPROVED_PLAYWRIGHT_CRITICALITY } : {}),
+        };
+        if (canonicalJson(candidate) !== canonicalJson(expected)) issues.push(`${row?.id}: tail packet candidate status/citation mismatch`);
+        if (candidate?.id?.startsWith("test:playwright:") && APPROVED_PLAYWRIGHT_OWNERS.get(row.id) !== candidate.id) issues.push(`${row?.id}: tail packet Playwright candidate is not allowlisted`);
+      }
+    }
+  }
+  return issueList(issues);
+}
+
+/** Validate blind tail output transport before it can become accepted evidence. */
+export function validateTailOutputScaffold({ artifact, outputs, outputBytes, packetBytes = outputBytes } = {}) {
+  const issues = [];
+  if (!(outputBytes instanceof Map) || !(packetBytes instanceof Map) || !artifact?.tailReview || !Array.isArray(outputs)) return ["tailReview: invalid output scaffold input"];
+  const decisionById = new Map((artifact.decisions ?? []).map((decision) => [decision.id, decision]));
+  const topKeys = ["packetSha256", "results", "reviewerRunId", "stopConditions"];
+  for (const [index, reference] of outputs.entries()) {
+    validateEvidencePath({ value: reference?.outputPath, hash: reference?.outputSha256, label: `output shard ${index} output`, scope: "tailReview", issues });
+    const bytes = outputBytes.get(reference.outputPath);
+    const text = evidenceText(bytes);
+    if (text === undefined) { issues.push(`tailReview: output shard ${index} bytes are missing`); continue; }
+    if (sha256Evidence(bytes) !== reference.outputSha256) issues.push(`tailReview: output shard ${index} byte hash mismatch`);
+    let output;
+    try { output = JSON.parse(text); } catch { issues.push(`tailReview: output shard ${index} is malformed JSON`); continue; }
+    if (canonicalJson(Object.keys(output).sort(compareText)) !== canonicalJson(topKeys)) issues.push(`tailReview: output shard ${index} top-level schema mismatch`);
+    const packet = artifact.tailReview.packetShards[index];
+    let packetBody;
+    try { packetBody = JSON.parse(evidenceText(packetBytes.get(packet?.packetPath))); } catch { issues.push(`tailReview: output shard ${index} packet evidence is missing or malformed`); }
+    if (output.reviewerRunId !== artifact.tailReview.reviewerRunId || output.packetSha256 !== packet?.packetSha256) issues.push(`tailReview: output shard ${index} reviewer/packet binding mismatch`);
+    if (!Array.isArray(output.stopConditions) || output.stopConditions.length) issues.push(`tailReview: output shard ${index} stopConditions must be empty`);
+    const results = Array.isArray(output.results) ? output.results : [];
+    if (results.length !== (packet?.rowIds ?? []).length) issues.push(`tailReview: output shard ${index} result count mismatch`);
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+      const result = results[resultIndex];
+      const id = packet?.rowIds?.[resultIndex];
+      const decision = decisionById.get(id);
+      const packetRow = packetBody?.rows?.[resultIndex];
+      const candidates = new Map((packetRow?.candidateOwners ?? []).map((candidate) => [candidate.id, candidate]));
+      if (Object.keys(result ?? {}).some((key) => !BLIND_RESULT_KEYS.has(key))) issues.push(`${result?.id}: tail output result schema leaks author resolution fields`);
+      if (result?.id !== id || result?.sourceHash !== decision?.sourceHash) issues.push(`tailReview: output shard ${index} result order/source binding mismatch`);
+      if (!CLASS_DISPOSITIONS.has(result?.class) || typeof result?.reason !== "string" || !result.reason.trim()) issues.push(`${result?.id}: tail output requires a supported class and substantive reason`);
+      const selected = Array.isArray(result?.ownerEvidence) ? result.ownerEvidence : [];
+      if (result?.ownerEvidence !== undefined && (!selected.length || selected.some((owner) => typeof owner !== "string" || !owner.trim()))) issues.push(`${result?.id}: tail output ownerEvidence is invalid`);
+      if (selected.some((owner) => !candidates.has(owner))) issues.push(`${result?.id}: tail output selected an invented candidate owner`);
+      if (BLIND_OWNER_CLASSES.has(result?.class) && (!selected.length || selected.some((owner) => {
+        const candidate = candidates.get(owner);
+        return !(candidate?.resolvedByBaseClosedRow === true || candidate?.status === "resolved");
+      }))) issues.push(`${result?.id}: tail output existing-owner class requires resolved candidate membership`);
+      if (BLIND_FUTURE_CLASSES.has(result?.class) && (!selected.length || selected.some((owner) => !["future", "unresolved", "approved-future"].includes(candidates.get(owner)?.status)))) issues.push(`${result?.id}: tail output future-owner class requires future candidate membership`);
+      if (result?.criticalityRef !== undefined && !CRITICALITY_SOURCES.has(result.criticalityRef)) issues.push(`${result?.id}: tail output citation is invalid`);
+      if (result?.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && !CRITICALITY_SOURCES.has(result?.criticalityRef)) issues.push(`${result?.id}: tail output B3 requires an exact criticalityRef`);
+      const requiredSources = [...new Set(selected.map((owner) => candidates.get(owner)?.normativeSource).filter(Boolean))];
+      if (requiredSources.some((source) => result?.criticalityRef !== source)) issues.push(`${result?.id}: tail output owner requires its exact citation`);
+      for (const owner of selected) if (owner.startsWith("test:playwright:")
+        && (APPROVED_PLAYWRIGHT_OWNERS.get(result.id) !== owner || result.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" || result.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY)) {
+        issues.push(`${result.id}: tail output Playwright mapping/class/citation mismatch`);
+      }
+    }
+  }
+  return issueList(issues);
+}
+
+function prefixedIterationIssues(iteration, nestedIssues, prefix) {
+  return nestedIssues.map((issue) => issue.startsWith("tailReview: ")
+    ? issue.replace("tailReview: ", `tailReview: iteration ${iteration} ${prefix}`)
+    : issue);
+}
+
+function validateTailIterationEvidence({ artifact, baseLedger, evidenceBytes, protectedIds, issues }) {
+  const tail = artifact.tailReview;
+  if (!["accepted", "blocked"].includes(tail?.status)) return;
+  const history = Array.isArray(tail.iterationHistory) ? tail.iterationHistory : [];
+  const seenRuns = new Set();
+  const seenPaths = new Set();
+  const iterationResults = [];
+  for (const [historyIndex, entry] of history.entries()) {
+    const iteration = historyIndex + 1;
+    const reviewer = entry?.reviewer;
+    const shards = Array.isArray(entry?.packetShards) ? entry.packetShards : [];
+    const metadataComplete = typeof entry?.reviewerRunId === "string" && entry.reviewerRunId
+      && Array.isArray(entry?.requiredBlindRowIds) && Array.isArray(entry?.task4Disagreements)
+      && Array.isArray(entry?.samplePopulation) && Array.isArray(entry?.sampleRowIds)
+      && Array.isArray(entry?.resultingRequiredBlindRowIds) && Array.isArray(entry?.resultingSamplePopulation) && Array.isArray(entry?.resultingSampleRowIds)
+      && Array.isArray(entry?.coverageOnlyTask3MismatchIds) && reviewer && typeof reviewer === "object"
+      && /^[0-9a-f]{64}$/.test(entry?.resultingRequiredPopulationDigest ?? "")
+      && /^[0-9a-f]{64}$/.test(entry?.resultingSamplePopulationDigest ?? "")
+      && /^[0-9a-f]{64}$/.test(entry?.mergedOutputSha256 ?? "");
+    if (!metadataComplete) {
+      issues.push(`tailReview: iteration ${iteration} evidence metadata is incomplete`);
+      continue;
+    }
+    const evidencePaths = [reviewer.packetPath, reviewer.outputPath, ...shards.flatMap((shard) => [shard?.packetPath, shard?.outputPath])];
+    if (seenRuns.has(entry.reviewerRunId) || evidencePaths.some((value) => seenPaths.has(value))) issues.push("tailReview: iteration reviewerRunIds and evidence references must be unique");
+    seenRuns.add(entry.reviewerRunId);
+    evidencePaths.forEach((value) => seenPaths.add(value));
+    if (reviewer.reviewerRunId !== entry.reviewerRunId || typeof reviewer.agentTaskId !== "string" || !reviewer.agentTaskId.trim()
+      || reviewer.contextPolicy !== "blind-no-proposed-class-or-reason") issues.push(`tailReview: iteration ${iteration} reviewer identity/context mismatch`);
+    if (entry.requiredPopulationDigest !== sha256Text(canonicalJson(entry.requiredBlindRowIds))) issues.push(`tailReview: iteration ${iteration} required population digest mismatch`);
+    const covered = shards.flatMap((shard) => shard?.rowIds ?? []);
+    if (canonicalJson(covered) !== canonicalJson(entry.requiredBlindRowIds)) issues.push(`tailReview: iteration ${iteration} packet shards must exactly cover its required blind IDs`);
+    if (shards.some((shard, index) => shard?.index !== index || !Array.isArray(shard?.rowIds) || shard.rowIds.length < 1 || shard.rowIds.length > 24)) issues.push(`tailReview: iteration ${iteration} packet shard indices must be contiguous and unique`);
+
+    const iterationTail = { ...tail, reviewerRunId: entry.reviewerRunId, requiredPopulationDigest: entry.requiredPopulationDigest, packetShards: shards };
+    const iterationArtifact = { ...artifact, tailReview: iterationTail };
+    const nestedPrefix = historyIndex === history.length - 1 ? "" : "";
+    const packetIssues = validateTailPacketScaffold({ artifact: iterationArtifact, baseLedger, packetBytes: evidenceBytes });
+    const outputIssues = validateTailOutputScaffold({ artifact: iterationArtifact, outputs: shards, outputBytes: evidenceBytes, packetBytes: evidenceBytes });
+    if (historyIndex === history.length - 1 && history.length === 1) {
+      issues.push(...packetIssues, ...outputIssues);
+    } else {
+      issues.push(...prefixedIterationIssues(iteration, packetIssues, nestedPrefix), ...prefixedIterationIssues(iteration, outputIssues, nestedPrefix));
+    }
+
+    const pairs = [
+      { label: "merged packet", path: reviewer.packetPath, hash: reviewer.packetSha256 },
+      { label: "merged output", path: reviewer.outputPath, hash: reviewer.outputSha256 },
+    ];
+    for (const pair of pairs) {
+      const pathIssues = [];
+      validateEvidencePath({ value: pair.path, hash: pair.hash, label: pair.label, scope: "tailReview", issues: pathIssues });
+      issues.push(...prefixedIterationIssues(iteration, pathIssues, ""));
+      const bytes = evidenceBytes instanceof Map ? evidenceBytes.get(pair.path) : undefined;
+      if (evidenceText(bytes) === undefined) issues.push(`tailReview: iteration ${iteration} ${pair.label} evidence file is missing`);
+      else if (sha256Evidence(bytes) !== pair.hash) issues.push(`tailReview: iteration ${iteration} ${pair.label} byte hash mismatch`);
+    }
+    const parseIssues = [];
+    const mergedPacket = parseEvidenceJson({ bytes: evidenceBytes?.get(reviewer.packetPath), label: `tail iteration ${iteration} merged packet`, issues: parseIssues });
+    const mergedOutput = parseEvidenceJson({ bytes: evidenceBytes?.get(reviewer.outputPath), label: `tail iteration ${iteration} merged output`, issues: parseIssues });
+    const shardPackets = shards.map((shard) => parseEvidenceJson({ bytes: evidenceBytes?.get(shard.packetPath), label: `tail iteration ${iteration} shard ${shard.index} packet`, issues: parseIssues })).filter(Boolean);
+    const shardOutputs = shards.map((shard) => parseEvidenceJson({ bytes: evidenceBytes?.get(shard.outputPath), label: `tail iteration ${iteration} shard ${shard.index} output`, issues: parseIssues })).filter(Boolean);
+    issues.push(...parseIssues.map((issue) => issue.replace(/^independentReview: tail /, "tailReview: ")));
+    if (mergedPacket && (mergedPacket.shardIndex !== "merged" || mergedPacket.reviewerRunId !== entry.reviewerRunId
+      || mergedPacket.requiredPopulationDigest !== entry.requiredPopulationDigest
+      || canonicalJson(mergedPacket.rows) !== canonicalJson(shardPackets.flatMap((packet) => packet.rows ?? [])))) issues.push(`tailReview: iteration ${iteration} merged packet does not reconstruct its shard packets`);
+    let reconstructed = [];
+    if (mergedOutput) {
+      if (mergedOutput.reviewerRunId !== entry.reviewerRunId || mergedOutput.packetSha256 !== reviewer.packetSha256
+        || !Array.isArray(mergedOutput.stopConditions) || mergedOutput.stopConditions.length
+        || canonicalJson(mergedOutput.results) !== canonicalJson(shardOutputs.flatMap((output) => output.results ?? []))) issues.push(`tailReview: iteration ${iteration} merged output does not reconstruct its shard outputs`);
+      reconstructed = (mergedOutput.results ?? []).map((result) => ({ ...result, reviewerRunId: entry.reviewerRunId }));
+      if (sha256Text(canonicalJson(reconstructed)) !== entry.mergedOutputSha256) issues.push(`tailReview: iteration ${iteration} merged blind-result digest mismatch`);
+    }
+    const blindById = new Map(reconstructed.map((result) => [result.id, result]));
+    const disagreementIds = [];
+    for (const disagreement of entry.task4Disagreements) {
+      const decision = (artifact.decisions ?? []).find((item) => item.id === disagreement?.id);
+      const blind = blindById.get(disagreement?.id);
+      if (!decision || decision.authorRunId !== tail.authorRunId || !disagreement?.authorFingerprint || !blind
+        || reviewFingerprint(disagreement.authorFingerprint, protectedIds.has(disagreement?.id), true) === reviewFingerprint(blind, protectedIds.has(disagreement?.id), true)) {
+        issues.push(`tailReview: iteration ${iteration} has an unsupported Task 4 disagreement: ${disagreement?.id}`);
+      } else disagreementIds.push(disagreement.id);
+    }
+    if (entry.task4RuleChanged !== (disagreementIds.length > 0)) issues.push(`tailReview: iteration ${iteration} task4RuleChanged is not supported by reconstructed disagreements`);
+    const fingerprintTail = { ...tail, reviewerRunId: entry.reviewerRunId, requiredBlindRowIds: entry.requiredBlindRowIds, blindResults: reconstructed, coverageOnlyTask3MismatchIds: entry.coverageOnlyTask3MismatchIds };
+    issues.push(...prefixedIterationIssues(iteration, validateTailFingerprints({ tailReview: fingerprintTail, decisions: artifact.decisions, protectedIds }), ""));
+    iterationResults.push({ entry, reconstructed });
+  }
+
+  const final = iterationResults.at(-1);
+  if (!final) return;
+  const finalEntry = final.entry;
+  if (tail.status === "accepted") {
+    const finalPopulationSetsAgree = canonicalJson(tail.requiredBlindRowIds) === canonicalJson(finalEntry.resultingRequiredBlindRowIds)
+      && tail.requiredPopulationDigest === finalEntry.resultingRequiredPopulationDigest
+      && canonicalJson(tail.deterministicSample?.population) === canonicalJson(finalEntry.resultingSamplePopulation)
+      && tail.deterministicSample?.populationDigest === finalEntry.resultingSamplePopulationDigest
+      && canonicalJson(tail.deterministicSample?.rowIds) === canonicalJson(finalEntry.resultingSampleRowIds);
+    if (!finalPopulationSetsAgree) issues.push("tailReview: final top-level population sets must equal the last fixed-point results");
+    const finalBindingsAgree = tail.reviewerRunId === finalEntry.reviewerRunId
+      && canonicalJson(tail.packetShards) === canonicalJson(finalEntry.packetShards)
+      && canonicalJson(tail.reviewer) === canonicalJson(finalEntry.reviewer)
+      && tail.mergedOutputSha256 === finalEntry.mergedOutputSha256
+      && finalPopulationSetsAgree
+      && canonicalJson(tail.coverageOnlyTask3MismatchIds) === canonicalJson(finalEntry.coverageOnlyTask3MismatchIds)
+      && canonicalJson(tail.blindResults) === canonicalJson(final.reconstructed)
+      && finalEntry.result === "fixed_point" && !finalEntry.task4RuleChanged && !finalEntry.samplePopulationChanged;
+    if (!finalBindingsAgree) issues.push("tailReview: final top-level state must equal the last fixed-point iteration");
+    if ((tail.disagreements ?? []).length || finalEntry.task4Disagreements.length) issues.push("tailReview: fixed-point Task 4 disagreements must be empty");
+  }
+}
+
+function reviewFingerprint(item, protectedRow = false, includeFutureOwners = false) {
+  const fingerprintOwnerClasses = OWNER_CLASSES.has(item?.class) || (includeFutureOwners && BLIND_FUTURE_CLASSES.has(item?.class));
+  const resolution = item?.resolution;
+  const resolutionOwners = [
+    ...(resolution?.disposition === "delete" ? [] : resolution?.replacementIds ?? []),
+    ...(resolution?.subgroups ?? []).flatMap((subgroup) => subgroup?.disposition === "delete" ? [] : subgroup?.replacementIds ?? []),
+  ];
+  const ownerEvidence = fingerprintOwnerClasses
+    ? [...new Set(Array.isArray(item?.ownerEvidence) ? item.ownerEvidence : resolutionOwners)].sort(compareText)
     : [];
   const criticalityRef = protectedRow || item?.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" ? item?.criticalityRef ?? null : null;
   return canonicalJson({ class: item?.class, ownerEvidence, criticalityRef });
@@ -552,24 +1062,25 @@ function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrac
 }
 
 function parseEvidenceJson({ bytes, label, issues }) {
-  if (typeof bytes !== "string") {
+  const text = evidenceText(bytes);
+  if (text === undefined) {
     issues.push(`independentReview: ${label} evidence file is missing`);
     return undefined;
   }
   try {
-    return JSON.parse(bytes);
+    return JSON.parse(text);
   } catch {
     issues.push(`independentReview: ${label} is malformed JSON`);
     return undefined;
   }
 }
 
-function validateEvidencePath({ value, hash, label, issues }) {
+function validateEvidencePath({ value, hash, label, issues, scope = "independentReview" }) {
   if (!confinedEvidencePath(value)) {
-    issues.push(`independentReview: ${label}Path must be confined to ${REVIEW_EVIDENCE_DIRECTORY}`);
+    issues.push(`${scope}: ${label}Path must be confined to ${REVIEW_EVIDENCE_DIRECTORY}`);
     return;
   }
-  if (!value.includes(hash ?? "")) issues.push(`independentReview: ${label}Path must contain its SHA-256`);
+  if (!/^[0-9a-f]{64}$/.test(hash ?? "") || !value.includes(hash)) issues.push(`${scope}: ${label}Path must contain its SHA-256`);
 }
 
 function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners, requiredBlindIdsNumeric, evidenceBytes, issues }) {
@@ -589,8 +1100,8 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
     validateEvidencePath({ value: outputPath, hash: outputSha256, label: `${label} output`, issues });
     const packetBytes = evidenceBytes.get(packetPath);
     const outputBytes = evidenceBytes.get(outputPath);
-    if (typeof packetBytes === "string" && sha256Text(packetBytes) !== packetSha256) issues.push(`independentReview: ${label} packet byte hash mismatch`);
-    if (typeof outputBytes === "string" && sha256Text(outputBytes) !== outputSha256) issues.push(`independentReview: ${label} output byte hash mismatch`);
+    if (evidenceText(packetBytes) !== undefined && sha256Evidence(packetBytes) !== packetSha256) issues.push(`independentReview: ${label} packet byte hash mismatch`);
+    if (evidenceText(outputBytes) !== undefined && sha256Evidence(outputBytes) !== outputSha256) issues.push(`independentReview: ${label} output byte hash mismatch`);
     const packet = parseEvidenceJson({ bytes: packetBytes, label: `${label} packet`, issues });
     const output = parseEvidenceJson({ bytes: outputBytes, label: `${label} output`, issues });
     if (!packet || !output) return { packet, output, rows: [], results: [] };
@@ -725,6 +1236,10 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (artifact.scope?.openRows !== baseOpenIds.size) issues.push(`scope: expected ${artifact.scope?.openRows ?? "unknown"} base-open rows, found ${baseOpenIds.size}`);
   if (artifact.scope?.closedRows !== closedRows.length) issues.push(`scope: expected ${artifact.scope?.closedRows ?? "unknown"} closed rows, found ${closedRows.length}`);
   if (artifact.scope?.closedRowsDigest !== sha256Text(canonicalJson(closedRows))) issues.push("scope: closedRowsDigest mismatch");
+  const expectedTailFamilies = deriveTailFamilyManifests({ baseLedger, baseTrackedPaths: tracked });
+  if (artifact.scope?.openRows === 436 && canonicalJson(artifact.tailFamilies) !== canonicalJson(expectedTailFamilies)) {
+    issues.push("tailFamilies: manifests must equal the frozen first-match partition");
+  }
 
   if (canonicalJson(currentLedger.rows.map((row) => row?.id)) !== canonicalJson(baseLedger.rows.map((row) => row?.id))) issues.push("ledger: current row ID order drift from review base");
   const currentById = new Map(currentLedger.rows.map((row) => [row?.id, row]));
@@ -754,7 +1269,8 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (!baseOpenIds.has(decision.id)) issues.push(`scope: decision is not a base-open row: ${decision.id}`);
     const baseRow = baseLedger.rows.find((row) => row.id === decision.id);
     if (baseRow && decision.sourceHash !== baseRow.sourceHash) issues.push(`${decision.id}: decision sourceHash drift`);
-    if (decision.authorRunId !== artifact.independentReview?.authorRunId) issues.push(`${decision.id}: authorRunId differs from artifact author run`);
+    const allowedAuthorRuns = new Set([artifact.independentReview?.authorRunId, artifact.tailReview?.authorRunId].filter(Boolean));
+    if (!allowedAuthorRuns.has(decision.authorRunId)) issues.push(`${decision.id}: authorRunId differs from artifact author runs`);
     if (decision.class !== "UNCLASSIFIED" && (typeof decision.reason !== "string" || !decision.reason.trim())) issues.push(`${decision.id}: classified decision requires a substantive reason`);
     if (decision.class === "UNCLASSIFIED" && (own(decision, "reason") || own(decision, "resolution"))) issues.push(`${decision.id}: UNCLASSIFIED may not contain reason or resolution`);
     if (Object.keys(decision).some((key) => ["override", "individualOverride"].includes(key))) issues.push(`${decision.id}: individual override is forbidden`);
@@ -789,6 +1305,9 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   }
 
   validateTimingAndForecast(artifact, baseLedger, issues);
+  validateAcceptedLoss(artifact, issues);
+  validateTailReviewScaffold(artifact, issues);
+  validateTailIterationEvidence({ artifact, baseLedger, evidenceBytes, protectedIds, issues });
 
   const independent = artifact.independentReview;
   issues.push(...validateRuleAdjudications({ independentReview: independent, decisions }));

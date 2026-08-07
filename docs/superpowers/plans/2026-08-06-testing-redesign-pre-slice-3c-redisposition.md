@@ -412,6 +412,11 @@ If the unmatched-group stop condition occurs, leave Tasks 1--3 committed, keep `
 **Files:**
 
 - Modify: `testing/source-contract-redisposition-review.json`
+- Modify: `scripts/testing/source-contract-redisposition-review.mjs`
+- Modify: `scripts/testing/source-contract-redisposition-review.test.ts`
+- Create: additional final accepted files under `testing/source-contract-redisposition-evidence/`
+- Modify: `docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md`
+- Modify: this plan for the separate tail-cycle schema clarification
 - Reference: all 84 remaining live legacy test files named by the artifact
 - Reference: existing Vitest/Playwright test declarations, repository rules, tool owners, Cargo metadata, and public seams cited by decisions
 
@@ -419,6 +424,7 @@ If the unmatched-group stop condition occurs, leave Tasks 1--3 committed, keep `
 
 - Consumes the calibrated group rules from Task 3.
 - Produces zero `UNCLASSIFIED` rows, complete existing/future owner projections, a complete D5 acceptance table, exact new mixed evidence, and all mandated independent-review records.
+- Preserves Task 3 `validIterations: 3`, its accepted shards, and its exact group adjudications. Task 4 uses a separate `tailValidIterations` counter and separate tail shard evidence; it starts at zero, is bounded by three, and equals the final tail sample iteration count. A new max-three tail stop requires a new explicit rule review and cannot reuse the Task 3 adjudication allowlist.
 
 - [ ] **Step 1: Freeze and validate the seven tail-family manifests**
 
@@ -464,7 +470,7 @@ Send the sampled declarations, invariants, ordinals, candidate owners, catalog, 
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
-After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Process every blind population as deterministic contiguous shards of at most 24 rows. Preserve a mechanically invalid shard output, but do not compare or adopt it and do not increment `iterations`; correct or rerun only that shard without author data. Continue until one complete valid merged iteration changes neither the group rules nor the sample population; record the final population digest and count of valid merged iterations. Permit at most three valid merged iterations, starting at zero for this amended protocol. If the third valid merged result still changes rules or population, keep `apply` blocked and stop for explicit rule review. The user-approved 2026-08-07 explicit review resolved that stop through the four group adjudications in Global Constraints; retain the iteration-three disagreements and raw evidence, apply only those exact group outcomes, and do not run iteration four. The carrier rejects more than three valid iterations, incomplete or overlapping shard coverage, a non-allowlisted adjudication, and any comparison whose sample was derived from an earlier population.
+After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Process every blind population as deterministic contiguous shards of at most 24 rows. Preserve a mechanically invalid shard output, but do not compare or adopt it and do not increment `tailValidIterations`; correct or rerun only that shard without author data. Continue until one complete valid merged tail iteration changes neither the group rules nor the sample population; record the final population digest and `tailValidIterations`. Permit at most three valid merged tail iterations, starting at zero. If the third valid merged tail result still changes rules or population, keep `apply` blocked and stop for a new explicit rule review. Do not reuse the Task 3 adjudication allowlist and do not run a fourth tail iteration without a new approved amendment. The carrier rejects more than three tail-valid iterations, incomplete or overlapping tail-shard coverage, a non-allowlisted tail adjudication, and any comparison whose sample was derived from an earlier population.
 
 - [ ] **Step 8: Calculate the final forecast and loss summaries**
 
@@ -488,7 +494,7 @@ Expected: PASS.
 
 Run: `git diff --check`
 
-Run: `git add testing/source-contract-redisposition-review.json`
+Run: `git add testing/source-contract-redisposition-review.json testing/source-contract-redisposition-evidence scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md docs/superpowers/plans/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md`
 
 Run: `git commit -m "test: complete source-contract redisposition review"`
 

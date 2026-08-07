@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -6,18 +7,26 @@ import reviewArtifact from "../../testing/source-contract-redisposition-review.j
 import {
   applyReview,
   canonicalJson,
+  deriveTailFamilyManifests,
   loadBaseLedger,
   loadBaseTrackedPaths,
   loadReviewEvidence,
   resolutionForDecision,
   sha256Text,
   validateRuleAdjudications,
+  validateTailFingerprints,
+  validateTailIterationProtocol,
+  validateTailOutputScaffold,
+  validateTailPacketScaffold,
   validateReview,
 } from "./source-contract-redisposition-review.mjs";
 
 const REVIEW_BASE = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const hash = (value: unknown) => createHash("sha256").update(String(value)).digest("hex");
 const clone = <T>(value: T): T => structuredClone(value);
+const evidenceText = (value: unknown) => Buffer.isBuffer(value) || value instanceof Uint8Array
+  ? Buffer.from(value).toString("utf8")
+  : String(value);
 const packetSha256 = "a".repeat(64);
 const outputSha256 = "b".repeat(64);
 const mandatoryP0Ids = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
@@ -322,6 +331,465 @@ function reviewWithApprovedPlaywright() {
 }
 
 describe("source-contract redisposition review", () => {
+  it("derives the exact seven frozen Task 4 tail families", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+    ]);
+
+    const families = deriveTailFamilyManifests({ baseLedger: realBaseLedger, baseTrackedPaths: realBaseTrackedPaths });
+    expect(families.map(({ name, rowIds, paths }: any) => ({ name, rows: rowIds.length, files: paths.length }))).toEqual([
+      { name: "testing/process infrastructure", rows: 24, files: 7 },
+      { name: "analysis", rows: 152, files: 24 },
+      { name: "projects/library", rows: 73, files: 19 },
+      { name: "prompt packs/YouTube", rows: 53, files: 11 },
+      { name: "Gemini browser", rows: 29, files: 3 },
+      { name: "Rust/security boundaries", rows: 25, files: 6 },
+      { name: "other product", rows: 54, files: 14 },
+    ]);
+    expect(new Set(families.flatMap(({ rowIds }: any) => rowIds)).size).toBe(410);
+    expect(new Set(families.flatMap(({ paths }: any) => paths)).size).toBe(84);
+  });
+
+  it("requires the artifact to pin the recomputed tail-family manifests", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+    ]);
+    const changed = clone(reviewArtifact) as any;
+    changed.tailFamilies[0].rowIds.pop();
+    expect(validateReview({
+      artifact: changed,
+      baseLedger: realBaseLedger,
+      currentLedger: realBaseLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+    })).toContain("tailFamilies: manifests must equal the frozen first-match partition");
+  });
+
+  it("validates the packet-only tail shards without author decisions", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const realBaseLedger = await loadBaseLedger({ repoRoot, commit: REVIEW_BASE });
+    const packetBytes = new Map(await Promise.all((reviewArtifact as any).tailReview.packetShards.map(async (shard: any) => [
+      shard.packetPath,
+      await readFile(fileURLToPath(new URL(`../../${shard.packetPath}`, import.meta.url)), "utf8"),
+    ])));
+    expect(validateTailPacketScaffold({ artifact: reviewArtifact, baseLedger: realBaseLedger, packetBytes })).toEqual([]);
+
+    const tampered = new Map(packetBytes);
+    const first = (reviewArtifact as any).tailReview.packetShards[0];
+    const packet = JSON.parse(tampered.get(first.packetPath) as string);
+    packet.rows[0].class = "D2_IMPLEMENTATION_SHAPE";
+    tampered.set(first.packetPath, `${JSON.stringify(packet, null, 2)}\n`);
+    expect(validateTailPacketScaffold({ artifact: reviewArtifact, baseLedger: realBaseLedger, packetBytes: tampered })).toEqual(expect.arrayContaining([
+      "tailReview: packet shard 0 byte hash mismatch",
+      `${packet.rows[0].id}: tail packet row schema leaks author/reviewer fields`,
+    ]));
+  });
+
+  it("keeps Task 3 tail mismatches coverage-only while Task 4 fingerprints fail closed", () => {
+    const decisions = [
+      { id: "SC-000001", authorRunId: "task-3-author", class: "D2_IMPLEMENTATION_SHAPE" },
+      { id: "SC-000002", authorRunId: "task-4-author", class: "B2_NEW_CHEAP_BEHAVIOR" },
+    ];
+    const tailReview: any = {
+      authorRunId: "task-4-author",
+      tailValidIterations: 1,
+      status: "accepted",
+      coverageOnlyTask3MismatchIds: ["SC-000001"],
+      blindResults: [
+        { id: "SC-000001", class: "B2_NEW_CHEAP_BEHAVIOR" },
+        { id: "SC-000002", class: "B2_NEW_CHEAP_BEHAVIOR" },
+      ],
+    };
+    expect(validateTailFingerprints({ tailReview, decisions })).toEqual([]);
+
+    tailReview.blindResults[1].class = "D2_IMPLEMENTATION_SHAPE";
+    expect(validateTailFingerprints({ tailReview, decisions })).toContain(
+      "tailReview: Task 4-authored fingerprint mismatches are not accepted: SC-000002",
+    );
+
+    decisions[1].class = "B2_NEW_CHEAP_BEHAVIOR";
+    decisions[1].resolution = { disposition: "behavior", replacementIds: ["test:vitest:expected.test.ts#owner"] };
+    tailReview.blindResults[1] = {
+      id: "SC-000002",
+      class: "B2_NEW_CHEAP_BEHAVIOR",
+      ownerEvidence: ["test:vitest:different.test.ts#owner"],
+    };
+    expect(validateTailFingerprints({ tailReview, decisions })).toContain(
+      "tailReview: Task 4-authored fingerprint mismatches are not accepted: SC-000002",
+    );
+  });
+
+  it("binds blind tail owners, statuses, citations, and content-addressed output paths before adoption", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const loaded = await loadReviewEvidence({ repoRoot, artifact: reviewArtifact });
+    const baseline = clone(reviewArtifact) as any;
+    expect(validateTailOutputScaffold({
+      artifact: baseline,
+      outputs: baseline.tailReview.packetShards,
+      outputBytes: loaded.evidenceBytes,
+      packetBytes: loaded.evidenceBytes,
+    })).toEqual([]);
+
+    const mutateOutput = (artifact: any, bytes: Map<string, unknown>, mutate: (output: any) => void, retainOldPath = false) => {
+      const reference = artifact.tailReview.packetShards[0];
+      const oldPath = reference.outputPath;
+      const output = JSON.parse(evidenceText(bytes.get(oldPath)));
+      mutate(output);
+      const body = `${JSON.stringify(output, null, 2)}\n`;
+      const outputHash = sha256Text(body);
+      const outputPath = retainOldPath ? oldPath : oldPath.replace(/[0-9a-f]{64}\.json$/, `${outputHash}.json`);
+      bytes.set(outputPath, body);
+      reference.outputSha256 = outputHash;
+      reference.outputPath = outputPath;
+      return output;
+    };
+    const validateChanged = (artifact: any, bytes: Map<string, unknown>) => validateTailOutputScaffold({
+      artifact,
+      outputs: artifact.tailReview.packetShards,
+      outputBytes: bytes,
+      packetBytes: bytes,
+    });
+
+    const fabricatedArtifact = clone(reviewArtifact) as any;
+    const fabricatedBytes = new Map<string, unknown>(loaded.evidenceBytes);
+    const fabricated = mutateOutput(fabricatedArtifact, fabricatedBytes, (output) => {
+      output.results[0].ownerEvidence = ["test:vitest:fabricated.test.ts#owner"];
+    });
+    expect(validateChanged(fabricatedArtifact, fabricatedBytes)).toContain(
+      `${fabricated.results[0].id}: tail output selected an invented candidate owner`,
+    );
+
+    const statusArtifact = clone(reviewArtifact) as any;
+    const statusBytes = new Map<string, unknown>(loaded.evidenceBytes);
+    const statusReference = statusArtifact.tailReview.packetShards[0];
+    const oldPacketPath = statusReference.packetPath;
+    const statusPacket = JSON.parse(evidenceText(statusBytes.get(oldPacketPath)));
+    statusPacket.rows[0].candidateOwners[0].status = "resolved";
+    const packetBody = `${JSON.stringify(statusPacket, null, 2)}\n`;
+    const packetHash = sha256Text(packetBody);
+    const packetPath = oldPacketPath.replace(/[0-9a-f]{64}\.json$/, `${packetHash}.json`);
+    statusBytes.set(packetPath, packetBody);
+    statusReference.packetPath = packetPath;
+    statusReference.packetSha256 = packetHash;
+    const statusOutput = mutateOutput(statusArtifact, statusBytes, (output) => { output.packetSha256 = packetHash; });
+    expect(validateChanged(statusArtifact, statusBytes)).toContain(
+      `${statusOutput.results[0].id}: tail output future-owner class requires future candidate membership`,
+    );
+
+    const citationArtifact = clone(reviewArtifact) as any;
+    const citationBytes = new Map<string, unknown>(loaded.evidenceBytes);
+    const citationOutput = mutateOutput(citationArtifact, citationBytes, (output) => { output.results[0].criticalityRef = "INVENTED_SOURCE"; });
+    expect(validateChanged(citationArtifact, citationBytes)).toContain(
+      `${citationOutput.results[0].id}: tail output citation is invalid`,
+    );
+
+    const pathArtifact = clone(reviewArtifact) as any;
+    const pathBytes = new Map<string, unknown>(loaded.evidenceBytes);
+    mutateOutput(pathArtifact, pathBytes, (output) => { output.results[0].reason += " coherent mutation"; }, true);
+    expect(validateChanged(pathArtifact, pathBytes)).toContain(
+      "tailReview: output shard 0 outputPath must contain its SHA-256",
+    );
+  });
+
+  it("validates the general bounded tail iteration protocol without Task 3 adjudication reuse", async () => {
+    const validate = (artifact: any) => validateTailIterationProtocol({ tailReview: artifact.tailReview });
+    const entry = (tail: any, iteration: number, changes: Partial<any> = {}) => ({
+      iteration,
+      requiredBlindRowIds: clone(tail.requiredBlindRowIds),
+      samplePopulation: clone(tail.deterministicSample.population),
+      sampleRowIds: clone(tail.deterministicSample.rowIds),
+      requiredPopulationDigest: tail.requiredPopulationDigest,
+      samplePopulationDigest: tail.deterministicSample.populationDigest,
+      resultingRequiredBlindRowIds: clone(tail.requiredBlindRowIds),
+      resultingSamplePopulation: clone(tail.deterministicSample.population),
+      resultingSampleRowIds: clone(tail.deterministicSample.rowIds),
+      resultingRequiredPopulationDigest: tail.requiredPopulationDigest,
+      resultingSamplePopulationDigest: tail.deterministicSample.populationDigest,
+      task4RuleChanged: false,
+      samplePopulationChanged: false,
+      result: "fixed_point",
+      ...changes,
+    });
+
+    const iteration2 = clone(reviewArtifact) as any;
+    iteration2.tailReview.tailValidIterations = 2;
+    iteration2.tailReview.deterministicSample.iterations = 2;
+    iteration2.tailReview.iterationHistory = [
+      entry(iteration2.tailReview, 1, { task4RuleChanged: true, result: "rule_changed" }),
+      entry(iteration2.tailReview, 2),
+    ];
+    expect(validate(iteration2)).toEqual([]);
+
+    const iteration3 = clone(reviewArtifact) as any;
+    const priorDigest = "e".repeat(64);
+    iteration3.tailReview.tailValidIterations = 3;
+    iteration3.tailReview.deterministicSample.iterations = 3;
+    iteration3.tailReview.iterationHistory = [
+      entry(iteration3.tailReview, 1, { task4RuleChanged: true, result: "rule_changed" }),
+      entry(iteration3.tailReview, 2, { task4RuleChanged: true, result: "rule_changed" }),
+      entry(iteration3.tailReview, 3),
+    ];
+    expect(validate(iteration3)).toEqual([]);
+
+    const skipped = clone(iteration2); skipped.tailReview.iterationHistory[1].iteration = 3;
+    expect(validate(skipped)).toContain("tailReview: iteration history must be contiguous and complete");
+    const duplicate = clone(iteration2); duplicate.tailReview.iterationHistory[1].iteration = 1;
+    expect(validate(duplicate)).toContain("tailReview: iteration history must be contiguous and complete");
+
+    const stale = clone(iteration2); stale.tailReview.iterationHistory[1].samplePopulationDigest = priorDigest;
+    expect(validate(stale)).toContain("tailReview: final iteration must compare the current tail population");
+
+    const thirdChangingAccepted = clone(iteration3);
+    thirdChangingAccepted.tailReview.iterationHistory[2] = entry(thirdChangingAccepted.tailReview, 3, { task4RuleChanged: true, result: "rule_changed" });
+    expect(validate(thirdChangingAccepted)).toContain("tailReview: accepted tail history must end at an unchanged fixed point");
+
+    const blocked = clone(thirdChangingAccepted); blocked.tailReview.status = "blocked";
+    expect(validate(blocked)).toContain("tailReview: third valid tail iteration changed rules or population; explicit rule amendment required");
+    expect(validate(blocked)).not.toContain("tailReview: unsupported status");
+
+    const iteration4 = clone(iteration3);
+    iteration4.tailReview.tailValidIterations = 4;
+    iteration4.tailReview.deterministicSample.iterations = 4;
+    iteration4.tailReview.iterationHistory.push(entry(iteration4.tailReview, 4));
+    expect(validate(iteration4)).toEqual(expect.arrayContaining([
+      "tailReview: tailValidIterations must be 0..3 and equal sample iterations",
+      "tailReview: a fourth valid tail iteration is forbidden",
+    ]));
+
+    const reused = clone(reviewArtifact) as any;
+    reused.tailReview.ruleAdjudications = clone(reused.independentReview.ruleAdjudications);
+    expect(validate(reused)).toContain("tailReview: Task 3 adjudications cannot authorize tail disagreements");
+
+    const invalidAttempts = clone(reviewArtifact) as any;
+    invalidAttempts.tailReview.invalidAttempts.push({ shardIndex: 1, sha256: "d".repeat(64), reason: "second invalid non-counting transport" });
+    expect(validate(invalidAttempts)).toEqual([]);
+  });
+
+  it("binds every valid tail iteration to distinct reconstructable evidence", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const validate = (artifact: any, evidenceBytes = loaded.evidenceBytes) => validateReview({
+      artifact, baseLedger: realBaseLedger, currentLedger: realBaseLedger, baseTrackedPaths: realBaseTrackedPaths, evidenceBytes,
+    });
+    expect(validate(reviewArtifact)).toEqual([]);
+
+    const remint = (artifact: any, evidenceBytes: Map<string, unknown>, iteration: number, reviewerRunId: string, changes: any = {}) => {
+      const sourceTail = reviewArtifact.tailReview as any;
+      const packetShards = sourceTail.packetShards.map((source: any, index: number) => {
+        const packet = JSON.parse(evidenceText(loaded.evidenceBytes.get(source.packetPath)));
+        packet.reviewerRunId = reviewerRunId;
+        const packetBody = `${JSON.stringify(packet, null, 2)}\n`;
+        const packetSha256 = sha256Text(packetBody);
+        const packetPath = `testing/source-contract-redisposition-evidence/fixture-${reviewerRunId}-shard-${index}-packet.${packetSha256}.json`;
+        evidenceBytes.set(packetPath, Buffer.from(packetBody));
+        const output = JSON.parse(evidenceText(loaded.evidenceBytes.get(source.outputPath)));
+        output.reviewerRunId = reviewerRunId;
+        output.packetSha256 = packetSha256;
+        const outputBody = `${JSON.stringify(output, null, 2)}\n`;
+        const outputSha256 = sha256Text(outputBody);
+        const outputPath = `testing/source-contract-redisposition-evidence/fixture-${reviewerRunId}-shard-${index}-output.${outputSha256}.json`;
+        evidenceBytes.set(outputPath, Buffer.from(outputBody));
+        return { index, rowIds: clone(source.rowIds), packetPath, packetSha256, outputPath, outputSha256 };
+      });
+      const mergedPacket = JSON.parse(evidenceText(loaded.evidenceBytes.get(sourceTail.reviewer.packetPath)));
+      mergedPacket.reviewerRunId = reviewerRunId;
+      const mergedPacketBody = `${JSON.stringify(mergedPacket, null, 2)}\n`;
+      const mergedPacketSha256 = sha256Text(mergedPacketBody);
+      const mergedPacketPath = `testing/source-contract-redisposition-evidence/fixture-${reviewerRunId}-merged-packet.${mergedPacketSha256}.json`;
+      evidenceBytes.set(mergedPacketPath, Buffer.from(mergedPacketBody));
+      const mergedOutput = JSON.parse(evidenceText(loaded.evidenceBytes.get(sourceTail.reviewer.outputPath)));
+      mergedOutput.reviewerRunId = reviewerRunId;
+      mergedOutput.packetSha256 = mergedPacketSha256;
+      const mergedOutputBody = `${JSON.stringify(mergedOutput, null, 2)}\n`;
+      const mergedOutputFileSha256 = sha256Text(mergedOutputBody);
+      const mergedOutputPath = `testing/source-contract-redisposition-evidence/fixture-${reviewerRunId}-merged-output.${mergedOutputFileSha256}.json`;
+      evidenceBytes.set(mergedOutputPath, Buffer.from(mergedOutputBody));
+      const reviewer = {
+        agentTaskId: `/fixture/reviewer-${iteration}`,
+        reviewerRunId,
+        contextPolicy: "blind-no-proposed-class-or-reason",
+        packetPath: mergedPacketPath,
+        packetSha256: mergedPacketSha256,
+        outputPath: mergedOutputPath,
+        outputSha256: mergedOutputFileSha256,
+      };
+      const blindResults = mergedOutput.results.map((result: any) => ({ ...result, reviewerRunId }));
+      const task4Disagreements = changes.task4Disagreements ?? [];
+      const samplePopulationChanged = changes.samplePopulationChanged ?? false;
+      const samplePopulation = clone(changes.samplePopulation ?? sourceTail.deterministicSample.population);
+      const sampleRowIds = clone(changes.sampleRowIds ?? sourceTail.deterministicSample.rowIds);
+      const resultingRequiredBlindRowIds = clone(changes.resultingRequiredBlindRowIds ?? sourceTail.requiredBlindRowIds);
+      const resultingSamplePopulation = clone(changes.resultingSamplePopulation ?? sourceTail.deterministicSample.population);
+      const resultingSampleRowIds = clone(changes.resultingSampleRowIds ?? sourceTail.deterministicSample.rowIds);
+      return {
+        iteration,
+        reviewerRunId,
+        requiredBlindRowIds: clone(sourceTail.requiredBlindRowIds),
+        samplePopulation,
+        sampleRowIds,
+        requiredPopulationDigest: changes.requiredPopulationDigest ?? sourceTail.requiredPopulationDigest,
+        samplePopulationDigest: changes.samplePopulationDigest ?? sourceTail.deterministicSample.populationDigest,
+        resultingRequiredBlindRowIds,
+        resultingSamplePopulation,
+        resultingSampleRowIds,
+        resultingRequiredPopulationDigest: changes.resultingRequiredPopulationDigest ?? sourceTail.requiredPopulationDigest,
+        resultingSamplePopulationDigest: changes.resultingSamplePopulationDigest ?? sourceTail.deterministicSample.populationDigest,
+        packetShards,
+        reviewer,
+        mergedOutputSha256: sha256Text(canonicalJson(blindResults)),
+        task4Disagreements,
+        coverageOnlyTask3MismatchIds: clone(sourceTail.coverageOnlyTask3MismatchIds),
+        task4RuleChanged: task4Disagreements.length > 0,
+        samplePopulationChanged,
+        result: task4Disagreements.length || samplePopulationChanged ? "rule_changed" : "fixed_point",
+      };
+    };
+    const bindFinal = (artifact: any, entry: any, iterations: number) => {
+      const tail = artifact.tailReview;
+      tail.tailValidIterations = iterations;
+      tail.deterministicSample.iterations = iterations;
+      tail.reviewerRunId = entry.reviewerRunId;
+      tail.packetShards = clone(entry.packetShards);
+      tail.reviewer = clone(entry.reviewer);
+      tail.mergedOutputSha256 = entry.mergedOutputSha256;
+      tail.requiredBlindRowIds = clone(entry.requiredBlindRowIds);
+      tail.requiredPopulationDigest = entry.requiredPopulationDigest;
+      tail.coverageOnlyTask3MismatchIds = clone(entry.coverageOnlyTask3MismatchIds);
+      tail.blindResults = (reviewArtifact.tailReview as any).blindResults.map((result: any) => ({ ...clone(result), reviewerRunId: entry.reviewerRunId }));
+    };
+    const disagreement = [{
+      id: "SC-000325",
+      authorFingerprint: { class: "D2_IMPLEMENTATION_SHAPE", ownerEvidence: [], criticalityRef: null },
+    }];
+    const makeIteration2 = () => {
+      const artifact = clone(reviewArtifact) as any;
+      const bytes = new Map<string, unknown>(loaded.evidenceBytes);
+      const first = remint(artifact, bytes, 1, "fixture-tail-iteration-1", { task4Disagreements: disagreement });
+      const second = remint(artifact, bytes, 2, "fixture-tail-iteration-2");
+      artifact.tailReview.iterationHistory = [first, second];
+      bindFinal(artifact, second, 2);
+      return { artifact, bytes, first, second };
+    };
+
+    const valid2 = makeIteration2();
+    expect(validate(valid2.artifact, valid2.bytes)).toEqual([]);
+
+    const reused = makeIteration2();
+    reused.artifact.tailReview.iterationHistory[0].reviewerRunId = reused.second.reviewerRunId;
+    reused.artifact.tailReview.iterationHistory[0].reviewer = clone(reused.second.reviewer);
+    reused.artifact.tailReview.iterationHistory[0].packetShards = clone(reused.second.packetShards);
+    expect(validate(reused.artifact, reused.bytes)).toContain("tailReview: iteration reviewerRunIds and evidence references must be unique");
+
+    const missing = makeIteration2(); missing.artifact.tailReview.iterationHistory[0].packetShards.pop();
+    expect(validate(missing.artifact, missing.bytes)).toContain("tailReview: iteration 1 packet shards must exactly cover its required blind IDs");
+    const duplicate = makeIteration2(); duplicate.artifact.tailReview.iterationHistory[0].packetShards[1].index = 0;
+    expect(validate(duplicate.artifact, duplicate.bytes)).toContain("tailReview: iteration 1 packet shard indices must be contiguous and unique");
+
+    const tampered = makeIteration2();
+    const priorOutput = tampered.first.packetShards[0].outputPath;
+    tampered.bytes.set(priorOutput, Buffer.concat([Buffer.from(tampered.bytes.get(priorOutput) as Uint8Array), Buffer.from(" ")]));
+    expect(validate(tampered.artifact, tampered.bytes)).toContain("tailReview: iteration 1 output shard 0 byte hash mismatch");
+
+    const digest = makeIteration2(); digest.artifact.tailReview.iterationHistory[0].mergedOutputSha256 = "f".repeat(64);
+    expect(validate(digest.artifact, digest.bytes)).toContain("tailReview: iteration 1 merged blind-result digest mismatch");
+    const facts = makeIteration2(); facts.artifact.tailReview.iterationHistory[0].task4Disagreements = [];
+    expect(validate(facts.artifact, facts.bytes)).toContain("tailReview: iteration 1 task4RuleChanged is not supported by reconstructed disagreements");
+    const population = makeIteration2(); population.artifact.tailReview.iterationHistory[0].samplePopulationChanged = true;
+    expect(validate(population.artifact, population.bytes)).toContain("tailReview: iteration 1 samplePopulationChanged is not supported by resulting population digests");
+
+    const arbitraryResultDigest = clone(reviewArtifact) as any;
+    arbitraryResultDigest.tailReview.iterationHistory[0].resultingRequiredPopulationDigest = "f".repeat(64);
+    expect(validate(arbitraryResultDigest)).toContain("tailReview: iteration 1 resulting required population digest mismatch");
+    const resultSetHash = makeIteration2(); resultSetHash.artifact.tailReview.iterationHistory[0].resultingRequiredBlindRowIds.pop();
+    expect(validate(resultSetHash.artifact, resultSetHash.bytes)).toContain("tailReview: iteration 1 resulting required population digest mismatch");
+    const fixedSets = makeIteration2();
+    fixedSets.second.resultingRequiredBlindRowIds = fixedSets.second.resultingRequiredBlindRowIds.slice(1);
+    fixedSets.second.resultingRequiredPopulationDigest = sha256Text(canonicalJson(fixedSets.second.resultingRequiredBlindRowIds));
+    fixedSets.artifact.tailReview.iterationHistory[1] = fixedSets.second;
+    expect(validate(fixedSets.artifact, fixedSets.bytes)).toContain("tailReview: iteration 2 fixed point must preserve all input population sets");
+    const nondeterministic = makeIteration2();
+    nondeterministic.second.resultingSampleRowIds = [...nondeterministic.second.resultingSampleRowIds].reverse();
+    nondeterministic.artifact.tailReview.iterationHistory[1] = nondeterministic.second;
+    expect(validate(nondeterministic.artifact, nondeterministic.bytes)).toContain("tailReview: iteration 2 resulting sample selection must equal deterministic ten percent");
+    const nextInput = makeIteration2();
+    nextInput.first.resultingRequiredBlindRowIds = nextInput.first.resultingRequiredBlindRowIds.slice(1);
+    nextInput.first.resultingRequiredPopulationDigest = sha256Text(canonicalJson(nextInput.first.resultingRequiredBlindRowIds));
+    nextInput.artifact.tailReview.iterationHistory[0] = nextInput.first;
+    expect(validate(nextInput.artifact, nextInput.bytes)).toContain("tailReview: iteration 2 input population sets must equal iteration 1 results");
+
+    const finalBinding = makeIteration2(); finalBinding.artifact.tailReview.reviewerRunId = "not-the-final-run";
+    expect(validate(finalBinding.artifact, finalBinding.bytes)).toContain("tailReview: final top-level state must equal the last fixed-point iteration");
+    const finalSets = makeIteration2(); finalSets.artifact.tailReview.deterministicSample.rowIds = finalSets.artifact.tailReview.deterministicSample.rowIds.slice(1);
+    expect(validate(finalSets.artifact, finalSets.bytes)).toContain("tailReview: final top-level population sets must equal the last fixed-point results");
+
+    const valid3 = makeIteration2();
+    const sourceSample = (reviewArtifact.tailReview as any).deterministicSample;
+    const priorSamplePopulation = sourceSample.population.slice(1);
+    const priorSampleRowIds = [...priorSamplePopulation].sort((left, right) => hash(left).localeCompare(hash(right))).slice(0, Math.ceil(priorSamplePopulation.length * 0.1));
+    const priorSampleDigest = sha256Text(canonicalJson(priorSamplePopulation));
+    const middle = remint(valid3.artifact, valid3.bytes, 2, "fixture-tail-iteration-2-changing", {
+      samplePopulation: priorSamplePopulation,
+      sampleRowIds: priorSampleRowIds,
+      samplePopulationDigest: priorSampleDigest,
+      resultingSamplePopulation: sourceSample.population,
+      resultingSampleRowIds: sourceSample.rowIds,
+      resultingSamplePopulationDigest: sourceSample.populationDigest,
+      samplePopulationChanged: true,
+    });
+    const third = remint(valid3.artifact, valid3.bytes, 3, "fixture-tail-iteration-3");
+    valid3.artifact.tailReview.iterationHistory = [valid3.first, middle, third];
+    valid3.first.samplePopulation = clone(priorSamplePopulation);
+    valid3.first.sampleRowIds = clone(priorSampleRowIds);
+    valid3.first.samplePopulationDigest = priorSampleDigest;
+    valid3.first.resultingSamplePopulation = clone(priorSamplePopulation);
+    valid3.first.resultingSampleRowIds = clone(priorSampleRowIds);
+    valid3.first.resultingSamplePopulationDigest = priorSampleDigest;
+    bindFinal(valid3.artifact, third, 3);
+    expect(validate(valid3.artifact, valid3.bytes)).toEqual([]);
+  }, 30_000);
+
+  it("loads and validates accepted content-addressed tail evidence", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    expect(loaded.issues).toEqual([]);
+    const input: any = { artifact: reviewArtifact, baseLedger: realBaseLedger, currentLedger: realBaseLedger, baseTrackedPaths: realBaseTrackedPaths, evidenceBytes: loaded.evidenceBytes };
+    expect(validateReview(input)).toEqual([]);
+
+    const changed = new Map(loaded.evidenceBytes);
+    const first = (reviewArtifact as any).tailReview.packetShards[0];
+    changed.set(first.packetPath, `${changed.get(first.packetPath)} `);
+    expect(validateReview({ ...input, evidenceBytes: changed })).toContain("tailReview: packet shard 0 byte hash mismatch");
+  });
+
+  it("recomputes final disposition forecasts and accepted loss from decisions", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const input: any = { baseLedger: realBaseLedger, currentLedger: realBaseLedger, baseTrackedPaths: realBaseTrackedPaths, evidenceBytes: loaded.evidenceBytes };
+
+    const forecast = clone(reviewArtifact) as any;
+    forecast.forecast.beforeByDisposition.behavior -= 1;
+    expect(validateReview({ ...input, artifact: forecast })).toContain("forecast: beforeByDisposition does not match frozen decisions");
+
+    const loss = clone(reviewArtifact) as any;
+    loss.acceptedLoss.rows = 1;
+    expect(validateReview({ ...input, artifact: loss })).toContain("acceptedLoss: summary does not match D5 decisions");
+  });
+
   it("pins every real base-open row in the static partial-review artifact", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths] = await Promise.all([
@@ -349,13 +817,12 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      B2_NEW_CHEAP_BEHAVIOR: 45,
+      B2_NEW_CHEAP_BEHAVIOR: 284,
       B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
       D1_COMPLETED_HISTORY_ONLY: 6,
-      D2_IMPLEMENTATION_SHAPE: 29,
-      D3_NON_OBSERVABLE_VISUAL: 4,
+      D2_IMPLEMENTATION_SHAPE: 121,
+      D3_NON_OBSERVABLE_VISUAL: 11,
       D4_DUPLICATE_EVIDENCE: 6,
-      UNCLASSIFIED: 338,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
     expect(reviewArtifact.independentReview.blindResults).toHaveLength(95);
@@ -891,7 +1358,7 @@ describe("source-contract redisposition review", () => {
       baseTrackedPaths: realBaseTrackedPaths,
       evidenceBytes: loaded.evidenceBytes,
     } as any;
-    expect(validateReview(realInput).filter((issue) => !issue.endsWith("UNCLASSIFIED blocks apply"))).toEqual([]);
+    expect(validateReview(realInput)).toEqual([]);
 
     const firstPacketPath = reviewArtifact.independentReview.shards[0].packetPath;
     const tamperedBytes = new Map(loaded.evidenceBytes);

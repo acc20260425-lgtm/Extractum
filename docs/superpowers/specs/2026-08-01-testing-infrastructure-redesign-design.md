@@ -799,6 +799,15 @@ the four group adjudications plus their exact affected sets; these are not
 per-row overrides and do not authorize any other disagreement. No iteration
 four is run. Later reviewers receive the clarified boundary policy.
 
+Task 4 tail convergence is a separate fixed-point cycle. The artifact preserves
+Task 3 `validIterations: 3`, its shard evidence, and its adjudications unchanged,
+and adds `tailValidIterations` plus separate content-addressed tail shards.
+`tailValidIterations` starts at zero, is bounded by three, and equals the final
+tail deterministic-sample iteration count. It cannot reopen or consume the
+Task 3 adjudication history. A third changing tail iteration triggers a new
+explicit rule review; the Task 3 adjudication allowlist cannot resolve a new
+tail disagreement.
+
 After any group-rule change, recompute the risk-cohort exclusions and the
 ten-percent remainder population. If that population changes, reselect the
 sample deterministically and review it again. Iterate until one complete,
