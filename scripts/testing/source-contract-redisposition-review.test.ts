@@ -16,7 +16,14 @@ import {
 const REVIEW_BASE = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const hash = (value: unknown) => createHash("sha256").update(String(value)).digest("hex");
 const clone = <T>(value: T): T => structuredClone(value);
+const packetSha256 = "a".repeat(64);
+const outputSha256 = "b".repeat(64);
 const mandatoryP0Ids = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
+const approvedPlaywrightOwners = new Map([
+  ["SC-000312", "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility"],
+  ["SC-000344", "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"],
+  ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
+]);
 
 function row(id: string, path: string, resolution: Record<string, unknown> = { disposition: "behavior", replacementIds: ["test:vitest:src/existing.test.ts#existing"] }) {
   return {
@@ -125,6 +132,13 @@ function artifactFor(decisions = defaultDecisions()) {
   const ordinary = decisions.filter((decision) => !["B3_PROTECTED_EXPENSIVE_BEHAVIOR", "D5_ACCEPTED_LOSS"].includes(decision.class) && !decision.resolution?.subgroups);
   const population = ordinary.map((decision) => decision.id).sort();
   const sample = [...population].sort((a, b) => hash(a).localeCompare(hash(b))).slice(0, Math.ceil(population.length * 0.1));
+  const blindResults = [...new Set([...sample, ...mandatoryP0Ids])].map((id) => decisions.find((decision) => decision.id === id)).filter(Boolean).map((decision) => ({
+    id: decision.id, sourceHash: decision.sourceHash, reviewerRunId: "reviewer-run", class: decision.class,
+    reason: `independent ${decision.reason}`, ...(decision.ownerEvidence ? { ownerEvidence: decision.ownerEvidence } : {}), ...(decision.criticalityRef ? { criticalityRef: decision.criticalityRef } : {}),
+  })).sort((left, right) => Number(left.id.slice(3)) - Number(right.id.slice(3)));
+  const shardRowIds = blindResults.map((result) => result.id).sort((left, right) => Number(left.slice(3)) - Number(right.slice(3)));
+  const shardPacketSha256 = sha256Text("fixture shard packet");
+  const shardOutputSha256 = sha256Text("fixture shard output");
   const artifact: any = {
     schemaVersion: 1,
     reviewBaseCommit: REVIEW_BASE,
@@ -138,11 +152,26 @@ function artifactFor(decisions = defaultDecisions()) {
     decisions,
     independentReview: {
       authorRunId: "author-run",
-      reviewer: { agentTaskId: "reviewer-run", contextPolicy: "blind-no-proposed-class-or-reason" },
-      blindResults: [...new Set([...sample, ...mandatoryP0Ids])].map((id) => decisions.find((decision) => decision.id === id)).filter(Boolean).map((decision) => ({
-        id: decision.id, sourceHash: decision.sourceHash, reviewerRunId: "reviewer-run", class: decision.class,
-        reason: `independent ${decision.reason}`, ...(decision.ownerEvidence ? { ownerEvidence: decision.ownerEvidence } : {}), ...(decision.criticalityRef ? { criticalityRef: decision.criticalityRef } : {}),
-      })),
+      reviewer: {
+        agentTaskId: "reviewer-agent-task",
+        reviewerRunId: "reviewer-run",
+        contextPolicy: "blind-no-proposed-class-or-reason",
+        packetPath: `.superpowers/sdd/packet.${packetSha256}.json`,
+        packetSha256,
+        outputPath: `.superpowers/sdd/output.${outputSha256}.json`,
+        outputSha256,
+      },
+      validIterations: 1,
+      shards: [{
+        index: 0,
+        rowIds: shardRowIds,
+        packetPath: `.superpowers/sdd/shard-packet.${shardPacketSha256}.json`,
+        packetSha256: shardPacketSha256,
+        outputPath: `.superpowers/sdd/shard-output.${shardOutputSha256}.json`,
+        outputSha256: shardOutputSha256,
+      }],
+      mergedOutputSha256: sha256Text(canonicalJson(blindResults)),
+      blindResults,
       calibrations: [], mandatoryCohorts: [{ name: "mandatory P0", rowIds: mandatoryP0Ids, comparison: "agree" }],
       deterministicSample: { algorithm: "sha256-id-lowest-10-percent", population, populationDigest: sha256Text(canonicalJson(population)), rowIds: sample, iterations: 1, comparison: "agree" },
       disagreements: [],
@@ -150,20 +179,28 @@ function artifactFor(decisions = defaultDecisions()) {
     acceptedLoss: { rows: 0, assertionOrdinals: 0, items: [] },
   };
   const rowById = new Map(baseLedger.rows.map((item) => [item.id, item]));
-  const futureRows = new Set<string>();
+  const futureByMechanism = new Map<string, { rows: Set<string>; assertionOrdinals: number }>();
   const proposedRows = new Set<string>();
-  let futureOrdinals = 0;
   let proposedOrdinals = 0;
   for (const decision of decisions) {
     if (!["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"].includes(decision.class)) continue;
     const row = rowById.get(decision.id) as any;
     const groups = decision.resolution?.subgroups ?? [decision.resolution];
     for (const group of groups) {
-      if (!group?.replacementIds?.some((id: string) => id.startsWith("test:vitest:"))) continue;
+      const mechanisms = new Set<string>((group?.replacementIds ?? []).flatMap((id: string) => {
+        if (id.startsWith("test:vitest:")) return ["jsdom"];
+        if (id.startsWith("test:cargo:")) return ["cargo"];
+        return [];
+      }));
+      if (!mechanisms.size) continue;
       const ordinals = decision.resolution?.subgroups ? group.assertionOrdinals : Array.from({ length: row.assertionCount }, (_, index) => index + 1);
-      futureRows.add(decision.id);
-      futureOrdinals += ordinals.length;
-      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") {
+      for (const mechanism of mechanisms) {
+        const summary = futureByMechanism.get(mechanism) ?? { rows: new Set<string>(), assertionOrdinals: 0 };
+        summary.rows.add(decision.id);
+        summary.assertionOrdinals += ordinals.length;
+        futureByMechanism.set(mechanism, summary);
+      }
+      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && mechanisms.has("jsdom")) {
         proposedRows.add(decision.id);
         proposedOrdinals += ordinals.length;
       }
@@ -176,7 +213,10 @@ function artifactFor(decisions = defaultDecisions()) {
   const scalable = Math.max(0, replacement - startup) / 46;
   artifact.forecast = {
     ...artifact.forecast,
-    futureOwnersByMechanism: futureRows.size ? { jsdom: { rows: futureRows.size, assertionOrdinals: futureOrdinals } } : {},
+    futureOwnersByMechanism: Object.fromEntries([...futureByMechanism].map(([mechanism, summary]) => [mechanism, {
+      rows: summary.rows.size,
+      assertionOrdinals: summary.assertionOrdinals,
+    }])),
     proposedNewJsdomRows: proposedRows.size,
     proposedNewJsdomOrdinals: proposedOrdinals,
     upperBoundPerRow: replacement / 46,
@@ -204,6 +244,49 @@ function review(overrides: Record<string, unknown> = {}) {
     artifact: artifactFor(), baseLedger: clone(baseLedger), currentLedger: clone(baseLedger), baseTrackedPaths,
     ...overrides,
   } as any;
+}
+
+function reviewWithApprovedPlaywright() {
+  const browserRows = [
+    { id: "SC-000312", assertionCount: 8 },
+    { id: "SC-000344", assertionCount: 6 },
+    { id: "SC-000385", assertionCount: 7 },
+  ].map(({ id, assertionCount }) => ({
+    ...row(id, `src/${id}.test.ts`, { disposition: "behavior", replacementIds: [approvedPlaywrightOwners.get(id)] }),
+    assertionCount,
+  }));
+  const extendedBase = clone(baseLedger);
+  extendedBase.rows.push(...browserRows);
+  const extendedTracked = new Set([...baseTrackedPaths, ...browserRows.map((item) => item.path)]);
+  const artifact = artifactFor();
+  const browserDecisions = browserRows.map((item) => ({
+    id: item.id,
+    sourceHash: item.sourceHash,
+    authorRunId: artifact.independentReview.authorRunId,
+    class: "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+    reason: `${item.id} requires the approved browser-owned behavior seam.`,
+    criticalityRef: "TESTING_BROWSER_COMPONENT_OWNERSHIP",
+    resolution: { disposition: "behavior", replacementIds: [approvedPlaywrightOwners.get(item.id)] },
+  }));
+  artifact.scope.openRows += browserRows.length;
+  artifact.decisions.push(...browserDecisions);
+  artifact.independentReview.mandatoryCohorts.push({ name: "approved-browser", rowIds: [...approvedPlaywrightOwners.keys()], comparison: "agree" });
+  artifact.independentReview.blindResults.push(...browserDecisions.map((decision) => ({
+    id: decision.id,
+    sourceHash: decision.sourceHash,
+    reviewerRunId: artifact.independentReview.reviewer.reviewerRunId,
+    class: decision.class,
+    reason: `independent ${decision.reason}`,
+    criticalityRef: decision.criticalityRef,
+  })));
+  artifact.independentReview.blindResults.sort((left: any, right: any) => Number(left.id.slice(3)) - Number(right.id.slice(3)));
+  artifact.independentReview.shards[0].rowIds = artifact.independentReview.blindResults.map((result: any) => result.id);
+  artifact.independentReview.mergedOutputSha256 = sha256Text(canonicalJson(artifact.independentReview.blindResults));
+  artifact.forecast.futureOwnersByMechanism = {
+    ...artifact.forecast.futureOwnersByMechanism,
+    playwright: { rows: 3, assertionOrdinals: 21 },
+  };
+  return { artifact, baseLedger: extendedBase, currentLedger: clone(extendedBase), baseTrackedPaths: extendedTracked } as any;
 }
 
 describe("source-contract redisposition review", () => {
@@ -235,15 +318,17 @@ describe("source-contract redisposition review", () => {
       return counts;
     }, {})).toEqual({
       A1_EXISTING_STRUCTURED_OWNER: 3,
-      B2_NEW_CHEAP_BEHAVIOR: 58,
-      D1_COMPLETED_HISTORY_ONLY: 9,
-      D2_IMPLEMENTATION_SHAPE: 19,
-      D3_NON_OBSERVABLE_VISUAL: 8,
+      B1_EXISTING_BEHAVIOR_OWNER: 3,
+      B2_NEW_CHEAP_BEHAVIOR: 47,
+      B3_PROTECTED_EXPENSIVE_BEHAVIOR: 7,
+      D1_COMPLETED_HISTORY_ONLY: 7,
+      D2_IMPLEMENTATION_SHAPE: 25,
+      D3_NON_OBSERVABLE_VISUAL: 5,
       D4_DUPLICATE_EVIDENCE: 1,
       UNCLASSIFIED: 338,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
-    expect(reviewArtifact.independentReview.blindResults).toHaveLength(97);
+    expect(reviewArtifact.independentReview.blindResults).toHaveLength(96);
   });
 
   it("derives timing forecasts from retained measurements and rejects invalid baseline or jsdom proposals", () => {
@@ -270,7 +355,18 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: wrongDominance }))).toContain("forecast: legacyDominatesFullUnitCeiling mismatch");
     const wrongGrouping = artifactFor();
     wrongGrouping.forecast.futureOwnersByMechanism = {};
-    expect(validateReview(review({ artifact: wrongGrouping }))).toContain("forecast: futureOwnersByMechanism does not match jsdom owner grouping");
+    expect(validateReview(review({ artifact: wrongGrouping }))).toContain("forecast: futureOwnersByMechanism does not match owner grouping");
+
+    const cargoDecisions = withFirstDecision({
+      ...artifactFor().decisions[0],
+      resolution: { disposition: "behavior", replacementIds: ["test:cargo:extractum::tests::future_behavior_owner"] },
+    });
+    const cargoArtifact = artifactFor(cargoDecisions);
+    cargoArtifact.forecast.futureOwnersByMechanism = {
+      ...cargoArtifact.forecast.futureOwnersByMechanism,
+      cargo: { rows: 1, assertionOrdinals: 2 },
+    };
+    expect(validateReview(review({ artifact: cargoArtifact }))).toEqual([]);
 
     const overCeiling = artifactFor();
     overCeiling.forecast.proposedNewJsdomRows = 47;
@@ -283,6 +379,36 @@ describe("source-contract redisposition review", () => {
     const playwrightProposal = artifactFor();
     playwrightProposal.decisions[0].resolution.replacementIds = ["test:playwright:future/proposal.spec.ts"];
     expect(validateReview(review({ artifact: playwrightProposal }))).toContain("SC-000001: browser owner requires program amendment");
+  });
+
+  it("allows only the exact approved three-row Playwright mapping outside jsdom timing", () => {
+    const approved = reviewWithApprovedPlaywright();
+    expect(validateReview(approved)).toEqual([]);
+    expect(approved.artifact.forecast.futureOwnersByMechanism.playwright).toEqual({ rows: 3, assertionOrdinals: 21 });
+
+    const alteredOwner = clone(approved.artifact);
+    alteredOwner.decisions.find((item: any) => item.id === "SC-000312").resolution.replacementIds = ["test:playwright:e2e/app-shell-responsive.spec.ts#wrong-owner"];
+    expect(validateReview({ ...approved, artifact: alteredOwner })).toContain("SC-000312: browser owner requires program amendment");
+
+    const wrongClass = clone(approved.artifact);
+    wrongClass.decisions.find((item: any) => item.id === "SC-000344").class = "B2_NEW_CHEAP_BEHAVIOR";
+    expect(validateReview({ ...approved, artifact: wrongClass })).toContain("SC-000344: approved browser owner requires B3_PROTECTED_EXPENSIVE_BEHAVIOR");
+
+    const wrongCitation = clone(approved.artifact);
+    wrongCitation.decisions.find((item: any) => item.id === "SC-000385").criticalityRef = "AGENTS_SECURITY";
+    expect(validateReview({ ...approved, artifact: wrongCitation })).toContain("SC-000385: approved browser owner requires TESTING_BROWSER_COMPONENT_OWNERSHIP");
+
+    const missingOwner = clone(approved.artifact);
+    missingOwner.decisions.find((item: any) => item.id === "SC-000385").resolution = { disposition: "behavior", replacementIds: ["test:cargo:extractum::tests::wrong_seam"] };
+    expect(validateReview({ ...approved, artifact: missingOwner })).toContain("forecast: approved Playwright owner mapping must equal 3 rows / 21 assertion ordinals");
+
+    const extraOwner = clone(approved.artifact);
+    extraOwner.decisions[0].resolution.replacementIds.push("test:playwright:e2e/unapproved.spec.ts#extra-owner");
+    expect(validateReview({ ...approved, artifact: extraOwner })).toContain("SC-000001: browser owner requires program amendment");
+
+    const wrongCount = clone(approved.artifact);
+    wrongCount.forecast.futureOwnersByMechanism.playwright.assertionOrdinals = 20;
+    expect(validateReview({ ...approved, artifact: wrongCount })).toContain("forecast: futureOwnersByMechanism does not match owner grouping");
   });
 
   it("fails closed for exact verify evidence, immutable catalogs, and the pinned legacy listing", () => {
@@ -414,6 +540,18 @@ describe("source-contract redisposition review", () => {
   it("checks blind review identity, deterministic samples, and mixed partitions", () => {
     const sameRun = artifactFor(); sameRun.independentReview.reviewer.agentTaskId = "author-run";
     expect(validateReview(review({ artifact: sameRun }))).toContain("independentReview: authorRunId and reviewer agentTaskId must differ");
+    const reusedRun = artifactFor(); reusedRun.independentReview.reviewer.reviewerRunId = "author-run";
+    expect(validateReview(review({ artifact: reusedRun }))).toContain("independentReview: authorRunId, reviewer agentTaskId, and reviewerRunId must be distinct");
+    const invalidPacketHash = artifactFor(); invalidPacketHash.independentReview.reviewer.packetSha256 = "not-a-sha256";
+    expect(validateReview(review({ artifact: invalidPacketHash }))).toContain("independentReview: reviewer packetSha256 must be lowercase SHA-256");
+    const invalidOutputHash = artifactFor(); invalidOutputHash.independentReview.reviewer.outputSha256 = "C".repeat(64);
+    expect(validateReview(review({ artifact: invalidOutputHash }))).toContain("independentReview: reviewer outputSha256 must be lowercase SHA-256");
+    const reusedEvidenceHash = artifactFor(); reusedEvidenceHash.independentReview.reviewer.outputSha256 = reusedEvidenceHash.independentReview.reviewer.packetSha256;
+    expect(validateReview(review({ artifact: reusedEvidenceHash }))).toContain("independentReview: packet and output SHA-256 values must differ");
+    const missingEvidencePath = artifactFor(); delete missingEvidencePath.independentReview.reviewer.packetPath;
+    expect(validateReview(review({ artifact: missingEvidencePath }))).toContain("independentReview: reviewer packetPath and outputPath are required");
+    const mismatchedEvidencePath = artifactFor(); mismatchedEvidencePath.independentReview.reviewer.packetPath = ".superpowers/sdd/packet.wrong.json";
+    expect(validateReview(review({ artifact: mismatchedEvidencePath }))).toContain("independentReview: reviewer evidence paths must contain their SHA-256 values");
     const staleBlind = artifactFor(); staleBlind.independentReview.blindResults[0].sourceHash = "0".repeat(64);
     expect(validateReview(review({ artifact: staleBlind }))).toContain("SC-000001: blind sourceHash drift");
     const staleSample = artifactFor(); staleSample.independentReview.deterministicSample.population = [];
@@ -466,14 +604,58 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: duplicateBlind }))).toContain("independentReview: duplicate blind result: SC-000001");
   });
 
+  it("requires complete numeric contiguous hashed shard coverage and valid iteration accounting", () => {
+    const exact = artifactFor();
+    expect(validateReview(review({ artifact: exact }))).toEqual([]);
+
+    const invalidIterations = clone(exact);
+    invalidIterations.independentReview.validIterations = 4;
+    expect(validateReview(review({ artifact: invalidIterations }))).toContain("independentReview: validIterations must be 0..3 and equal deterministicSample.iterations");
+
+    const incomplete = clone(exact);
+    incomplete.independentReview.shards[0].rowIds.pop();
+    expect(validateReview(review({ artifact: incomplete }))).toContain("independentReview: shard rows must exactly cover required blind IDs in numeric order");
+
+    const overlapping = clone(exact);
+    overlapping.independentReview.shards.push({ ...clone(overlapping.independentReview.shards[0]), index: 1 });
+    expect(validateReview(review({ artifact: overlapping }))).toContain("independentReview: shard rows must exactly cover required blind IDs in numeric order");
+
+    const reordered = clone(exact);
+    [reordered.independentReview.shards[0].rowIds[0], reordered.independentReview.shards[0].rowIds[1]] = [reordered.independentReview.shards[0].rowIds[1], reordered.independentReview.shards[0].rowIds[0]];
+    expect(validateReview(review({ artifact: reordered }))).toContain("independentReview: shard rows must exactly cover required blind IDs in numeric order");
+
+    const oversized = clone(exact);
+    oversized.independentReview.shards[0].rowIds = Array.from({ length: 25 }, (_, index) => `SC-${String(index + 1).padStart(6, "0")}`);
+    expect(validateReview(review({ artifact: oversized }))).toContain("independentReview: shard 0 must contain 1..24 rows");
+
+    const unhashed = clone(exact);
+    unhashed.independentReview.shards[0].packetSha256 = "not-a-hash";
+    expect(validateReview(review({ artifact: unhashed }))).toContain("independentReview: shard 0 requires content-addressed packet/output evidence");
+
+    const staleMerge = clone(exact);
+    staleMerge.independentReview.mergedOutputSha256 = "f".repeat(64);
+    expect(validateReview(review({ artifact: staleMerge }))).toContain("independentReview: merged output digest mismatch");
+  });
+
   it("derives blind comparisons and disagreement IDs from class and evidence fingerprints", () => {
     const exact = artifactFor();
     exact.independentReview.calibrations = [{ class: "B2_NEW_CHEAP_BEHAVIOR", rowIds: ["SC-000001"], adjacentClass: "B1_EXISTING_BEHAVIOR_OWNER", result: "agree" }];
     expect(validateReview(review({ artifact: exact }))).toEqual([]);
 
+    const nonProtectedCitation = artifactFor();
+    nonProtectedCitation.independentReview.blindResults[0].criticalityRef = "TESTING_SOURCE_CONTRACT_REPLACEMENT";
+    nonProtectedCitation.independentReview.mergedOutputSha256 = sha256Text(canonicalJson(nonProtectedCitation.independentReview.blindResults));
+    expect(validateReview(review({ artifact: nonProtectedCitation }))).toEqual([]);
+
+    const futureCandidateEvidence = artifactFor();
+    futureCandidateEvidence.independentReview.blindResults[0].ownerEvidence = ["test:vitest:src/future.test.ts#one"];
+    futureCandidateEvidence.independentReview.mergedOutputSha256 = sha256Text(canonicalJson(futureCandidateEvidence.independentReview.blindResults));
+    expect(validateReview(review({ artifact: futureCandidateEvidence }))).toEqual([]);
+
     const criticalityMismatch = artifactFor();
     const criticalBlind = criticalityMismatch.independentReview.blindResults.find((item: any) => item.id === "SC-000420");
     criticalBlind.criticalityRef = "AGENTS_WINDOWS_SANDBOX";
+    criticalityMismatch.independentReview.mergedOutputSha256 = sha256Text(canonicalJson(criticalityMismatch.independentReview.blindResults));
     expect(validateReview(review({ artifact: criticalityMismatch }))).toEqual(expect.arrayContaining([
       "mandatoryCohorts: recorded comparison must be rule_changed",
       "independentReview: disagreements must equal fingerprint mismatch IDs",
@@ -504,6 +686,17 @@ describe("source-contract redisposition review", () => {
     const nonEmpty = artifactFor();
     nonEmpty.independentReview.calibrations = [{ class: "B2_NEW_CHEAP_BEHAVIOR", rowIds: ["SC-000001"], adjacentClass: "B1_EXISTING_BEHAVIOR_OWNER", result: "no_match" }];
     expect(validateReview(review({ artifact: nonEmpty }))).toContain("calibrations: recorded comparison must be agree");
+
+    for (const invalidRowIds of [undefined, null, "SC-000001"]) {
+      const invalid = artifactFor();
+      invalid.independentReview.calibrations = [{
+        class: "T1_EXISTING_TOOL_OWNER",
+        ...(invalidRowIds === undefined ? {} : { rowIds: invalidRowIds }),
+        adjacentClass: "A1_EXISTING_STRUCTURED_OWNER",
+        result: "no_match",
+      }];
+      expect(validateReview(review({ artifact: invalid }))).toContain("calibrations: rowIds must be an array");
+    }
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {

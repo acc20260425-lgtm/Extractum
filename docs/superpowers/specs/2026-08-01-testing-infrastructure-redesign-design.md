@@ -652,11 +652,26 @@ Measure the removable legacy side with the same protocol through
 conservative removable contribution of the current legacy owner to the future
 3C+ gate, not a promise that every sub-slice realizes the saving immediately.
 
-This checkpoint does not propose new Playwright owners. If the ladder reaches
-B3 and only a browser seam is truthful, leave that row `UNCLASSIFIED`, stop the
-checkpoint, and request a program amendment. This gives browser work the same
-fail-closed outcome as a cost conversion would, without four Chromium runs,
-startup attribution, or a synthetic browser-to-jsdom exchange rate.
+This checkpoint normally does not propose new Playwright owners. If the ladder
+reaches B3 and only a browser seam is truthful, leave that row `UNCLASSIFIED`,
+stop the checkpoint, and request a program amendment. This gives browser work
+the same fail-closed outcome as a cost conversion would, without four Chromium
+runs, startup attribution, or a synthetic browser-to-jsdom exchange rate.
+
+The 2026-08-07 stop review approved one narrow amendment. Exactly these three
+B3 rows may retain the listed unresolved future Playwright owners:
+
+| Row | Approved future owner |
+| --- | --- |
+| SC-000312 | `test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility` |
+| SC-000344 | `test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts` |
+| SC-000385 | `test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay` |
+
+Each requires `TESTING_BROWSER_COMPONENT_OWNERSHIP` criticality. They are
+reported separately as three browser rows and 21 assertion ordinals, consume no
+jsdom replacement units, and add no timing estimate at this checkpoint. The
+amendment does not implement those owners. Every other unresolved Playwright
+proposal still triggers the stop rule.
 
 An exact Playwright ID may count as B1 or D4 only when the unchanged transition
 validator already resolves that ID through current runner and verify evidence.
@@ -665,16 +680,15 @@ path, so none qualify. A file merely present in the Playwright census is not
 enough to claim resolution.
 
 Five open rows already carry unresolved future `test:playwright:` IDs. Resolve
-their D3/B3 boundary before the tail pass. They are non-normative visual details
-and therefore match D3 before B3:
+their D3/B3 boundary before the tail pass. The independent stop review moved
+SC-000312 and SC-000385 to the approved B3 allowlist above. The remaining three
+are non-normative visual details and therefore match D3 before B3:
 
 | Row | D3 loss recorded by redisposition |
 | --- | --- |
-| SC-000312 | Responsive desktop/mobile visibility of the menu trigger. |
 | SC-000323 | Visible active-row focus and selection affordance. |
 | SC-000352 | Two-line source titles remaining visible without clipping. |
 | SC-000353 | Centered single-line cells retaining overflow ellipsis. |
-| SC-000385 | Portaled dialog content remaining visibly layered and interactive above its overlay. |
 
 The calibration set must include D3/B3 explicitly. A later row reaches the
 browser stop only after D3 is tested and rejected because the invariant has
@@ -711,9 +725,10 @@ replacementUnitCeiling = 46
 proposedNewJsdomRows <= replacementUnitCeiling
 ```
 
-One proposed jsdom row consumes one unit. Browser owners are outside this
-checkpoint by the explicit stop rule above. This count is the binding
-guardrail. `netGateForecast` remains a disclosure of expected gate effect and
+One proposed jsdom row consumes one unit. The three approved browser rows are
+outside this count and are disclosed separately; any other browser owner remains
+outside the checkpoint through the explicit stop rule above. This count is the
+binding guardrail. `netGateForecast` remains a disclosure of expected gate effect and
 cannot make the unit ceiling pass or fail. The artifact also reports
 whether `Tlegacy` exceeds the scalable forecast at the full 46-unit ceiling so a
 vacuously zero net forecast is visible rather than celebrated as a constraint.
@@ -746,12 +761,26 @@ agreement and disagreement are calculated mechanically only after both passes
 exist. A disagreement changes the rule or named class for the complete matching
 group and reruns that group; it never creates a per-row override.
 
+The 2026-08-07 convergence amendment makes a blind pass operational only after
+mechanical validation. Sort the required blind population by numeric SC ID and
+split it into contiguous deterministic shards of at most 24 rows. A clean
+reviewer processes one shard at a time; every shard packet and output is
+content-addressed and must pass schema, uniqueness, order, source-hash,
+candidate-owner, citation, and approved-Playwright validation before merge.
+An invalid shard output is review transport failure: preserve it, correct or
+rerun that shard without author decisions, and do not count it as a fixed-point
+iteration. Only a complete mechanically valid merged result may change group
+rules or the deterministic-sample population and consume one of the three
+allowed iterations. Earlier monolithic attempts remain superseded evidence;
+the amended sharded protocol starts its valid-iteration count at zero.
+
 After any group-rule change, recompute the risk-cohort exclusions and the
 ten-percent remainder population. If that population changes, reselect the
-sample deterministically and review it again. Iterate until one complete pass
-changes neither group rules nor the sampled population; record the final
-population digest and iteration count. Stop for explicit rule review if a fixed
-point has not been reached after three iterations.
+sample deterministically and review it again. Iterate until one complete,
+mechanically valid merged pass changes neither group rules nor the sampled
+population; record the final population digest and valid-iteration count. Stop
+for explicit rule review if a fixed point has not been reached after three
+valid merged iterations.
 
 The P0 catalog freezes after the protected and normative-critical pass. A P0
 candidate discovered later returns the work to that pass, expands the catalog,

@@ -7,6 +7,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REVIEW_BASE_COMMIT = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const PATH_PRESENT_CLOSED_ROW_IDS = ["SC-000355", "SC-000366"];
 const MANDATORY_P0_SEED_IDS = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
+const APPROVED_PLAYWRIGHT_OWNERS = new Map([
+  ["SC-000312", "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility"],
+  ["SC-000344", "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"],
+  ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
+]);
+const APPROVED_PLAYWRIGHT_CRITICALITY = "TESTING_BROWSER_COMPONENT_OWNERSHIP";
 const REASON_CLASS_CATALOG = [
   { id: "D1_COMPLETED_HISTORY_ONLY", rule: "Completed historical evidence with no future-defect seam." },
   { id: "D2_IMPLEMENTATION_SHAPE", rule: "Implementation-shape assertion with no durable behavioral obligation." },
@@ -155,7 +161,13 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
       if (own(subgroup, "deletionReason")) issues.push(`${prefix} retained resolution must not include deletionReason`);
       for (const replacementId of subgroup.replacementIds ?? []) {
         if (typeof replacementId !== "string" || !replacementId.trim()) issues.push(`${prefix} invalid replacementId`);
-        if (replacementId?.startsWith("test:playwright:")) issues.push(`${prefix} browser owner requires program amendment`);
+        if (replacementId?.startsWith("test:playwright:")) {
+          if (APPROVED_PLAYWRIGHT_OWNERS.get(decision.id) !== replacementId) issues.push(`${prefix} browser owner requires program amendment`);
+          else {
+            if (decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR") issues.push(`${prefix} approved browser owner requires B3_PROTECTED_EXPENSIVE_BEHAVIOR`);
+            if (decision.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY) issues.push(`${prefix} approved browser owner requires TESTING_BROWSER_COMPONENT_OWNERSHIP`);
+          }
+        }
       }
     }
   }
@@ -227,25 +239,44 @@ function retainedMedian(mechanism, name, command, issues) {
   return median;
 }
 
-function jsdomSummary(decisions, baseLedger) {
+function futureOwnerSummary(decisions, baseLedger) {
   const rowsById = new Map((baseLedger?.rows ?? []).map((row) => [row.id, row]));
-  const summary = { futureRows: new Set(), futureOrdinals: 0, proposedRows: new Set(), proposedOrdinals: 0 };
+  const byMechanism = new Map();
+  const proposedRows = new Set();
+  let proposedOrdinals = 0;
   for (const decision of decisions ?? []) {
     if (!["B2_NEW_CHEAP_BEHAVIOR", "B3_PROTECTED_EXPENSIVE_BEHAVIOR"].includes(decision?.class)) continue;
     const row = rowsById.get(decision.id);
     const groups = decision.resolution?.subgroups ?? [decision.resolution];
     for (const group of groups) {
-      if (!Array.isArray(group?.replacementIds) || !group.replacementIds.some((id) => id.startsWith("test:vitest:"))) continue;
+      const mechanisms = new Set((group?.replacementIds ?? []).flatMap((id) => {
+        if (id?.startsWith("test:vitest:")) return ["jsdom"];
+        if (id?.startsWith("test:cargo:")) return ["cargo"];
+        if (id?.startsWith("test:playwright:")) return ["playwright"];
+        return [];
+      }));
+      if (!mechanisms.size) continue;
       const ordinals = decision.resolution?.subgroups ? group.assertionOrdinals ?? [] : Array.from({ length: row?.assertionCount ?? 0 }, (_, index) => index + 1);
-      summary.futureRows.add(decision.id);
-      summary.futureOrdinals += ordinals.length;
-      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") {
-        summary.proposedRows.add(decision.id);
-        summary.proposedOrdinals += ordinals.length;
+      for (const mechanism of mechanisms) {
+        const summary = byMechanism.get(mechanism) ?? { rows: new Set(), assertionOrdinals: 0 };
+        summary.rows.add(decision.id);
+        summary.assertionOrdinals += ordinals.length;
+        byMechanism.set(mechanism, summary);
+      }
+      if (decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && mechanisms.has("jsdom")) {
+        proposedRows.add(decision.id);
+        proposedOrdinals += ordinals.length;
       }
     }
   }
-  return { futureRows: summary.futureRows.size, futureOrdinals: summary.futureOrdinals, proposedRows: summary.proposedRows.size, proposedOrdinals: summary.proposedOrdinals };
+  return {
+    futureOwnersByMechanism: Object.fromEntries([...byMechanism].map(([mechanism, summary]) => [mechanism, {
+      rows: summary.rows.size,
+      assertionOrdinals: summary.assertionOrdinals,
+    }])),
+    proposedRows: proposedRows.size,
+    proposedOrdinals,
+  };
 }
 
 function validateTimingAndForecast(artifact, baseLedger, issues) {
@@ -281,10 +312,25 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
     return;
   }
   const proposedRows = forecast.proposedNewJsdomRows;
-  const jsdom = jsdomSummary(artifact.decisions, baseLedger);
-  const expectedFutureOwners = jsdom.futureRows ? { jsdom: { rows: jsdom.futureRows, assertionOrdinals: jsdom.futureOrdinals } } : {};
-  if (canonicalJson(forecast.futureOwnersByMechanism) !== canonicalJson(expectedFutureOwners)) issues.push("forecast: futureOwnersByMechanism does not match jsdom owner grouping");
-  if (forecast.proposedNewJsdomRows !== jsdom.proposedRows || forecast.proposedNewJsdomOrdinals !== jsdom.proposedOrdinals) issues.push("forecast: proposed jsdom rows or ordinals do not match B3 owner grouping");
+  const ownerSummary = futureOwnerSummary(artifact.decisions, baseLedger);
+  if (canonicalJson(forecast.futureOwnersByMechanism) !== canonicalJson(ownerSummary.futureOwnersByMechanism)) issues.push("forecast: futureOwnersByMechanism does not match owner grouping");
+  if (forecast.proposedNewJsdomRows !== ownerSummary.proposedRows || forecast.proposedNewJsdomOrdinals !== ownerSummary.proposedOrdinals) issues.push("forecast: proposed jsdom rows or ordinals do not match B3 owner grouping");
+  const approvedBrowserScope = [...APPROVED_PLAYWRIGHT_OWNERS.keys()].every((id) => artifact.decisions.some((decision) => decision.id === id));
+  if (approvedBrowserScope) {
+    const approvedRows = new Set();
+    let approvedOrdinals = 0;
+    const rowsById = new Map((baseLedger?.rows ?? []).map((row) => [row.id, row]));
+    for (const decision of artifact.decisions) {
+      const approvedId = APPROVED_PLAYWRIGHT_OWNERS.get(decision.id);
+      if (!approvedId || decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" || decision.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY) continue;
+      for (const group of decision.resolution?.subgroups ?? [decision.resolution]) {
+        if (!(group?.replacementIds ?? []).includes(approvedId)) continue;
+        approvedRows.add(decision.id);
+        approvedOrdinals += decision.resolution?.subgroups ? (group.assertionOrdinals ?? []).length : (rowsById.get(decision.id)?.assertionCount ?? 0);
+      }
+    }
+    if (approvedRows.size !== 3 || approvedOrdinals !== 21) issues.push("forecast: approved Playwright owner mapping must equal 3 rows / 21 assertion ordinals");
+  }
   if (!Number.isInteger(proposedRows) || proposedRows < 0) issues.push("forecast: proposedNewJsdomRows must be a non-negative integer");
   if (proposedRows > 46) issues.push("forecast: proposedNewJsdomRows exceeds replacementUnitCeiling");
   if (forecast.replacementUnitCeiling !== 46) issues.push("forecast: replacementUnitCeiling must equal 46");
@@ -314,9 +360,12 @@ function expectedSample(decisions, protectedIds) {
   return { population, rowIds: [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1)) };
 }
 
-function reviewFingerprint(item) {
-  const ownerEvidence = [...new Set(Array.isArray(item?.ownerEvidence) ? item.ownerEvidence : [])].sort(compareText);
-  return canonicalJson({ class: item?.class, ownerEvidence, criticalityRef: item?.criticalityRef ?? null });
+function reviewFingerprint(item, protectedRow = false) {
+  const ownerEvidence = OWNER_CLASSES.has(item?.class)
+    ? [...new Set(Array.isArray(item?.ownerEvidence) ? item.ownerEvidence : [])].sort(compareText)
+    : [];
+  const criticalityRef = protectedRow || item?.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" ? item?.criticalityRef ?? null : null;
+  return canonicalJson({ class: item?.class, ownerEvidence, criticalityRef });
 }
 
 function expectedComparison(rowIds, matches) {
@@ -326,6 +375,7 @@ function expectedComparison(rowIds, matches) {
 function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrackedPaths }) {
   const issues = [];
   const baseOpenIds = baseOpenIdsFor(baseLedger, baseTrackedPaths);
+  const decisionById = new Map((artifact?.decisions ?? []).map((decision) => [decision.id, decision]));
   const expectedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger }).ledger;
   if (canonicalJson(currentLedger.rows.map((row) => row?.id)) !== canonicalJson(baseLedger.rows.map((row) => row?.id))) issues.push("simulated ledger: row ID order drift from review base");
   const expectedById = new Map(expectedLedger.rows.map((row) => [row.id, row]));
@@ -339,7 +389,10 @@ function validateSimulatedLedger({ artifact, baseLedger, currentLedger, baseTrac
     }
     if (canonicalJson(resolutionless(expected)) !== canonicalJson(resolutionless(current)) || canonicalJson(resolutionOnly(expected)) !== canonicalJson(resolutionOnly(current))) issues.push(`simulated ledger: unexpected row output: ${baseRow.id}`);
     const replacementIds = [...(current?.replacementIds ?? []), ...(current?.subgroups ?? []).flatMap((subgroup) => subgroup?.replacementIds ?? [])];
-    if (baseOpenIds.has(baseRow.id) && replacementIds.some((id) => id?.startsWith("test:playwright:"))) issues.push(`${baseRow.id}: browser owner requires program amendment`);
+    if (baseOpenIds.has(baseRow.id)) {
+      const decision = decisionById.get(baseRow.id);
+      if (replacementIds.some((id) => id?.startsWith("test:playwright:") && APPROVED_PLAYWRIGHT_OWNERS.get(decision?.id) !== id)) issues.push(`${baseRow.id}: browser owner requires program amendment`);
+    }
   }
   return issueList(issues);
 }
@@ -439,7 +492,15 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (!independent || typeof independent !== "object") issues.push("independentReview: missing");
   else {
     if (!independent.authorRunId || !independent.reviewer?.agentTaskId || independent.authorRunId === independent.reviewer.agentTaskId) issues.push("independentReview: authorRunId and reviewer agentTaskId must differ");
-    if (independent.reviewer?.contextPolicy !== "blind-no-proposed-class-or-reason") issues.push("independentReview: unsupported contextPolicy");
+    const reviewer = independent.reviewer;
+    if (!reviewer?.reviewerRunId || new Set([independent.authorRunId, reviewer?.agentTaskId, reviewer?.reviewerRunId]).size !== 3) issues.push("independentReview: authorRunId, reviewer agentTaskId, and reviewerRunId must be distinct");
+    if (reviewer?.contextPolicy !== "blind-no-proposed-class-or-reason") issues.push("independentReview: unsupported contextPolicy");
+    const sha256Pattern = /^[0-9a-f]{64}$/;
+    if (!sha256Pattern.test(reviewer?.packetSha256 ?? "")) issues.push("independentReview: reviewer packetSha256 must be lowercase SHA-256");
+    if (!sha256Pattern.test(reviewer?.outputSha256 ?? "")) issues.push("independentReview: reviewer outputSha256 must be lowercase SHA-256");
+    if (reviewer?.packetSha256 && reviewer.packetSha256 === reviewer?.outputSha256) issues.push("independentReview: packet and output SHA-256 values must differ");
+    if (typeof reviewer?.packetPath !== "string" || !reviewer.packetPath.trim() || typeof reviewer?.outputPath !== "string" || !reviewer.outputPath.trim()) issues.push("independentReview: reviewer packetPath and outputPath are required");
+    else if (!reviewer.packetPath.includes(reviewer.packetSha256) || !reviewer.outputPath.includes(reviewer.outputSha256)) issues.push("independentReview: reviewer evidence paths must contain their SHA-256 values");
     const sample = independent.deterministicSample;
     const expected = expectedSample(decisions, protectedIds);
     const requiredBlindIds = new Set([
@@ -447,6 +508,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       ...(Array.isArray(independent.mandatoryCohorts) ? independent.mandatoryCohorts : []).flatMap((item) => item?.rowIds ?? []),
       ...(Array.isArray(sample?.rowIds) ? sample.rowIds : []),
     ]);
+    const requiredBlindIdsNumeric = [...requiredBlindIds].sort(compareId);
     const blinds = Array.isArray(independent.blindResults) ? independent.blindResults : [];
     const blindById = new Map();
     const fingerprintMatches = new Map();
@@ -466,20 +528,52 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (!decision) { issues.push(`${id}: blind scope references no decision`); continue; }
       const blind = blindById.get(id);
       if (!blind) { issues.push(`${id}: missing blind result`); continue; }
-      if (blind.reviewerRunId !== independent.reviewer?.agentTaskId) issues.push(`${decision.id}: reviewerRunId differs from reviewer task`);
+      if (blind.reviewerRunId !== reviewer?.reviewerRunId) issues.push(`${decision.id}: reviewerRunId differs from reviewer run`);
       if (blind.sourceHash !== decision.sourceHash) issues.push(`${decision.id}: blind sourceHash drift`);
       if (blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
-      fingerprintMatches.set(id, reviewFingerprint(decision) === reviewFingerprint(blind));
+      const protectedRow = protectedIds.has(id);
+      fingerprintMatches.set(id, reviewFingerprint(decision, protectedRow) === reviewFingerprint(blind, protectedRow));
+    }
+    const validIterations = independent.validIterations;
+    if (!Number.isInteger(validIterations) || validIterations < 0 || validIterations > 3 || validIterations !== sample?.iterations) {
+      issues.push("independentReview: validIterations must be 0..3 and equal deterministicSample.iterations");
+    }
+    const shards = Array.isArray(independent.shards) ? independent.shards : [];
+    const shardRows = [];
+    for (let index = 0; index < shards.length; index += 1) {
+      const shard = shards[index];
+      const rowIds = Array.isArray(shard?.rowIds) ? shard.rowIds : [];
+      if (shard?.index !== index) issues.push(`independentReview: shard indexes must be contiguous from zero`);
+      if (rowIds.length < 1 || rowIds.length > 24) issues.push(`independentReview: shard ${index} must contain 1..24 rows`);
+      shardRows.push(...rowIds);
+      const hashed = sha256Pattern.test(shard?.packetSha256 ?? "")
+        && sha256Pattern.test(shard?.outputSha256 ?? "")
+        && shard.packetSha256 !== shard.outputSha256
+        && typeof shard?.packetPath === "string" && shard.packetPath.includes(shard.packetSha256)
+        && typeof shard?.outputPath === "string" && shard.outputPath.includes(shard.outputSha256);
+      if (!hashed) issues.push(`independentReview: shard ${index} requires content-addressed packet/output evidence`);
+    }
+    if (canonicalJson(shardRows) !== canonicalJson(requiredBlindIdsNumeric)
+      || canonicalJson(blinds.map((blind) => blind?.id)) !== canonicalJson(requiredBlindIdsNumeric)) {
+      issues.push("independentReview: shard rows must exactly cover required blind IDs in numeric order");
+    }
+    if (!sha256Pattern.test(independent.mergedOutputSha256 ?? "")
+      || independent.mergedOutputSha256 !== sha256Text(canonicalJson(blinds))) {
+      issues.push("independentReview: merged output digest mismatch");
     }
     if (!sample || sample.algorithm !== "sha256-id-lowest-10-percent") issues.push("independentReview: unsupported deterministic sample algorithm");
     else {
       if (canonicalJson(sample.population) !== canonicalJson(expected.population)) issues.push("independentReview: deterministic sample population is stale");
       if (sample.populationDigest !== sha256Text(canonicalJson(expected.population))) issues.push("independentReview: deterministic sample digest mismatch");
       if (canonicalJson(sample.rowIds) !== canonicalJson(expected.rowIds)) issues.push("independentReview: deterministic sample IDs are not deterministic");
-      if (!Number.isInteger(sample.iterations) || sample.iterations < 1 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 1..3");
+      if (!Number.isInteger(sample.iterations) || sample.iterations < 0 || sample.iterations > 3) issues.push("independentReview: deterministic sample iterations must be 0..3");
     }
     for (const cohort of Array.isArray(independent.calibrations) ? independent.calibrations : []) {
-      const rowIds = Array.isArray(cohort?.rowIds) ? cohort.rowIds : [];
+      if (!Array.isArray(cohort?.rowIds)) {
+        issues.push("calibrations: rowIds must be an array");
+        continue;
+      }
+      const rowIds = cohort.rowIds;
       const expectedComparisonValue = rowIds.length ? expectedComparison(rowIds, fingerprintMatches) : "no_match";
       if (!rowIds.length && cohort?.result !== expectedComparisonValue) {
         issues.push("calibrations: empty calibration must record no_match");

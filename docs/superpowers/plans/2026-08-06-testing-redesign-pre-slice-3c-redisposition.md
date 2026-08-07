@@ -20,10 +20,11 @@
 - P0 membership and normative criticality are separate. B3 requires an exact normative `criticalityRef`; a P0 row with no A1/T1/B1/B2 owner terminates at B3.
 - D1--D5 reasons begin with the full class name and continue with row-specific text. D5 additionally enumerates all intentionally lost behavior and exact assertion ordinals.
 - Independent classification uses a reviewer context that contains only the approved class catalog, normative-source catalog, source declaration/invariant/ordinals, and candidate-owner inventory; it must not contain the author's proposed class, reason, artifact decision, conversation history, or diff. In the current Codex harness, create that context through a separate subagent with `fork_turns: "none"`; another harness must provide an equivalent clean-context primitive or stop explicitly.
+- After the user-approved 2026-08-07 convergence amendment, sort every blind population by numeric SC ID and split it into contiguous deterministic shards of at most 24 rows. Process and mechanically validate one shard at a time before merge. Invalid shard output is preserved review-transport evidence but consumes no fixed-point iteration; only a complete valid merged result may change rules/population and consume one of three iterations. The amended sharded protocol starts at valid iteration zero; earlier monolithic attempts remain superseded evidence.
 - A mixed decision removes top-level resolution fields and writes at least two subgroups whose ordinals exactly and non-overlappingly partition `1..assertionCount`; every subgroup has its own invariant and resolution.
 - The committed carrier remains outside `verify`. Its `check` command is mandatory checkpoint evidence; the existing transition validator remains unchanged.
 - Run timing observations and the complete `verify` unsandboxed. Use one unretained warm-up plus three retained runs per component mechanism. Use `npm.cmd` for repository scripts and canonical `src-tauri/target`.
-- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The binding 3C+ ceiling is 46 proposed jsdom rows. This checkpoint does not propose Playwright owners: a browser-only B3 candidate stops for a program amendment. Net gate seconds are disclosure only.
+- The 90-second value is an objective and disclosure, not a B3 admissibility filter. The binding 3C+ ceiling is 46 proposed jsdom rows. The user-approved 2026-08-07 amendment permits exactly SC-000312, SC-000344, and SC-000385 to use their frozen future Playwright owners; they are disclosed separately and consume no jsdom units. Every other browser-only B3 candidate stops for another program amendment. Net gate seconds are disclosure only.
 - Do not add Nx, Nx Cloud, GitHub Actions, branch protection, git hooks, remote cache, or an external reporting service.
 
 ---
@@ -197,7 +198,7 @@ expect(validateReview({ artifact: withDecision("SC-000001", {
 
 - [ ] **Step 5: Implement class, P0, criticality, owner, and D5 checks**
 
-Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact owner already resolved by the unchanged transition validator, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. A Playwright ID is allowed only if that same validator evidence already resolves the exact ID; the base has no such IDs, so every current or proposed unresolved `test:playwright:` replacement fails with `browser owner requires program amendment`. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
+Require P0 rows to avoid D1--D5. Require B3 citations to resolve through `criticalitySources`; require every protected row to carry a valid criticality source. Require D4/A1/T1/B1 owner evidence to name an exact owner already resolved by the unchanged transition validator, while B2/B3 may name unresolved future `test:vitest:` or `test:cargo:` IDs. An unresolved Playwright ID is allowed only for the exact SC-000312/SC-000344/SC-000385 mapping approved on 2026-08-07, with class B3 and `TESTING_BROWSER_COMPONENT_OWNERSHIP`; every other current or proposed unresolved `test:playwright:` replacement fails with `browser owner requires program amendment`. For a simple D5 row, require `lostBehavior` to cover exactly `1..assertionCount`; for a D5 mixed subgroup, require it to cover exactly that subgroup's ordinals. Reject both partial coverage and ordinals outside the relevant set.
 
 - [ ] **Step 6: Write RED tests for mixed rows and idempotent apply**
 
@@ -322,7 +323,7 @@ netGateForecastPercent = netGateForecast / freshVerifySeconds * 100
 legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * replacementUnitCeiling
 ```
 
-Require `proposedNewJsdomRows <= replacementUnitCeiling`. Reject any Playwright replacement before forecast calculation; it is an explicit program-amendment stop rather than a measured mechanism. Add tests that perturb every derived number, the 46-unit ceiling, the legacy-dominance disclosure, the baseline listing, and jsdom owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
+Require `proposedNewJsdomRows <= replacementUnitCeiling`. The exact three-row Playwright allowlist is excluded from forecast calculation and recorded separately as 3 rows / 21 ordinals; reject every other Playwright replacement before forecast calculation. Add tests that perturb every derived number, the 46-unit ceiling, the legacy-dominance disclosure, the baseline listing, the Playwright allowlist, and jsdom owner grouping and assert a deterministic validation error. The draft may use zero proposed rows until classification is complete, but must contain correct zero forecasts and the measured removable legacy seconds.
 
 - [ ] **Step 7: Commit the measured draft**
 
@@ -364,13 +365,13 @@ Use the known unresolved browser references as the mandatory D3/B3 calibration s
 
 | Row | Required decision | Required row-specific D3 reason |
 | --- | --- | --- |
-| SC-000312 | D3 / delete | Responsive desktop/mobile menu-trigger visibility is a non-normative visual breakpoint detail with no truthful non-browser seam. |
+| SC-000312 | B3 / approved Playwright | Responsive desktop/mobile menu-trigger visibility requires computed browser layout and the exact approved app-shell owner. |
 | SC-000323 | D3 / delete | Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam. |
 | SC-000352 | D3 / delete | Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam. |
 | SC-000353 | D3 / delete | Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam. |
-| SC-000385 | D3 / delete | Dialog/overlay visual stacking and pointer interactivity are non-normative browser-layering details with no truthful non-browser seam. |
+| SC-000385 | B3 / approved Playwright | Dialog/overlay stacking and hit-testing require a real browser and the exact approved dialog-layering owner. |
 
-Each final `deletionReason` begins `D3 non-observable-visual:` and expands the table text. Remove the unresolved future Playwright replacement ID. If blind review finds normative criticality or independently observable behavior in any of the five, do not force D3; stop for the browser program amendment before continuing.
+The three D3 decisions use a final `deletionReason` beginning `D3 non-observable-visual:` and remove their unresolved future Playwright IDs. SC-000312 and SC-000385 use the exact allowlisted B3 owners. The clean review also adds SC-000344 as B3 with `test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts`. All three B3 decisions require `TESTING_BROWSER_COMPONENT_OWNERSHIP`. Any additional browser-only result stops for another amendment.
 
 - [ ] **Step 2: Classify the exact protected and normative-critical cohorts**
 
@@ -447,7 +448,7 @@ Apply the same group-rule process to the 126 rows in these two families. Prefer 
 
 - [ ] **Step 5: Classify Gemini browser and other-product families**
 
-Apply the ladder to the remaining 83 rows. A browser-facing invariant does not imply Playwright: test B1/B2 and jsdom seams first. If a row reaches B3 and only Playwright is truthful, leave it `UNCLASSIFIED`, record `browser owner requires program amendment`, and stop Task 4. Do not measure or propose a browser owner inside this checkpoint.
+Apply the ladder to the remaining 83 rows. A browser-facing invariant does not imply Playwright: test B1/B2 and jsdom seams first. The approved SC-000312/SC-000344/SC-000385 Playwright mappings are already resolved in Task 3. If any other row reaches B3 and only Playwright is truthful, leave it `UNCLASSIFIED`, record `browser owner requires program amendment`, and stop Task 4. Do not measure or propose another browser owner inside this checkpoint.
 
 Across Steps 2--5, `manual` remains extraction metadata only. Process its 124 rows in their ordinary families; it neither supplies a class nor triggers automatic 100-percent blind review. Never use a generic D1, D2, or D5 sentence. Each deletion reason names the exact historical fact, implementation detail, unobservable visual, duplicate owner, or accepted behavior loss. When only some ordinals match, emit a mixed resolution with exact subgroup invariants and a full partition.
 
@@ -455,17 +456,17 @@ Across Steps 2--5, `manual` remains extraction metadata only. Process its 124 ro
 
 Construct the remainder after excluding the 26 large rows, all P0/security/import/process rows, all B3/D5 rows, all new mixed rows, and all calibration rows. Manual rows remain eligible unless excluded by one of those risk cohorts. Sort by `sha256(id)` ascending and take `ceil(population.length * 0.10)` IDs. Store both the complete population and selected IDs so the carrier can recompute the sample.
 
-Send the sampled declarations, invariants, ordinals, candidate owners, catalog, and normative sources to the same clean-context reviewer without author decisions. The reviewer returns its own class/reason list before seeing the artifact. The carrier compares outputs. A disagreement updates the group rule, reclassifies all matching rows, and is recorded under `disagreements`.
+Send the sampled declarations, invariants, ordinals, candidate owners, catalog, and normative sources to the same clean-context reviewer without author decisions, in numeric-ID-sorted contiguous shards of at most 24 rows. Validate each shard's schema, uniqueness, exact order/source hashes, candidate-owner membership, citations, and Playwright allowlist before sending the next. The reviewer returns its own class/reason list before seeing the artifact. Only the complete valid merged output is compared. A disagreement updates the group rule, reclassifies all matching rows, and is recorded under `disagreements`.
 
 - [ ] **Step 7: Complete 100-percent review of expensive/loss/mixed decisions**
 
 Prepare a blind packet for every B3 and D5 decision and every newly mixed row after all group-rule changes. The reviewer sees neither the proposed class nor reason and returns a complete independent decision list before comparison. For B3 the independent result must prove both the absence of a cheaper truthful seam and the exact normative citation. For D5 it must verify non-P0 status, absence of normative criticality, exact lost behavior, and exact ordinal coverage.
 
-After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Continue until one full iteration changes neither the group rules nor the sample population; record the final population digest and iteration count. Permit at most three iterations. If the third still changes rules or population, keep `apply` blocked and stop for explicit rule review. The carrier rejects more than three iterations and any comparison whose sample was derived from an earlier population.
+After every group-rule change from Step 6 or Step 7, recompute the excluded risk cohorts and the Step 6 remainder population. If the population changes, deterministically select the ten-percent sample again and repeat its blind review. Process every blind population as deterministic contiguous shards of at most 24 rows. Preserve a mechanically invalid shard output, but do not compare or adopt it and do not increment `iterations`; correct or rerun only that shard without author data. Continue until one complete valid merged iteration changes neither the group rules nor the sample population; record the final population digest and count of valid merged iterations. Permit at most three valid merged iterations, starting at zero for this amended protocol. If the third valid merged result still changes rules or population, keep `apply` blocked and stop for explicit rule review. The carrier rejects more than three valid iterations, incomplete or overlapping shard coverage, and any comparison whose sample was derived from an earlier population.
 
 - [ ] **Step 8: Calculate the final forecast and loss summaries**
 
-Count proposed owners by class/mechanism in rows and assertion ordinals. Assert that no replacement ID uses the Playwright namespace. Set `proposedNewJsdomRows`/ordinals from B3 jsdom rows and subgroups, then recalculate component, gross, removable-legacy, and net fields. Require `proposedNewJsdomRows <= 46`. If the count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
+Count proposed owners by class/mechanism in rows and assertion ordinals. Assert that Playwright replacements equal exactly the approved SC-000312/SC-000344/SC-000385 mapping (3 rows / 21 ordinals) and report them separately. Set `proposedNewJsdomRows`/ordinals from B3 jsdom rows and subgroups only, then recalculate component, gross, removable-legacy, and net fields. Require `proposedNewJsdomRows <= 46`. If the count exceeds 46, keep the completed classifications committed, leave `apply` blocked, and mark the checkpoint awaiting a separate program amendment. Resume at this step after approval; do not change valid row classes to force the number down.
 
 Publish `legacyDominatesFullUnitCeiling = Tlegacy >= scalablePerRow * 46` and the actual comparison of `Tlegacy` with `scalableForecastSeconds`. These are explicit diagnostics: net seconds remain disclosure and never determine whether the 46-row constraint passes.
 
@@ -592,7 +593,7 @@ Run: `git commit -m "test: apply pre-slice 3c ledger redisposition"`
 
 - [ ] **Step 1: Write the evidence record from artifact values**
 
-Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; explicit confirmation that no unresolved Playwright owner was proposed; removable legacy time/files; net forecast; the binding 46-row result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
+Include: review/base/frozen commits; exact scope reconciliation; before/after disposition counts; class counts; projected existing versus future owners by mechanism; timing commands and all retained observations; jsdom upper/scalable forecasts; the exact approved three-row Playwright disclosure and confirmation that no other unresolved Playwright owner was proposed; removable legacy time/files; net forecast; the binding 46-row result; legacy-dominance diagnostics; fresh verify comparison; independent blind-review populations and disagreements; and confirmation that the program index was intentionally not changed.
 
 Add a dedicated `Accepted D5 Losses` table with one row per artifact item and columns `SC ID`, `ordinals`, and `lost behavior`. State total D5 row and ordinal counts immediately above it.
 
