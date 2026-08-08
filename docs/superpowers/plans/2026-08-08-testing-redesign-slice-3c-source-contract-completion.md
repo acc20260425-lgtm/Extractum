@@ -18,14 +18,13 @@
 - Use `npm.cmd` for repository npm commands on Windows. Run at most two focused frontend owner commands concurrently.
 - Process-spawning replacement files enter `OS_INTEGRATION_FILES` in their additive commit. Their legacy paths leave that list only in the component cutover commit.
 - A correctness failure is retained and fixed. A final `verify` retry is allowed only for a demonstrated spawn, sandbox, or process-infrastructure failure, and both observations must be recorded.
-- The commit that deletes the factually last legacy file must also remove the `legacy-contract` project, census owner, npm script, and verify gate.
 - Nx remains deferred until Slice 4 has committed.
 
 ---
 
 ## Frozen Interfaces and Work Graph
 
-The decision artifact is the only row-to-owner map. Before changing a target, print its exact rows with this read-only pattern, replacing the path literal with the task's exact target path:
+The decision artifact is the only row-to-owner map. Task 1 generates the complete map once into the ignored scratchpad; later tasks read their target sections and never edit or rerun a path-specific query.
 
 ```powershell
 @'
@@ -33,19 +32,37 @@ const fs = require("fs");
 const artifact = JSON.parse(fs.readFileSync("testing/source-contract-redisposition-review.json", "utf8"));
 const ledger = JSON.parse(fs.readFileSync("testing/source-contract-ledger.json", "utf8"));
 const rows = new Map(ledger.rows.map((row) => [row.id, row]));
-const targetPath = "REPLACE_WITH_EXACT_TARGET_PATH";
+const groups = new Map();
+const covered = new Set();
 for (const decision of artifact.decisions) {
-  const ids = decision.resolution?.replacementIds ?? [];
-  if (!ids.some((id) => id.includes(`:${targetPath}#`) || id.endsWith(`:${targetPath}`))) continue;
   const row = rows.get(decision.id);
-  console.log(JSON.stringify({
-    id: decision.id,
-    invariant: row.invariant,
-    assertionCount: row.assertionCount,
-    replacementIds: ids,
-    criticalityRef: decision.criticalityRef ?? null,
-  }, null, 2));
+  const ids = decision.resolution?.replacementIds ?? [];
+  const keys = ids.length > 0
+    ? [...new Set(ids.map((id) => id.split("#")[0]))]
+    : [`delete:${row.path}`];
+  for (const key of keys) {
+    const entries = groups.get(key) ?? [];
+    entries.push({
+      id: decision.id,
+      legacyPath: row.path,
+      invariant: row.invariant,
+      assertionCount: row.assertionCount,
+      replacementIds: ids,
+      criticalityRef: decision.criticalityRef ?? null,
+    });
+    groups.set(key, entries);
+  }
+  covered.add(decision.id);
 }
+if (covered.size !== artifact.decisions.length) throw new Error("incomplete replacement map");
+const body = [...groups.entries()]
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([key, entries]) => `## ${key}\n\n\`\`\`json\n${JSON.stringify(entries, null, 2)}\n\`\`\``)
+  .join("\n\n");
+const output = "tmp/analysis-smoke/slice-3c-replacement-map.md";
+fs.mkdirSync("tmp/analysis-smoke", { recursive: true });
+fs.writeFileSync(output, `# Slice 3C replacement map\n\n${body}\n`, "utf8");
+console.log(`${output}: ${covered.size} decisions, ${groups.size} owner/delete sections`);
 '@ | node -
 ```
 
@@ -53,20 +70,20 @@ For every target file, the RED test declarations use the complete title after `#
 
 Cutover distribution:
 
-| Bucket | Components | Legacy files | Rows | Integration batches |
-| --- | ---: | ---: | ---: | ---: |
-| Wave 0 | 23 | 23 | 70 | 1 |
-| Wave 1 | 14 | 14 | 29 | 1 |
-| Wave 2A | included below | 7 | 42 | 1 |
-| Wave 2B | included below | 7 | 50 | 1 |
-| Wave 2C | included below | 8 | 58 | 1 |
-| Wave 2D | included below | 7 | 56 | 1 |
-| Wave 2E | included below | 8 | 65 | 1 |
-| Wave 3 | 9 | 9 | 55 | 1 |
-| Browser | 3 | 3 | 11 | 1 |
-| **Total** | **84** | **86** | **436** | **9** |
+| Bucket | Components | Legacy files | Rows closed | Accounting remainder | Integration batches |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Wave 0 | 23 | 23 | 70 | 366 | 1 |
+| Wave 1 | 14 | 14 | 29 | 337 | 1 |
+| Wave 2A | included below | 7 | 42 | 295 | 1 |
+| Wave 2B | included below | 7 | 50 | 245 | 1 |
+| Wave 2C | included below | 8 | 58 | 187 | 1 |
+| Wave 2D | included below | 7 | 56 | 131 | 1 |
+| Wave 2E | included below | 8 | 65 | 66 | 1 |
+| Wave 3 | 9 | 9 | 55 | 11 | 1 |
+| Browser | 3 | 3 | 11 | 0 | 1 |
+| **Total** | **84** | **86** | **436** | **0** | **9** |
 
-The batch row counts are closure counts, including accepted delete rows in mixed files. No batch splits a connected component.
+The remainder column is accounting-only: it subtracts rows in table order and does not prescribe when the independent browser batch runs. Operational cutovers verify their exact row delta, not an absolute global count. The row counts include accepted delete rows in mixed files. No batch splits a connected component.
 
 ## File Map
 
@@ -87,13 +104,13 @@ All replacement and legacy paths are listed in their owning tasks below.
 
 Every behavior task uses this order:
 
-1. Confirm the exact target path/title map from the artifact.
+1. Read the exact target path/title map from `tmp/analysis-smoke/slice-3c-replacement-map.md` generated in Task 1.
 2. Add the complete target-file RED and run the exact owner selection; an empty selection is a failure.
 3. Implement only the observable seam and run the target-file GREEN.
 4. If the component is not yet complete, commit the additive owner without deleting the legacy file.
-5. Before a ready batch cutover, stage all targets and legacy deletions, run the complete transition validator once, and inspect its exact open-row delta.
-6. If that cutover makes the filesystem legacy inventory empty, remove the legacy runner in the same staged diff before validation and commit.
-7. Run `git diff --check`, one read-only integration review, one combined fix wave if required, and commit the bounded batch.
+5. Before a ready batch cutover, stage all targets and legacy deletions, run `node scripts/validate-testing-transition.mjs` exactly once, and require the task's exact open-row delta. Run `npm.cmd run check` only when Svelte or TypeScript production files changed.
+6. If that cutover makes the filesystem legacy inventory empty, remove `LEGACY_TEST_FILES` and the `legacy-contract` project from `vitest.config.ts`, its census owner from `testing/runner-census.json`, `test:legacy-contract` from `package.json`, and its gate from `scripts/verify.mjs`; update the owning runner/conventions tests in the same staged diff before validation and commit.
+7. Run `git diff --check`, one read-only integration review, one combined fix wave if required, and commit the bounded batch with the task's listed subject.
 
 Do not edit resolution metadata during ordinary cutover. A component closes because its legacy declaration disappears and its frozen replacement already resolves.
 
@@ -127,11 +144,15 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
 - Produces forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`.
 
-- [ ] **Step 1: Add focused RED assertions**
+- [ ] **Step 1: Generate the complete replacement map once**
+
+Run the single command in Frozen Interfaces and require `tmp/analysis-smoke/slice-3c-replacement-map.md` to report all 436 decisions. Keep the file ignored and available to every later task; do not regenerate it unless the approved decision artifact changes.
+
+- [ ] **Step 2: Add focused RED assertions**
 
 In `scripts/testing/test-conventions.test.ts`, assert that a component behavior target is owned only by `component`, while the two existing Telegram behavior files remain owned only by `unit-node`. In the carrier test, mutate the execution classifier input so `src/lib/components/example.behavior.test.ts` must report `jsdom` and `src/lib/example.behavior.test.ts` must report `node`; assert the exact forecast counts above.
 
-- [ ] **Step 2: Run the RED**
+- [ ] **Step 3: Run the RED**
 
 Run:
 
@@ -141,7 +162,7 @@ node scripts/run-vitest.mjs run --project unit-node scripts/testing/test-convent
 
 Expected: FAIL because component behavior paths still fall through to `unit-node` and the carrier still classifies only `.component.test.ts` as jsdom.
 
-- [ ] **Step 3: Implement the ownership correction**
+- [ ] **Step 4: Implement the ownership correction**
 
 In `vitest.config.ts`, add:
 
@@ -153,7 +174,7 @@ Include it in the `component` project's `include`, exclude it from `unit-node`, 
 
 Update only the artifact forecast fields and append a dated forecast-correction note to the pre-Slice 3C verification document. Do not change decisions, review packet/output paths, hashes, or blind digests.
 
-- [ ] **Step 4: Run focused GREEN and drift checks**
+- [ ] **Step 5: Run focused GREEN and drift checks**
 
 Run:
 
@@ -166,7 +187,7 @@ git diff --check
 
 Expected: all tests pass; carrier changed paths are empty; transition remains 671 rows/436 open; census remains 196 candidates, 189 Vitest, 7 Playwright because no replacement file exists yet.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```powershell
 git add vitest.config.ts scripts/testing/test-conventions.test.ts scripts/testing/source-contract-redisposition-review.mjs scripts/testing/source-contract-redisposition-review.test.ts testing/source-contract-redisposition-review.json docs/superpowers/verification/2026-08-06-testing-redesign-pre-slice-3c-redisposition.md
@@ -222,7 +243,7 @@ node scripts/validate-testing-transition.mjs
 git diff --check
 ```
 
-Expected: transition passes and reports 366 open rows. The diff contains only 23 file deletions.
+Expected: transition passes and the open-row count decreases by exactly 70. The diff contains only 23 file deletions.
 
 - [ ] **Step 4: Review and commit**
 
@@ -322,9 +343,9 @@ Do not run complete `verify`.
 
 **Interfaces:** All targets are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
 
-- [ ] **Step 1: Print and pin the exact titles**
+- [ ] **Step 1: Read and pin the exact titles**
 
-Run the Frozen Interfaces command for every target path. Record the complete replacement title in the new `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one.
+Read all 18 target sections from `tmp/analysis-smoke/slice-3c-replacement-map.md`. Record the complete replacement title in the new `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one.
 
 - [ ] **Step 2: Add target-file REDs in two bounded groups**
 
@@ -424,7 +445,7 @@ npm.cmd run check
 git diff --check
 ```
 
-Expected: transition passes with 337 open rows. Review must confirm that SC-000383, SC-000384, and SC-000379 are present but their connected legacy components remain open.
+Expected: transition passes and the open-row count decreases by exactly 29. Review must confirm that SC-000383, SC-000384, and SC-000379 are present but their connected legacy components remain open.
 
 ```powershell
 git commit -m "test: cut over single-row vitest components"
@@ -478,7 +499,7 @@ git diff --check
 git commit -m "test: replace browser-owned source contracts"
 ```
 
-Expected: transition passes with 326 open rows. If the browser harness is blocked, preserve the evidence, leave these three legacy files present, and continue Tasks 7–14 without claiming Slice 3C completion.
+Expected: transition passes and the open-row count decreases by exactly 11. If the browser harness is blocked, preserve the evidence, leave these three legacy files present, and continue Tasks 7–14 without claiming Slice 3C completion.
 
 ### Task 7: Add the Wave 2 process owners to `os-integration`
 
@@ -544,26 +565,7 @@ src/lib/diagnostics-ux-contract.test.ts
 src/lib/provider-test-console-placement.test.ts
 ```
 
-**Interfaces:** Closes 7 legacy files and 42 rows. The two new process paths remain in `OS_INTEGRATION_FILES`; the two deleted process paths leave it in this cutover commit.
-
-- [ ] **Step 1: Write REDs for the four not-yet-implemented target groups**
-
-Use direct module/API spies for Node route orchestration and rendered accessible behavior for `ApalisJobsPanel`. Reuse the green diagnostics count target from Task 5. Run exact path selections in their owning projects; no selection may be empty.
-
-- [ ] **Step 2: Implement GREEN and complete process ownership migration**
-
-Run at most two frontend owner commands concurrently: one `unit-node` selection and one `component` selection. Run `os-integration` separately. Remove only the two legacy process paths from `OS_INTEGRATION_FILES` after all owners are green.
-
-- [ ] **Step 3: Cut over, review, and commit**
-
-```powershell
-node scripts/validate-testing-transition.mjs
-npm.cmd run check
-git diff --check
-git commit -m "test: cut over source contracts wave 2a"
-```
-
-Expected: 284 open rows if Task 6 cut over the browser components; otherwise 295. The full validator runs exactly once for this cutover batch.
+- [ ] **Batch-specific execution:** Closes exactly 42 rows. Use direct module/API spies for Node route orchestration and rendered accessible behavior for `ApalisJobsPanel`; reuse the green diagnostics-count target from Task 5. Run `unit-node` and `component` as the two permitted frontend commands, then `os-integration` separately. Keep both new process paths in `OS_INTEGRATION_FILES` and remove the two deleted legacy process paths in this cutover. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2a`.
 
 ### Task 9: Cut over Wave 2B analysis contracts
 
@@ -591,29 +593,7 @@ src/lib/analysis-redesign-route-contract.test.ts
 src/lib/analysis-redesign-safety-contract.test.ts
 ```
 
-**Interfaces:** Seven Node/Vitest owners close 7 legacy files and 50 rows. Rows absent from the ranges above are already owned by earlier Slice 3 replacements and must not be duplicated.
-
-- [ ] **Step 1: Write one complete RED file per target**
-
-Prefer public state reducers, route adapters, and component-facing props. A pure seam extraction is allowed only when no observable seam exists. Use every exact title printed from the artifact.
-
-- [ ] **Step 2: Run one focused Node GREEN selection**
-
-```powershell
-node scripts/run-vitest.mjs run --project unit-node <the-seven-exact-target-paths>
-```
-
-Expected: seven non-empty files pass with no source-reader obligations.
-
-- [ ] **Step 3: Cut over, review, and commit**
-
-```powershell
-node scripts/validate-testing-transition.mjs
-git diff --check
-git commit -m "test: cut over source contracts wave 2b"
-```
-
-Expected: 234 open rows if browser cutover completed; otherwise 245.
+- [ ] **Batch-specific execution:** Closes exactly 50 rows. All seven targets run together in one non-empty `unit-node` selection and use public state reducers, route adapters, or component-facing props. Rows omitted from the ranges are already owned by earlier Slice 3 replacements and must not be duplicated. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2b`.
 
 ### Task 10: Cut over Wave 2C report and companion contracts
 
@@ -645,28 +625,7 @@ src/lib/analysis-run-companion-tabs.test.ts
 src/lib/analysis-source-access-placement.test.ts
 ```
 
-**Interfaces:** Eight Node/Vitest owners close 8 files and 58 rows. Route tests use module/API fixtures, not rendered `+page.svelte` source inspection.
-
-- [ ] **Step 1: Add RED declarations and minimal route fixtures**
-
-Use exact frozen titles. Keep saved-run restoration, source-window loading, tab state, and report-canvas props independently observable. Reject a fixture that proves the assertion only by reproducing route implementation text.
-
-- [ ] **Step 2: Run focused GREEN**
-
-```powershell
-node scripts/run-vitest.mjs run --project unit-node <the-eight-exact-target-paths>
-```
-
-- [ ] **Step 3: Cut over, review, and commit**
-
-```powershell
-node scripts/validate-testing-transition.mjs
-npm.cmd run check
-git diff --check
-git commit -m "test: cut over source contracts wave 2c"
-```
-
-Expected: 176 open rows if browser cutover completed; otherwise 187.
+- [ ] **Batch-specific execution:** Closes exactly 58 rows. Run the eight targets together in `unit-node`. Route tests use module/API fixtures, not rendered `+page.svelte` source inspection; saved-run restoration, source-window loading, tab state, and report-canvas props remain independently observable. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2c`.
 
 ### Task 11: Cut over Wave 2D source-browser and project-grid contracts
 
@@ -694,26 +653,7 @@ src/lib/components/research-projects/ResearchProjectsShell.component.test.ts
 src/lib/components/research-projects/SourcesGrid.test.ts
 ```
 
-**Interfaces:** The three `src/lib/analysis-*` targets run in `unit-node`; the four `src/lib/components/**` targets run in `component`. Together they close 7 files and 56 rows. SC-000323 and SC-000344 are not reimplemented here: their accepted visual/browser ownership remains in Task 6 or its deferred cutover.
-
-- [ ] **Step 1: Write Node and component REDs**
-
-For source readers and YouTube specialization, use API/event fixtures. For rendered grid shells, assert accessible host state, row/cell behavior, callbacks, and responsive column decisions that jsdom can truthfully expose; do not claim visual clipping or layering.
-
-- [ ] **Step 2: Run focused GREEN with at most two commands**
-
-Run the three Node paths in one `unit-node` command and the four component paths in one `component` command. Both selections must be non-empty.
-
-- [ ] **Step 3: Cut over, review, and commit**
-
-```powershell
-node scripts/validate-testing-transition.mjs
-npm.cmd run check
-git diff --check
-git commit -m "test: cut over source contracts wave 2d"
-```
-
-Expected: 120 open rows if browser cutover completed; otherwise 131.
+- [ ] **Batch-specific execution:** Closes exactly 56 rows. Run the three `src/lib/analysis-*` targets in one `unit-node` command and the four `src/lib/components/**` targets in one `component` command. Use API/event fixtures for source readers and YouTube specialization; rendered grids prove accessible host state, row/cell behavior, callbacks, and jsdom-observable responsive decisions, not clipping or layering. SC-000323 and SC-000344 remain owned by Task 6. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2d`.
 
 ### Task 12: Cut over Wave 2E settings, library, runs, and YouTube-summary contracts
 
@@ -749,26 +689,7 @@ src/lib/youtube-summary-launch-contract.test.ts
 src/lib/youtube-summary-result-view-contract.test.ts
 ```
 
-**Interfaces:** Mixed Node/component ownership closes 8 files and 65 rows. Five components require both commands; keep each connected component in one cutover even though its owners were implemented in different tasks.
-
-- [ ] **Step 1: Add remaining REDs**
-
-Use actual API adapters and rendered accessible workflows. The import-boundary target may inspect the repository through its approved structured test seam only; do not add a raw-source exception. Use the exact artifact title for every row.
-
-- [ ] **Step 2: Run focused GREEN**
-
-Run all Node paths in one `unit-node` command and all component paths in one `component` command. At most those two frontend commands may run concurrently.
-
-- [ ] **Step 3: Cut over, review, and commit**
-
-```powershell
-node scripts/validate-testing-transition.mjs
-npm.cmd run check
-git diff --check
-git commit -m "test: cut over source contracts wave 2e"
-```
-
-Expected: 55 open rows if browser cutover completed; otherwise 66.
+- [ ] **Batch-specific execution:** Closes exactly 65 rows. Run all Node paths in one `unit-node` command and all component paths in one `component` command; five connected components require both owner selections and remain in this single cutover. Use actual API adapters and accessible workflows. The import-boundary target uses only its approved structured seam. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2e`.
 
 ### Task 13: Implement root `extractum` Cargo identities
 
@@ -857,16 +778,9 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets
 ```
 
-- [ ] **Step 3: Delete the nine legacy files and handle the actual-last condition**
+- [ ] **Step 3: Perform the Wave 3 cutover**
 
-If Task 6 already cut over the browser components, this is the factually last legacy batch. In the same staged diff:
-
-- remove `LEGACY_TEST_FILES` and the `legacy-contract` project from `vitest.config.ts`;
-- remove the legacy owner from `testing/runner-census.json`;
-- remove `test:legacy-contract` from `package.json`;
-- remove its gate from `scripts/verify.mjs` and update `scripts/verify.test.ts` and conventions tests.
-
-If Task 6 is still deferred, leave all legacy-runner wiring intact and expect 11 open rows. The later browser cutover must perform this removal instead.
+Delete the nine exact legacy files above and follow the Cutover Protocol, including its factually-last runner-removal rule. The batch closes exactly 55 rows whether the independent browser batch ran earlier or remains deferred.
 
 - [ ] **Step 4: Validate, review, and commit**
 
@@ -876,22 +790,17 @@ git diff --check
 git commit -m "test: cut over source contracts wave 3"
 ```
 
-Expected: 0 open rows and no legacy owner if browser cutover is complete; otherwise 11 open rows and the legacy owner remains.
+Expected: transition passes and the open-row count decreases by exactly 55.
 
-### Task 15: Remove the factually last legacy runner, verify once, and hand off Slice 4
+### Task 15: Verify once and hand off Slice 4
 
 **Files:**
-- Modify as needed at the last cutover: `vitest.config.ts`, `testing/runner-census.json`, `package.json`, `scripts/verify.mjs`, `scripts/verify.test.ts`, `scripts/testing/test-conventions.test.ts`
 - Create: `docs/superpowers/verification/2026-08-08-testing-redesign-slice-3c.md`
 - Modify: `docs/superpowers/plans/2026-08-02-testing-redesign-program-index.md`
 
-**Interfaces:** This task runs only after the browser and Cargo tracks have both cut over. It records no benchmark series: one preflight, one retained wall-clock observation for the single final `verify`, and no warmup/median/threshold.
+**Interfaces:** This task starts only after Tasks 6 and 14 have both cut over and the Cutover Protocol has removed the empty legacy runner. It records no benchmark series: one preflight, one retained wall-clock observation for the single final `verify`, and no warmup/median/threshold.
 
-- [ ] **Step 1: Complete a deferred browser cutover if necessary**
-
-If Task 6 was deferred, resume it now. In the same commit that deletes its last three legacy files, remove all legacy-runner wiring listed in Task 14 Step 3. Run the transition validator and require zero open rows before committing.
-
-- [ ] **Step 2: Prove the zero-inventory state with focused gates**
+- [ ] **Step 1: Prove the zero-inventory state with focused gates**
 
 Run sequentially:
 
@@ -904,7 +813,7 @@ git diff --check
 
 Expected: carrier changed paths empty; ledger 671 rows/0 open; census has no `vitest:legacy-contract`; no tracked legacy file exists; Svelte/TypeScript check is clean.
 
-- [ ] **Step 3: Bootstrap the fresh worktree and run the process preflight**
+- [ ] **Step 2: Bootstrap the fresh worktree and run the process preflight**
 
 ```powershell
 npm.cmd run bootstrap:testing
@@ -912,7 +821,7 @@ npm.cmd run bootstrap:testing
 
 Use the established PowerShell/CIM preflight to require zero competing repository-owned Vitest, Playwright, Cargo, Rust, Vite, or Chromium processes. Record the exact command and result. Do not start a warmup.
 
-- [ ] **Step 4: Run exactly one final full verification**
+- [ ] **Step 3: Run exactly one final full verification**
 
 Run unsandboxed on Windows:
 
@@ -922,7 +831,7 @@ npm.cmd run verify
 
 Retain its exit code and one wall-clock duration. Do not rerun for a correctness failure. A retry is allowed only for a demonstrated spawn/sandbox/process-infrastructure failure, and both observations must remain in evidence.
 
-- [ ] **Step 5: Write final evidence and update the program index**
+- [ ] **Step 4: Write final evidence and update the program index**
 
 The verification document records:
 
@@ -936,7 +845,7 @@ The verification document records:
 
 Update the program index to mark Slice 3 complete and identify Slice 4 as next. Do not claim Slice 3C complete if any browser component, legacy file, or legacy runner remains.
 
-- [ ] **Step 6: Final read-only review and evidence commit**
+- [ ] **Step 5: Final read-only review and evidence commit**
 
 Run one read-only spec/quality review over the complete Slice 3C commit range and verification record. Resolve findings in one bounded fix wave, rerun only the directly affected focused gate, and do not repeat full `verify` unless the retry exception above applies.
 
