@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement only the classes, dispositions, paths, declaration titles, invariants, deletion reasons, and criticality decisions frozen in `testing/source-contract-redisposition-review.json` and `testing/source-contract-ledger.json`.
-- The approved ownership corrections are exact: `src/lib/components/**/*.behavior.test.ts` belongs to `component`; SC-000464 belongs to the comprehensive Cargo owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its focused Vitest behavior owner for the other 18 ordinals. The final forecast is Node 178 rows/1,101 ordinals, jsdom 90/598, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; SC-000464 was not a sampled blind result and SC-000515's prior blind packet remains historical evidence.
+- The approved ownership corrections are exact: component behavior owners belong to `component`; SC-000464 belongs jointly to the comprehensive service Cargo owner and actual application execution-task owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its real-wrapper component owner for the other 18 ordinals. SC-000025/435/552 also use real route/component owners. The final forecast is Node 174 rows/1,065 ordinals, jsdom 94/634, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; SC-000464 was not a sampled blind result and SC-000515's prior blind packet remains historical evidence.
 - Do not use `?raw`, `readFileSync`, or another direct production-source reader in a replacement test. Do not add a `sourceReaderExceptions` entry.
 - A small behavior-neutral pure-function or adapter extraction is allowed only when the frozen behavior has no truthful existing seam. Stop the connected component if path, title, mechanism, invariant, disposition, or criticality would need to change.
 - Do not add Nx, a migration scheduler, a second ledger, a subset transition validator, timing thresholds, warmups, medians, or benchmark artifacts.
@@ -118,13 +118,13 @@ Every behavior task uses this order:
 6. If that cutover makes the filesystem legacy inventory empty, remove `LEGACY_TEST_FILES` and the `legacy-contract` project from `vitest.config.ts`, its census owner from `testing/runner-census.json`, `test:legacy-contract` from `package.json`, and its gate from `scripts/verify.mjs`; update the owning runner/conventions tests in the same staged diff before validation and commit.
 7. Run `git diff --check`, one read-only integration review, one combined fix wave if required, and commit the bounded batch with the task's listed subject.
 
-Do not edit resolution metadata during ordinary cutover. The user-approved SC-000464 comprehensive Cargo correction and SC-000515 mixed ordinal correction are the only Task 4 resolution amendments and are applied through the fail-closed carrier before Task 4 completes. A component closes because its legacy declaration disappears and its approved replacement already resolves.
+Do not edit resolution metadata during ordinary cutover. The user-approved SC-000464 joint Cargo correction, SC-000515 mixed/component correction, and SC-000025/435/552 component-owner correction are the exact Task 4 amendments and are applied through the fail-closed carrier before Task 4 completes. A component closes because its legacy declaration disappears and its approved replacement already resolves.
 
 ## Rust Verification Loops
 
 Affected packages are `extractum`, `extractum-analysis`, `extractum-llm`, and `extractum-prompt-packs`.
 
-Task 4 affects `extractum-prompt-packs` and its immediate `extractum` consumer. Its narrow RED/GREEN owner is `runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`; the retained application adapter checks are `prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket` and `prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`.
+Task 4 affects `extractum-prompt-packs` and its immediate `extractum` consumer. Its service owner is `runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`; its app-level RED/GREEN owner is `prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled`. The producer feature-off check proves the narrow ticket constructor remains behind the existing non-default `dev-fixtures` test edge, and the retained application adapter checks remain supplementary.
 
 - Exact RED/GREEN: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact`.
 - If the exact name is not collected, first run `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib -- --list` and reject a zero-test selection.
@@ -150,7 +150,7 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 **Interfaces:**
 - Produces `COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts"` in both component include and unit exclusion.
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
-- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; Task 4 applies the approved SC-000464 and SC-000515 corrections for the final forecast `178/1101`, `90/598`, `19/161`, `3/21`.
+- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; the first Task 4 corrections produce `178/1101`, `90/598`, `19/161`, `3/21`, and the final real-component owner correction produces `174/1065`, `94/634`, `19/161`, `3/21`.
 
 - [ ] **Step 1: Generate the complete replacement map once**
 
@@ -347,28 +347,29 @@ Do not run complete `verify`.
 | `scripts/testing/run-observation.behavior.test.ts` | SC-000023 |
 | `scripts/testing/slice-1-baseline.behavior.test.ts` | SC-000024 |
 | `scripts/testing/research-projects-grid-date-formatting.behavior.test.ts` | SC-000514 |
-| `scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts` | SC-000515 |
-| `src/lib/accounts-route-add-account-modal.behavior.test.ts` | SC-000025 |
+| `src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts` | SC-000515 |
+| `src/routes/accounts/accounts-route-add-account-modal.behavior.component.test.ts` | SC-000025 |
 | `src/lib/analysis-group-editor-props.behavior.test.ts` | SC-000095 |
 | `src/lib/analysis-ui-smoke-contract.behavior.test.ts` | SC-000283 |
 | `src/lib/gemini-browser-polling.test.ts` | SC-000416 |
 | `src/lib/tauri-security-config.behavior.test.ts` | SC-000557 |
-| `src/routes/projects/library/library-page.behavior.test.ts` | SC-000435 |
+| `src/routes/projects/library/library-page.behavior.component.test.ts` | SC-000435 |
 | `src/routes/projects/runs/project-runs-page.behavior.test.ts` | SC-000450 |
 | `src/routes/projects/next/page-inspector.behavior.test.ts` | SC-000670 |
 | `src/routes/projects/next/page-keyboard.behavior.test.ts` | SC-000671 |
-| `src/routes/settings/settings-focus.behavior.test.ts` | SC-000552 |
+| `src/routes/settings/settings-focus.behavior.component.test.ts` | SC-000552 |
 
-**SC-000464 comprehensive Cargo owner -- implement and verify exactly:**
+**SC-000464 joint Cargo owners -- implement and verify exactly:**
 
 - `test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled`
 
 **SC-000515 exact mixed split:**
 
 - Architecture ordinals `1, 11, 19`: `rule:extractum-grid-wrapper-boundary`.
-- Behavior ordinals `2-10, 12-18, 20-21`: `test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers`.
+- Behavior ordinals `2-10, 12-18, 20-21`: `test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers`.
 
-**Interfaces:** The 17 files above are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. SC-000464 preserves ID, invariant, assertion count 5, class `B2_NEW_CHEAP_BEHAVIOR`, and behavior disposition, but uses the comprehensive Cargo owner above to observe real production ordering. SC-000515 preserves ID, source hash, assertion count 21, lineage, class, and criticality while removing its top-level behavior resolution in favor of the exact mixed split above. The carrier accepts only the immediately preceding SC-000464 five-owner and SC-000515 top-level-behavior state as the correction input, and only the exact comprehensive/mixed output; partial or arbitrary owner sets and ordinal partitions fail closed. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
+**Interfaces:** SC-000023 remains the real child/grandchild B3 owner in `os-integration`; the four approved component targets run only in `component`, and the remaining pure targets stay in `unit-node`. SC-000464 preserves ID, invariant, assertion count 5, class `B2_NEW_CHEAP_BEHAVIOR`, and behavior disposition, with joint service/application Cargo ownership. SC-000515 preserves ID, source hash, assertion count 21, lineage, class, and criticality with the exact mixed split above. The carrier accepts the immediately preceding Task 4 mapping only as the authorized correction input and fails closed on partial or arbitrary owner sets and ordinal partitions.
 
 - [ ] **Step 1: Read and pin the exact titles**
 

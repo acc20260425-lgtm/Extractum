@@ -11,6 +11,7 @@ use super::source_adapter::AppPromptPackSourceReader;
 use crate::db::get_pool;
 use crate::error::AppResult;
 use crate::llm::{resolve_profile_for_backend, LlmSchedulerState};
+use extractum_llm::ResolvedLlmProfile;
 use extractum_prompt_packs::{
     cancel_prompt_pack_run_in_pool, cleanup_interrupted_prompt_pack_runs_in_pool,
     delete_prompt_pack_run_in_pool, dispatch_run_execution_ticket, execute_prepared_api_run,
@@ -30,6 +31,108 @@ use extractum_prompt_packs::{
 };
 
 type ExecutionTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+type ExecutionPortFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'a>>;
+
+trait YoutubeSummaryExecutionPort: Send + Sync + 'static {
+    fn resolve_profile<'a>(
+        &'a self,
+        profile_id: Option<&'a str>,
+    ) -> ExecutionPortFuture<'a, ResolvedLlmProfile>;
+    fn execute_api<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        prepared: extractum_prompt_packs::PreparedApiRunExecution,
+        profile: ResolvedLlmProfile,
+    ) -> ExecutionPortFuture<'a, ()>;
+    fn execute_browser<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        prepared: extractum_prompt_packs::PreparedBrowserRunExecution,
+    ) -> ExecutionPortFuture<'a, ()>;
+    fn fail<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        ticket: &'a RunExecutionTicket,
+        error: &'a crate::error::AppError,
+    ) -> ExecutionPortFuture<'a, ()>;
+    fn events(&self) -> Arc<dyn PromptPackEventSink>;
+}
+
+struct TauriYoutubeSummaryExecutionPort {
+    handle: AppHandle,
+}
+
+impl YoutubeSummaryExecutionPort for TauriYoutubeSummaryExecutionPort {
+    fn resolve_profile<'a>(
+        &'a self,
+        profile_id: Option<&'a str>,
+    ) -> ExecutionPortFuture<'a, ResolvedLlmProfile> {
+        Box::pin(resolve_profile_for_backend(&self.handle, profile_id))
+    }
+
+    fn execute_api<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        prepared: extractum_prompt_packs::PreparedApiRunExecution,
+        profile: ResolvedLlmProfile,
+    ) -> ExecutionPortFuture<'a, ()> {
+        Box::pin(async move {
+            execute_prepared_api_run(
+                pool,
+                self.handle.state::<PromptPackRunState>().inner(),
+                self.handle.state::<Arc<LlmSchedulerState>>().inner().as_ref(),
+                events,
+                prepared,
+                profile,
+            )
+            .await
+            .map(|_| ())
+        })
+    }
+
+    fn execute_browser<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        prepared: extractum_prompt_packs::PreparedBrowserRunExecution,
+    ) -> ExecutionPortFuture<'a, ()> {
+        Box::pin(async move {
+            execute_prepared_browser_run(
+                pool,
+                self.handle.state::<PromptPackRunState>().inner(),
+                Arc::new(TauriGeminiBrowserPort::new(self.handle.clone())),
+                events,
+                prepared,
+            )
+            .await
+            .map(|_| ())
+        })
+    }
+
+    fn fail<'a>(
+        &'a self,
+        pool: &'a SqlitePool,
+        events: Arc<dyn PromptPackEventSink>,
+        ticket: &'a RunExecutionTicket,
+        error: &'a crate::error::AppError,
+    ) -> ExecutionPortFuture<'a, ()> {
+        Box::pin(fail_run_execution(
+            pool,
+            self.handle.state::<PromptPackRunState>().inner(),
+            events,
+            ticket,
+            error,
+        ))
+    }
+
+    fn events(&self) -> Arc<dyn PromptPackEventSink> {
+        Arc::new(TauriPromptPackEventSink::new(self.handle.clone()))
+    }
+}
 
 #[tauri::command]
 pub async fn preflight_youtube_summary_run(
@@ -117,10 +220,10 @@ fn spawn_youtube_summary_execution(
     pool: SqlitePool,
     ticket: RunExecutionTicket,
 ) {
-    let build_handle = handle.clone();
+    let execution_port = Arc::new(TauriYoutubeSummaryExecutionPort { handle });
     dispatch_run_execution_ticket(
         ticket,
-        move |ticket| build_youtube_summary_execution_task(build_handle, pool, ticket),
+        move |ticket| build_youtube_summary_execution_task(pool, ticket, execution_port),
         |task| {
             tauri::async_runtime::spawn(task);
             // resolve_profile_for_backend runs only when the spawned task is polled.
@@ -129,19 +232,18 @@ fn spawn_youtube_summary_execution(
 }
 
 fn build_youtube_summary_execution_task(
-    handle: AppHandle,
     pool: SqlitePool,
     ticket: RunExecutionTicket,
+    execution_port: Arc<dyn YoutubeSummaryExecutionPort>,
 ) -> ExecutionTask {
     Box::pin(async move {
-        let state = handle.state::<PromptPackRunState>();
-        let events: Arc<dyn PromptPackEventSink> =
-            Arc::new(TauriPromptPackEventSink::new(handle.clone()));
+        let events = execution_port.events();
         let prepared = match prepare_run_execution(&pool, &ticket).await {
             Ok(value) => value,
             Err(error) => {
-                if let Err(failure_error) =
-                    fail_run_execution(&pool, state.inner(), events, &ticket, &error).await
+                if let Err(failure_error) = execution_port
+                    .fail(&pool, events, &ticket, &error)
+                    .await
                 {
                     eprintln!(
                         "Prompt Pack run {} failed and could not be marked failed: {failure_error}",
@@ -153,35 +255,21 @@ fn build_youtube_summary_execution_task(
         };
         let result = match prepared {
             PreparedRunExecution::Api(api) => {
-                match resolve_profile_for_backend(&handle, api.profile_id()).await {
-                    Ok(profile) => {
-                        execute_prepared_api_run(
-                            &pool,
-                            state.inner(),
-                            handle.state::<Arc<LlmSchedulerState>>().inner().as_ref(),
-                            events.clone(),
-                            api,
-                            profile,
-                        )
-                        .await
-                    }
+                match execution_port.resolve_profile(api.profile_id()).await {
+                    Ok(profile) => execution_port
+                        .execute_api(&pool, events.clone(), api, profile)
+                        .await,
                     Err(error) => Err(error),
                 }
             }
-            PreparedRunExecution::GeminiBrowser(browser_run) => {
-                execute_prepared_browser_run(
-                    &pool,
-                    state.inner(),
-                    Arc::new(TauriGeminiBrowserPort::new(handle.clone())),
-                    events.clone(),
-                    browser_run,
-                )
+            PreparedRunExecution::GeminiBrowser(browser_run) => execution_port
+                .execute_browser(&pool, events.clone(), browser_run)
                 .await
-            }
         };
         if let Err(error) = result {
-            if let Err(failure_error) =
-                fail_run_execution(&pool, state.inner(), events, &ticket, &error).await
+            if let Err(failure_error) = execution_port
+                .fail(&pool, events, &ticket, &error)
+                .await
             {
                 eprintln!(
                     "Prompt Pack run {} failed and could not be marked failed: {failure_error}",
@@ -300,9 +388,70 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use extractum_prompt_packs::dispatch_run_execution_ticket;
+    use extractum_core::error::AppError;
+    use extractum_llm::ResolvedLlmProfile;
+    use extractum_prompt_packs::{
+        dispatch_run_execution_ticket, PreparedApiRunExecution, PreparedBrowserRunExecution,
+        PromptPackEvent, PromptPackEventSink, RunExecutionTicket,
+    };
+    use sqlx::SqlitePool;
+    use super::{
+        build_youtube_summary_execution_task, ExecutionPortFuture, ExecutionTask,
+        YoutubeSummaryExecutionPort,
+    };
 
-    use super::ExecutionTask;
+    #[derive(Default)]
+    struct RecordingExecutionPort {
+        resolutions: AtomicUsize,
+    }
+
+    impl PromptPackEventSink for RecordingExecutionPort {
+        fn emit(&self, _event: PromptPackEvent) {}
+    }
+
+    impl YoutubeSummaryExecutionPort for RecordingExecutionPort {
+        fn resolve_profile<'a>(
+            &'a self,
+            profile_id: Option<&'a str>,
+        ) -> ExecutionPortFuture<'a, ResolvedLlmProfile> {
+            assert_eq!(profile_id, Some("profile-91"));
+            self.resolutions.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(AppError::internal("recording resolver")) })
+        }
+
+        fn execute_api<'a>(
+            &'a self,
+            _pool: &'a SqlitePool,
+            _events: Arc<dyn PromptPackEventSink>,
+            _prepared: PreparedApiRunExecution,
+            _profile: ResolvedLlmProfile,
+        ) -> ExecutionPortFuture<'a, ()> {
+            panic!("recording resolver must stop before API execution")
+        }
+
+        fn execute_browser<'a>(
+            &'a self,
+            _pool: &'a SqlitePool,
+            _events: Arc<dyn PromptPackEventSink>,
+            _prepared: PreparedBrowserRunExecution,
+        ) -> ExecutionPortFuture<'a, ()> {
+            panic!("API ticket must not execute the browser path")
+        }
+
+        fn fail<'a>(
+            &'a self,
+            _pool: &'a SqlitePool,
+            _events: Arc<dyn PromptPackEventSink>,
+            _ticket: &'a RunExecutionTicket,
+            _error: &'a AppError,
+        ) -> ExecutionPortFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn events(&self) -> Arc<dyn PromptPackEventSink> {
+            Arc::new(RecordingExecutionPort::default())
+        }
+    }
 
     #[tokio::test]
     async fn execution_adapter_resolves_api_profile_only_inside_spawned_task() {
@@ -331,6 +480,52 @@ mod tests {
             .expect("spawned task");
         task.await;
         assert_eq!(resolutions.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("test pool");
+        crate::migrations::apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("prompt-pack schema");
+        sqlx::query("INSERT INTO prompt_packs (pack_id, display_name, created_at, updated_at) VALUES ('youtube-summary', 'YouTube Summary', 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("prompt pack");
+        sqlx::query("INSERT INTO prompt_pack_versions (id, pack_id, pack_version, schema_version, origin_kind, lifecycle_status, content_hash, created_at, updated_at) VALUES (1, 'youtube-summary', '1', '1', 'bundled', 'active', 'hash', 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("prompt pack version");
+        sqlx::query("INSERT INTO prompt_pack_runs (id, pack_version_id, pack_id, pack_version, schema_version, run_status, provider_profile_id, output_language, control_preset, evidence_mode, created_at, updated_at, runtime_provider) VALUES (91, 1, 'youtube-summary', '1', '1', 'queued', 'profile-91', 'en', 'standard', 'standard', '2026-08-08T00:00:00Z', '2026-08-08T00:00:00Z', 'api')")
+            .execute(&pool)
+            .await
+            .expect("prompt pack run");
+
+        let execution_port = Arc::new(RecordingExecutionPort::default());
+        let observed_port = execution_port.clone();
+        let captured = Arc::new(Mutex::new(None::<ExecutionTask>));
+        let captured_for_spawn = captured.clone();
+
+        dispatch_run_execution_ticket(
+            RunExecutionTicket::for_app_test(91),
+            move |ticket| {
+                build_youtube_summary_execution_task(pool, ticket, execution_port)
+            },
+            move |task| {
+                *captured_for_spawn.lock().expect("captured task") = Some(task);
+            },
+        );
+
+        assert_eq!(observed_port.resolutions.load(Ordering::SeqCst), 0);
+        let task = captured
+            .lock()
+            .expect("captured task")
+            .take()
+            .expect("spawned task");
+        task.await;
+        assert_eq!(observed_port.resolutions.load(Ordering::SeqCst), 1);
     }
 
     #[test]

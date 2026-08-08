@@ -608,11 +608,11 @@
       "sourceHash": "f122ae5d448010dfcd1699842fe1fc1c50bb6eacada67c52c4ceed2e10f0d144",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the account creation form behind a configured-accounts header action. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the account creation form behind a configured-accounts header action. The approved component owner renders the real Accounts route and drives the live dialog binding through its header action.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action"
+          "test:vitest:src/routes/accounts/accounts-route-add-account-modal.behavior.component.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action"
         ]
       }
     },
@@ -4351,11 +4351,11 @@
       "sourceHash": "4e6f548b0c87d18eb35af94a8b23c985ca7d18d5c9f1ccf2112aa4407d819cd6",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Renders Library as a separate route backed by the current workflow. The complete invariant has the frozen unresolved cheap owner test:vitest:src/routes/projects/library/library-page.behavior.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Renders Library as a separate route backed by the current workflow. The approved component owner renders the real route boundary, observes LibraryScreen, and drives its consumed catalog workflow.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/routes/projects/library/library-page.behavior.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow"
+          "test:vitest:src/routes/projects/library/library-page.behavior.component.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow"
         ]
       }
     },
@@ -4711,11 +4711,12 @@
       "sourceHash": "e26d4c998996ae0471341bb03a7da35c742653cf8d0463b1448389796535367b",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps start idempotency readiness preflight queued-event dispatch spawn and profile-resolution order. The approved Slice 3C ownership correction binds one comprehensive Cargo owner that observes the real production orchestration through behavior-neutral recording ports.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps start idempotency readiness preflight queued-event dispatch spawn and profile-resolution order. The approved joint Cargo owners observe the real service ordering and the actual application execution-task adapter tail through behavior-neutral recording ports.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order"
+          "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order",
+          "test:cargo:extractum::prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled"
         ]
       }
     },
@@ -5339,7 +5340,7 @@
             "invariant": "Extractum grid wrappers retain locale, theme, overlay, date, tree, and selection runtime behavior.",
             "disposition": "behavior",
             "replacementIds": [
-              "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers"
+              "test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers"
             ]
           }
         ]
@@ -5469,11 +5470,11 @@
       "sourceHash": "7ce882e82c730beb7bc488e0609a03180802a8ecd37733583ff9cc52056f0901",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Settings stays focused on LLM provider profiles and test runs. The complete invariant has the frozen unresolved cheap owner test:vitest:src/routes/settings/settings-focus.behavior.test.ts#keeps Settings focused on LLM configuration.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Settings stays focused on LLM provider profiles and test runs. The approved component owner renders the real Settings UI and verifies its visible LLM-only scope.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/routes/settings/settings-focus.behavior.test.ts#keeps Settings focused on LLM configuration"
+          "test:vitest:src/routes/settings/settings-focus.behavior.component.test.ts#keeps Settings focused on LLM configuration"
         ]
       }
     },
@@ -8450,16 +8451,16 @@
     },
     "futureOwnersByMechanism": {
       "node": {
-      "rows": 178,
-      "assertionOrdinals": 1101
+      "rows": 174,
+      "assertionOrdinals": 1065
       },
       "cargo": {
       "rows": 19,
       "assertionOrdinals": 161
       },
       "jsdom": {
-        "rows": 90,
-        "assertionOrdinals": 598
+        "rows": 94,
+        "assertionOrdinals": 634
       },
       "playwright": {
         "rows": 3,

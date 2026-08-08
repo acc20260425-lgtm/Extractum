@@ -81,6 +81,7 @@ extractum-telegram = { path = "crates/extractum-telegram" }
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 extractum-telegram = { path = "crates/extractum-telegram", features = ["app-test-support"] }
+extractum-prompt-packs = { path = "crates/extractum-prompt-packs", features = ["dev-fixtures"] }
 
 [profile.dev]
 debug = "line-tables-only"

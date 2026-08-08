@@ -21,7 +21,9 @@ const APPROVED_PLAYWRIGHT_OWNERS = new Map([
 const APPROVED_PLAYWRIGHT_CRITICALITY = "TESTING_BROWSER_COMPONENT_OWNERSHIP";
 const APPROVED_SC_000464_CARGO_OWNERS = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled",
 ];
+const PRE_FINAL_SC_000464_CARGO_OWNERS = APPROVED_SC_000464_CARGO_OWNERS.slice(0, 1);
 const FIRST_CORRECTION_SC_000464_CARGO_OWNERS = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
   "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
@@ -29,7 +31,22 @@ const FIRST_CORRECTION_SC_000464_CARGO_OWNERS = [
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket",
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
 ];
-const SC_000515_BEHAVIOR_OWNER = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const HISTORICAL_SC_000515_BEHAVIOR_OWNER = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const SC_000515_BEHAVIOR_OWNER = "test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const FINAL_TASK4_OWNER_CORRECTIONS = new Map([
+  ["SC-000025", {
+    before: "test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
+    after: "test:vitest:src/routes/accounts/accounts-route-add-account-modal.behavior.component.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
+  }],
+  ["SC-000435", {
+    before: "test:vitest:src/routes/projects/library/library-page.behavior.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow",
+    after: "test:vitest:src/routes/projects/library/library-page.behavior.component.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow",
+  }],
+  ["SC-000552", {
+    before: "test:vitest:src/routes/settings/settings-focus.behavior.test.ts#keeps Settings focused on LLM configuration",
+    after: "test:vitest:src/routes/settings/settings-focus.behavior.component.test.ts#keeps Settings focused on LLM configuration",
+  }],
+]);
 const APPROVED_SC_000515_SUBGROUPS = [
   {
     assertionOrdinals: [1, 11, 19],
@@ -1542,6 +1559,11 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (isApprovedTask4CorrectionScope && decision.id === "SC-000515" && canonicalJson(decision.resolution) !== canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })) {
       issues.push("SC-000515: resolution must equal the approved architecture/behavior ordinal split");
     }
+    const finalOwnerCorrection = FINAL_TASK4_OWNER_CORRECTIONS.get(decision.id);
+    if (isApprovedTask4CorrectionScope && finalOwnerCorrection
+      && canonicalJson(decision.resolution?.replacementIds) !== canonicalJson([finalOwnerCorrection.after])) {
+      issues.push(`${decision.id}: replacementIds must equal the approved component owner`);
+    }
   }
   if (decisionIds.size !== baseOpenIds.size) issues.push("scope: expected one decision for every base-open row");
   for (const id of baseOpenIds) if (!decisionIds.has(id)) issues.push(`scope: missing decision: ${id}`);
@@ -1554,14 +1576,21 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const correctionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000464");
   const gridCorrectionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000515");
   const isApprovedPreCorrectionLedger = correctionRow?.disposition === "behavior"
-    && canonicalJson(correctionRow.replacementIds) === canonicalJson(FIRST_CORRECTION_SC_000464_CARGO_OWNERS)
-    && gridCorrectionRow?.disposition === "behavior"
-    && canonicalJson(gridCorrectionRow.replacementIds) === canonicalJson([SC_000515_BEHAVIOR_OWNER])
+    && canonicalJson(correctionRow.replacementIds) === canonicalJson(PRE_FINAL_SC_000464_CARGO_OWNERS)
+    && canonicalJson(gridCorrectionRow?.subgroups) === canonicalJson(APPROVED_SC_000515_SUBGROUPS.map((subgroup) => (
+      subgroup.disposition === "behavior"
+        ? { ...subgroup, replacementIds: [HISTORICAL_SC_000515_BEHAVIOR_OWNER] }
+        : subgroup
+    )))
+    && [...FINAL_TASK4_OWNER_CORRECTIONS].every(([id, owners]) => canonicalJson(
+      correctedCurrentLedger.rows.find((row) => row?.id === id)?.replacementIds,
+    ) === canonicalJson([owners.before]))
     && (() => {
       correctionRow.replacementIds = clone(APPROVED_SC_000464_CARGO_OWNERS);
-      delete gridCorrectionRow.disposition;
-      delete gridCorrectionRow.replacementIds;
       gridCorrectionRow.subgroups = clone(APPROVED_SC_000515_SUBGROUPS);
+      for (const [id, owners] of FINAL_TASK4_OWNER_CORRECTIONS) {
+        correctedCurrentLedger.rows.find((row) => row?.id === id).replacementIds = [owners.after];
+      }
       return canonicalJson(correctedCurrentLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
     })();
   if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
@@ -1660,7 +1689,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       const protectedRow = protectedIds.has(id);
       const approvedSc000515Correction = id === "SC-000515"
         && canonicalJson(decision.resolution) === canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })
-        && canonicalJson(blind.ownerEvidence) === canonicalJson([SC_000515_BEHAVIOR_OWNER]);
+        && canonicalJson(blind.ownerEvidence) === canonicalJson([HISTORICAL_SC_000515_BEHAVIOR_OWNER]);
       fingerprintMatches.set(id, approvedSc000515Correction
         || reviewFingerprint(decision, protectedRow) === reviewFingerprint(blind, protectedRow));
     }

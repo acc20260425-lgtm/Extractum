@@ -22,5 +22,12 @@ describe("run vitest wrapper", () => {
       "--exclude",
       ".worktrees/**",
     ]));
-  });
+
+    const discovery = runVitest?.({
+      argv: ["list", "--filesOnly", "e2e/app-harness-smoke.spec.ts"],
+      cwd: process.cwd(),
+    });
+    expect(discovery?.status).toBe(0);
+    expect(runVitestModule.normalizeVitestListOutput(discovery?.stdout ?? "").trim()).toBe("");
+  }, 20_000);
 });

@@ -8,7 +8,7 @@ owners already frozen in `testing/source-contract-redisposition-review.json`,
 deletes accepted legacy evidence, removes the empty `legacy-contract` runner,
 and hands a zero-open-row inventory to Slice 4.
 
-This slice does not repeat the redisposition review. Except for the two exact
+This slice does not repeat the redisposition review. Except for the exact
 ownership corrections approved below, it does not change a reviewed class,
 invariant, disposition, replacement identity, deletion reason, or criticality
 citation. Nx remains outside the repository until the separate post-Slice-4
@@ -21,11 +21,11 @@ The scope is exactly 436 validator-open rows in 86 legacy files:
 - 289 behavior rows with exact future owner identities;
 - 1 mixed row with an exact architecture/behavior ordinal split;
 - 146 accepted deletion rows;
-- 178 Node/Vitest rows covering 1,101 assertion ordinals;
-- 90 jsdom/Vitest rows covering 598 assertion ordinals;
+- 174 Node/Vitest rows covering 1,065 assertion ordinals;
+- 94 jsdom/Vitest rows covering 634 assertion ordinals;
 - 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 71 Vitest target files, 19 Cargo identities, and 3 Playwright target files.
+- 71 Vitest target files, 20 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
@@ -40,6 +40,10 @@ comprehensive Cargo identity that behaviorally proves the Rust-owned invariant.
 The third correction preserves SC-000515's frozen row fields while assigning
 ordinals 1/11/19 to a structured repository rule and the other 18 ordinals to
 the real grid-wrapper configuration/selection behavior owner.
+The final correction binds that behavior subgroup to a component-project owner,
+moves SC-000025/435/552 to real route/component owners, and supplements
+SC-000464 with the application Cargo tail that exercises the actual spawned
+execution task.
 
 ## Connected Closure Components
 
@@ -191,17 +195,20 @@ forecast and its forecast validator from 269 Node rows and 0 jsdom rows to the
 corrected 179 Node rows and 90 jsdom rows. The approved SC-000464 correction
 then moves one five-ordinal row from Node to Cargo, and SC-000515 moves three
 source-shape ordinals from Node behavior ownership to architecture ownership,
-producing the final 178 Node rows/1,101 ordinals and 19 Cargo rows/161 ordinals.
+The final component-owner correction moves another four rows/36 ordinals from
+Node to jsdom, producing 174 Node rows/1,065 ordinals, 94 jsdom rows/634
+ordinals, and 19 Cargo rows/161 ordinals.
 SC-000464's exact owner is:
 
 - `test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled`
 
 SC-000515's architecture subgroup is ordinals `1, 11, 19`, invariant
 "Direct SVAR imports and scoped SVAR tree styles remain inside the approved
 Extractum grid wrapper boundary," owned by `rule:extractum-grid-wrapper-boundary`.
 Its behavior subgroup is ordinals `2-10, 12-18, 20-21`, invariant "Extractum
 grid wrappers retain locale, theme, overlay, date, tree, and selection runtime
-behavior," owned by the frozen grid-wrapper Vitest declaration.
+behavior," owned by `test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers`.
 
 Historical packet transport remains content-addressed evidence of the earlier
 review convention and is not rewritten or re-reviewed; the carrier uses a

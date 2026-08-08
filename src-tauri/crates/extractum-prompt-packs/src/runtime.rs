@@ -57,6 +57,11 @@ impl RunExecutionTicket {
     pub fn run_id(&self) -> i64 {
         self.run_id
     }
+
+    #[cfg(feature = "dev-fixtures")]
+    pub fn for_app_test(run_id: i64) -> Self {
+        Self { run_id }
+    }
 }
 
 pub fn dispatch_run_execution_ticket<Ticket, Task, Build, Spawn>(

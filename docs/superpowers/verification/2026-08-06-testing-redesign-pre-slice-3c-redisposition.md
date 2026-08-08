@@ -10,13 +10,15 @@ Forecast correction (2026-08-08): execution ownership now places the 90 rows / 5
 
 Task 4 correction (2026-08-08): the user-approved follow-up replaces SC-000464's insufficient five-owner joint mapping with one comprehensive real-orchestration Cargo owner, and converts SC-000515 to an exact mixed split: architecture ordinals `1, 11, 19` use `rule:extractum-grid-wrapper-boundary`; behavior ordinals `2-10, 12-18, 20-21` use the frozen Vitest owner. Final execution forecasts are Node `178 / 1,101`, jsdom `90 / 598`, Cargo `19 / 161`, and Playwright `3 / 21`; final dispositions are 289 behavior, 1 mixed, and 146 delete. Historical content-addressed evidence bytes remain unchanged.
 
+Final Task 4 owner correction (2026-08-08): the explicitly approved final wave keeps SC-000464's comprehensive service owner and adds the application Cargo owner that drives the actual execution-task builder and proves profile resolution is deferred until the spawned future is polled. SC-000515's 18 behavior ordinals move to a component owner rendering the real wrappers; SC-000025, SC-000435, and SC-000552 likewise move from helper-only Node owners to real route/component owners. The resulting execution forecast is Node `174 / 1,065`, jsdom `94 / 634`, Cargo `19 / 161`, and Playwright `3 / 21`. The SC-000515 architecture subgroup remains unchanged, and historical content-addressed evidence bytes remain unchanged.
+
 ## Review pins and scope reconciliation
 
 - Review base: `a54507d63420bb870c3870c91d7e22b050abae3e`.
 - Frozen ledger commit: `0045abf6006f42fe735d5142e139375d702d4fe9`.
 - Completed-review commit: `ccdda90815bcf080080687c9c33144afee61a5cd`.
 - Atomic ledger-cutover commit: `1e7a57ebbe7fc11b9878c914f1ae28dc59e03c82`.
-- Artifact bytes/SHA-256: `571347` / `298943c8d697a324b1c40d679e9ee25a94566a2d5f39bcf793a8890df25b22b6`.
+- Artifact bytes/SHA-256: `571281` / `65bedf06a35b00b5a585659ce859f23e30a424ceccb5c45429a08183b14fdcf1`.
 - Scope: 671 ledger rows = 436 validator-open review rows + 235 closed rows. The 436 open rows span 86 files; 124 carry the extraction-only `manual` marker.
 - The 26-row large-contract population is 16 rows from `src/lib/analysis-crate-boundary-contract.test.ts` plus 10 from `src/lib/crate-extraction-shell-cap-contract.test.ts`. The tail is the remaining 410 rows in 84 files.
 - Closed-row SHA-256: `385c6f0596e5c3d25f26df077484e25918af68fba5bab138fc8e014c7eceb2d8`. The carrier confirms byte-equivalence for all 235 closed rows. `SC-000355` and `SC-000366` are the two path-present closed rows and remained outside the review with the other 233 closed rows.

@@ -39,6 +39,7 @@ const approvedPlaywrightOwners = new Map([
 ]);
 const approvedSc000464CargoOwners = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled",
 ];
 const firstCorrectionSc000464CargoOwners = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
@@ -48,7 +49,22 @@ const firstCorrectionSc000464CargoOwners = [
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
 ];
 const preCorrectionSc000464Owner = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
-const sc000515BehaviorOwner = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const historicalSc000515BehaviorOwner = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const sc000515BehaviorOwner = "test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const finalTask4OwnerCorrections = new Map([
+  ["SC-000025", {
+    before: "test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
+    after: "test:vitest:src/routes/accounts/accounts-route-add-account-modal.behavior.component.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
+  }],
+  ["SC-000435", {
+    before: "test:vitest:src/routes/projects/library/library-page.behavior.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow",
+    after: "test:vitest:src/routes/projects/library/library-page.behavior.component.test.ts#library prototype contract > renders Library as a separate route backed by the current workflow",
+  }],
+  ["SC-000552", {
+    before: "test:vitest:src/routes/settings/settings-focus.behavior.test.ts#keeps Settings focused on LLM configuration",
+    after: "test:vitest:src/routes/settings/settings-focus.behavior.component.test.ts#keeps Settings focused on LLM configuration",
+  }],
+]);
 const approvedSc000515Subgroups = [
   {
     assertionOrdinals: [1, 11, 19],
@@ -887,6 +903,9 @@ describe("source-contract redisposition review", () => {
     expect(decision.class).toBe("B2_NEW_CHEAP_BEHAVIOR");
     expect(decision.resolution.replacementIds).toEqual(approvedSc000464CargoOwners);
     expect(gridDecision.resolution).toEqual({ subgroups: approvedSc000515Subgroups });
+    for (const [id, owners] of finalTask4OwnerCorrections) {
+      expect((reviewArtifact as any).decisions.find((item: any) => item.id === id).resolution.replacementIds).toEqual([owners.after]);
+    }
 
     const partial = clone(reviewArtifact) as any;
     partial.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = firstCorrectionSc000464CargoOwners;
@@ -899,12 +918,16 @@ describe("source-contract redisposition review", () => {
       "SC-000515: incomplete subgroup assertion ordinals",
     ]));
 
+    const helperOnlyOwner = clone(reviewArtifact) as any;
+    helperOnlyOwner.decisions.find((item: any) => item.id === "SC-000025").resolution.replacementIds = [finalTask4OwnerCorrections.get("SC-000025")?.before];
+    expect(validateReview({ ...input, artifact: helperOnlyOwner })).toContain("SC-000025: replacementIds must equal the approved component owner");
+
     const preCorrectionArtifact = clone(reviewArtifact) as any;
-    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = firstCorrectionSc000464CargoOwners;
-    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000515").resolution = {
-      disposition: "behavior",
-      replacementIds: [sc000515BehaviorOwner],
-    };
+    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = approvedSc000464CargoOwners.slice(0, 1);
+    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000515").resolution.subgroups[1].replacementIds = [historicalSc000515BehaviorOwner];
+    for (const [id, owners] of finalTask4OwnerCorrections) {
+      preCorrectionArtifact.decisions.find((item: any) => item.id === id).resolution.replacementIds = [owners.before];
+    }
     const preCorrectionLedger = applyReview({
       artifact: preCorrectionArtifact,
       baseLedger: realBaseLedger,
@@ -1070,9 +1093,9 @@ describe("source-contract redisposition review", () => {
     const executionForecast = (reviewArtifact as any).forecast.futureOwnersByMechanism;
 
     expect(executionForecast).toEqual({
-      node: { rows: 178, assertionOrdinals: 1101 },
+      node: { rows: 174, assertionOrdinals: 1065 },
       cargo: { rows: 19, assertionOrdinals: 161 },
-      jsdom: { rows: 90, assertionOrdinals: 598 },
+      jsdom: { rows: 94, assertionOrdinals: 634 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });
     expect((reviewArtifact as any).forecast.proposedNewJsdomRows).toBe(0);
