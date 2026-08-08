@@ -266,6 +266,7 @@ git commit -m "test: remove accepted legacy-only contracts"
 - Create: `e2e/playwright.config.ts`
 - Create: `e2e/fixtures/tauri.ts`
 - Create: `e2e/app-harness-smoke.spec.ts` (temporary tracked owner; removed in Task 6)
+- Modify: `vitest.config.ts`
 - Modify: `package.json`
 - Modify: `testing/runner-census.json`
 - Modify: `scripts/verify.mjs`
@@ -275,11 +276,12 @@ git commit -m "test: remove accepted legacy-only contracts"
 **Interfaces:**
 - Produces `test:app:e2e` and census owner `playwright:app-e2e` for `e2e/**/*.spec.ts`.
 - Keeps `test:e2e` and `playwright:gemini-browser-adapter` unchanged.
+- Adds `e2e/**/*.spec.ts` to the existing `PLAYWRIGHT_TESTS` exclusion so app specs are never collected by `unit-node`.
 - Uses explicit `http://127.0.0.1:4178` with `--strictPort` and one narrow pre-navigation Tauri IPC installer.
 
 - [ ] **Step 1: Write runner/census RED tests**
 
-Add exact assertions that the census contains both Playwright owners, that `verify` contains distinct adapter and app gates, and that an `e2e/smoke.spec.ts` candidate is owned only by `playwright:app-e2e`.
+Add exact assertions that the census contains both Playwright owners, that `verify` contains distinct adapter and app gates, and that an `e2e/smoke.spec.ts` candidate is owned only by `playwright:app-e2e` and excluded from `unit-node`.
 
 - [ ] **Step 2: Run the RED**
 
@@ -287,7 +289,7 @@ Add exact assertions that the census contains both Playwright owners, that `veri
 node scripts/run-vitest.mjs run --project unit-node scripts/verify.test.ts scripts/testing/validate-testing-transition.test.ts -t "application Playwright owner|app e2e gate"
 ```
 
-Expected: FAIL because the config, script, census owner, and gate do not exist.
+Expected: FAIL because the app config, script, census owner, verify gate, and Vitest exclusion do not exist; without the exclusion the candidate has duplicate Playwright/Vitest ownership.
 
 - [ ] **Step 3: Add the minimal harness**
 
@@ -299,6 +301,15 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 ```
 
 `e2e/fixtures/tauri.ts` installs only the invoke/event responses requested by a scenario before navigation; unknown commands throw with the command name. Do not introduce a production test route or duplicate component markup.
+
+Extend the existing Vitest exclusion in `vitest.config.ts`:
+
+```ts
+const PLAYWRIGHT_TESTS = Object.freeze([
+  "research/gemini_browser_adapter/tests/**/*.spec.ts",
+  "e2e/**/*.spec.ts",
+]);
+```
 
 - [ ] **Step 4: Prove one real route smoke and cleanup**
 
@@ -316,7 +327,7 @@ Expected: one Chromium test passes. Run the documented PowerShell PID/CommandLin
 node scripts/run-vitest.mjs run --project unit-node scripts/verify.test.ts scripts/testing/validate-testing-transition.test.ts
 node scripts/validate-testing-transition.mjs
 git diff --check
-git add e2e/playwright.config.ts e2e/fixtures/tauri.ts e2e/app-harness-smoke.spec.ts package.json testing/runner-census.json scripts/verify.mjs scripts/verify.test.ts scripts/testing/validate-testing-transition.test.ts
+git add e2e/playwright.config.ts e2e/fixtures/tauri.ts e2e/app-harness-smoke.spec.ts vitest.config.ts package.json testing/runner-census.json scripts/verify.mjs scripts/verify.test.ts scripts/testing/validate-testing-transition.test.ts
 git commit -m "test: establish application playwright owner"
 ```
 
