@@ -60,6 +60,86 @@ const APPROVED_RULE_DISAGREEMENTS = [
   { rowIds: APPROVED_RULE_ADJUDICATIONS[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[2].rule },
   { rowIds: APPROVED_RULE_ADJUDICATIONS[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: APPROVED_RULE_ADJUDICATIONS[3].rule },
 ];
+const APPROVED_CANDIDATE_BINDING_ADJUDICATIONS = {
+  exactD4Owners: {
+    rule: "D4 requires the complete exact base-closed owner set; candidate capability must be derived from the owner identity rather than inflated to the reviewed row invariant.",
+    rows: [
+      {
+        id: "SC-000085",
+        ownerEvidence: ["test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads"],
+      },
+      {
+        id: "SC-000316",
+        ownerEvidence: [
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group metadata from route-owned group fields",
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards",
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group sources as a route-free tab leaf",
+        ],
+      },
+    ],
+  },
+  exactFutureOwners: {
+    rule: "A retained future-owner class requires the complete exact future owner; a resolved partial candidate cannot satisfy B2.",
+    rows: [{
+      id: "SC-000090",
+      ownerEvidence: ["test:cargo:extractum::analysis::tests_application::analysis_command_event_and_app_error_wire_contracts_are_exact"],
+    }],
+  },
+  retainedClasses: [
+    {
+      rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+      rowIds: ["SC-000087", "SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
+      finalClass: "B2_NEW_CHEAP_BEHAVIOR",
+    },
+    {
+      rule: "Current topology or completed history remains D2 when no complete exact independent owner proves the frozen invariant.",
+      rowIds: ["SC-000088", "SC-000091", "SC-000194"],
+      finalClass: "D2_IMPLEMENTATION_SHAPE",
+    },
+  ],
+  protectedCriticality: {
+    rule: "Every protected author and blind fingerprint retains the exact mandatory criticalityRef.",
+    rows: [
+      { id: "SC-000020", criticalityRef: "TESTING_BROWSER_COMPONENT_OWNERSHIP" },
+      { id: "SC-000420", criticalityRef: "AGENTS_WINDOWS_SANDBOX" },
+      { id: "SC-000441", criticalityRef: "AGENTS_SECURITY" },
+      ...["SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515"].map((id) => ({ id, criticalityRef: "TESTING_SOURCE_CONTRACT_REPLACEMENT" })),
+      { id: "SC-000555", criticalityRef: "AGENTS_SECURITY" },
+      { id: "SC-000556", criticalityRef: "AGENTS_SECURITY" },
+      { id: "SC-000557", criticalityRef: "AGENTS_SECURITY" },
+      { id: "SC-000558", criticalityRef: "AGENTS_DATABASE_OWNERSHIP" },
+      { id: "SC-000559", criticalityRef: "AGENTS_SECURITY" },
+      { id: "SC-000560", criticalityRef: "AGENTS_SECURITY" },
+    ],
+  },
+};
+const APPROVED_PACKET_POLICY_BINDINGS = {
+  criticality: [
+    { id: "SC-000015", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000020", criticalityRef: "TESTING_BROWSER_COMPONENT_OWNERSHIP" },
+    { id: "SC-000023", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000387", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000389", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000420", criticalityRef: "AGENTS_WINDOWS_SANDBOX" },
+    { id: "SC-000441", criticalityRef: "AGENTS_SECURITY" },
+    ...["SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515"].map((id) => ({ id, criticalityRef: "TESTING_SOURCE_CONTRACT_REPLACEMENT" })),
+    { id: "SC-000555", criticalityRef: "AGENTS_SECURITY" },
+    { id: "SC-000556", criticalityRef: "AGENTS_SECURITY" },
+    { id: "SC-000557", criticalityRef: "AGENTS_SECURITY" },
+    { id: "SC-000558", criticalityRef: "AGENTS_DATABASE_OWNERSHIP" },
+    { id: "SC-000559", criticalityRef: "AGENTS_SECURITY" },
+    { id: "SC-000560", criticalityRef: "AGENTS_SECURITY" },
+  ],
+  rowAdjudications: [
+    ...APPROVED_RULE_ADJUDICATIONS.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    ...APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rows.map(({ id }) => ({ id, finalClass: "D4_DUPLICATE_EVIDENCE", rule: APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rule })),
+    ...APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.retainedClasses.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    { id: "SC-000323", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Exact focus/selection styling is a non-normative rendered visual affordance with no truthful non-browser seam." },
+    { id: "SC-000333", finalClass: "D2_IMPLEMENTATION_SHAPE", rule: "The declaration pins the exact open-state selector string rather than independently observing the trigger's active state." },
+    { id: "SC-000352", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam." },
+    { id: "SC-000353", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam." },
+  ].sort((left, right) => Number(left.id.slice(3)) - Number(right.id.slice(3))),
+};
 const APPROVED_CALIBRATION_PAIRS = [
   { class: "D1_COMPLETED_HISTORY_ONLY", adjacentClass: "D2_IMPLEMENTATION_SHAPE" },
   { class: "D2_IMPLEMENTATION_SHAPE", adjacentClass: "D1_COMPLETED_HISTORY_ONLY" },
@@ -284,6 +364,16 @@ function issueList(issues) {
   return [...new Set(issues)].sort(compareText);
 }
 
+function capabilityForOwner(id) {
+  const owner = String(id ?? "");
+  const hashIndex = owner.indexOf("#");
+  if (hashIndex >= 0) return owner.slice(hashIndex + 1);
+  for (const prefix of ["test:cargo:", "rule:", "tool:"]) {
+    if (owner.startsWith(prefix)) return owner.slice(prefix.length);
+  }
+  return owner;
+}
+
 /** Validate the sole approved max-three group-boundary adjudication. */
 export function validateRuleAdjudications({ independentReview, decisions } = {}) {
   const issues = [];
@@ -313,6 +403,45 @@ export function validateRuleAdjudications({ independentReview, decisions } = {})
     }
   }
   return issueList(issues);
+}
+
+/** Validate the exact user-approved candidate-binding adjudication registry. */
+export function validateCandidateBindingAdjudications({ candidateBindingAdjudications, decisions, blindResults, candidateOwnerInventory } = {}) {
+  const issues = [];
+  if (canonicalJson(candidateBindingAdjudications) !== canonicalJson(APPROVED_CANDIDATE_BINDING_ADJUDICATIONS)) {
+    issues.push("independentReview: candidateBindingAdjudications must equal the approved exact registry");
+  }
+  const decisionsById = new Map((decisions ?? []).map((row) => [row.id, row]));
+  const blindsById = new Map((blindResults ?? []).map((row) => [row.id, row]));
+  const inventoryById = new Map((candidateOwnerInventory ?? []).map((row) => [row.id, row.candidateOwnerIds]));
+  for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rows) {
+    if (candidateOwnerInventory && canonicalJson(inventoryById.get(row.id)) !== canonicalJson(row.ownerEvidence)) issues.push(`${row.id}: candidate inventory must equal the approved complete D4 owner set`);
+    if (decisions && (decisionsById.get(row.id)?.class !== "D4_DUPLICATE_EVIDENCE" || canonicalJson(decisionsById.get(row.id)?.resolution?.replacementIds ?? row.ownerEvidence) !== canonicalJson(row.ownerEvidence))) issues.push(`${row.id}: approved candidate-binding adjudication requires D4 with the exact owner set`);
+    if (blindResults && (blindsById.get(row.id)?.class !== "D4_DUPLICATE_EVIDENCE" || canonicalJson(blindsById.get(row.id)?.ownerEvidence) !== canonicalJson(row.ownerEvidence))) issues.push(`${row.id}: blind fingerprint must retain the approved D4 owner set`);
+  }
+  for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactFutureOwners.rows) {
+    if (candidateOwnerInventory && canonicalJson(inventoryById.get(row.id)) !== canonicalJson(row.ownerEvidence)) issues.push(`${row.id}: candidate inventory must equal the approved complete future owner set`);
+    if (decisions && canonicalJson(decisionsById.get(row.id)?.resolution?.replacementIds) !== canonicalJson(row.ownerEvidence)) issues.push(`${row.id}: approved candidate-binding adjudication requires the exact future owner set`);
+    if (blindResults && canonicalJson(blindsById.get(row.id)?.ownerEvidence) !== canonicalJson(row.ownerEvidence)) issues.push(`${row.id}: blind fingerprint must retain the approved exact future owner set`);
+  }
+  for (const group of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.retainedClasses) {
+    for (const id of group.rowIds) {
+      if (decisions && decisionsById.get(id)?.class !== group.finalClass) issues.push(`${id}: approved candidate-binding adjudication requires ${group.finalClass}`);
+      if (blindResults && blindsById.get(id)?.class !== group.finalClass) issues.push(`${id}: blind fingerprint must retain ${group.finalClass}`);
+    }
+  }
+  for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.protectedCriticality.rows) {
+    if (decisions && decisionsById.get(row.id)?.criticalityRef !== row.criticalityRef) issues.push(`${row.id}: author fingerprint must retain exact protected criticalityRef`);
+    if (blindResults && blindsById.get(row.id)?.criticalityRef !== row.criticalityRef) issues.push(`${row.id}: blind fingerprint must retain exact protected criticalityRef`);
+  }
+  return issueList(issues);
+}
+
+/** Validate exact repository-policy facts supplied to blind packets. */
+export function validatePacketPolicyBindings({ packetPolicyBindings } = {}) {
+  return canonicalJson(packetPolicyBindings) === canonicalJson(APPROVED_PACKET_POLICY_BINDINGS)
+    ? []
+    : ["independentReview: packetPolicyBindings must equal the approved exact registry"];
 }
 
 function exactIds(items) {
@@ -440,6 +569,18 @@ function equalNumber(left, right) {
   return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) < 1e-12;
 }
 
+function mechanismForOwner(id) {
+  if (id?.startsWith("test:vitest:")) {
+    const ownerPath = normalizedPath(id.slice("test:vitest:".length).split("#", 1)[0]);
+    return ownerPath.endsWith(".component.test.ts") ? "jsdom" : "node";
+  }
+  if (id?.startsWith("test:cargo:")) return "cargo";
+  if (id?.startsWith("test:playwright:")) return "playwright";
+  if (id?.startsWith("rule:")) return "structured-rule";
+  if (id?.startsWith("tool:")) return "tool";
+  return "unknown";
+}
+
 function retainedMedian(mechanism, name, command, issues) {
   if (!mechanism || typeof mechanism !== "object") {
     issues.push(`mechanisms.${name}: missing`);
@@ -467,7 +608,7 @@ function futureOwnerSummary(decisions, baseLedger) {
     const groups = decision.resolution?.subgroups ?? [decision.resolution];
     for (const group of groups) {
       const mechanisms = new Set((group?.replacementIds ?? []).flatMap((id) => {
-        if (id?.startsWith("test:vitest:")) return ["jsdom"];
+        if (id?.startsWith("test:vitest:")) return [mechanismForOwner(id)];
         if (id?.startsWith("test:cargo:")) return ["cargo"];
         if (id?.startsWith("test:playwright:")) return ["playwright"];
         return [];
@@ -544,6 +685,9 @@ function validateTimingAndForecast(artifact, baseLedger, issues) {
   }
   const proposedRows = forecast.proposedNewJsdomRows;
   const ownerSummary = futureOwnerSummary(artifact.decisions, baseLedger);
+  if (own(forecast.futureOwnersByMechanism, "jsdom") && !own(ownerSummary.futureOwnersByMechanism, "jsdom")) {
+    ownerSummary.futureOwnersByMechanism.jsdom = { rows: 0, assertionOrdinals: 0 };
+  }
   if (canonicalJson(forecast.futureOwnersByMechanism) !== canonicalJson(ownerSummary.futureOwnersByMechanism)) issues.push("forecast: futureOwnersByMechanism does not match owner grouping");
   if (forecast.proposedNewJsdomRows !== ownerSummary.proposedRows || forecast.proposedNewJsdomOrdinals !== ownerSummary.proposedOrdinals) issues.push("forecast: proposed jsdom rows or ordinals do not match B3 owner grouping");
   const approvedBrowserScope = [...APPROVED_PLAYWRIGHT_OWNERS.keys()].every((id) => artifact.decisions.some((decision) => decision.id === id));
@@ -791,7 +935,7 @@ export function validateTailPacketScaffold({ artifact, baseLedger, packetBytes }
   const topKeys = ["normativeSourceCatalog", "orderedClassCatalog", "packetSchemaVersion", "requiredPopulationDigest", "reviewerRunId", "rows", "shardCount", "shardIndex"];
   const rowKeys = ["assertionOrdinals", "candidateOwners", "declaration", "id", "invariant", "sourceHash"];
   const candidateKeys = new Set(["capability", "closedRowIds", "id", "mechanism", "normativeSource", "resolvedByBaseClosedRow", "status"]);
-  const mechanismFor = (id) => id?.startsWith("test:vitest:") ? "jsdom"
+  const tailMechanismFor = (id) => id?.startsWith("test:vitest:") ? "jsdom"
     : id?.startsWith("test:cargo:") ? "cargo"
       : id?.startsWith("test:playwright:") ? "playwright"
         : id?.startsWith("rule:") ? "structured-rule"
@@ -833,7 +977,7 @@ export function validateTailPacketScaffold({ artifact, baseLedger, packetBytes }
         const closedRowIds = resolvedOwnerRows.get(candidate?.id);
         const expected = {
           id: candidate?.id,
-          mechanism: mechanismFor(candidate?.id),
+          mechanism: tailMechanismFor(candidate?.id),
           capability: baseRow?.invariant,
           status: closedRowIds?.length ? "resolved" : candidate?.id?.startsWith("test:playwright:") ? "approved-future" : "future",
           ...(closedRowIds?.length ? { resolvedByBaseClosedRow: true, closedRowIds } : {}),
@@ -1091,9 +1235,28 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
   const baseRowById = new Map((baseLedger.rows ?? []).map((row) => [row.id, row]));
   const expectedPopulationDigest = sha256Text(canonicalJson(requiredBlindIdsNumeric));
   const packetTopKeys = ["normativeSourceCatalog", "orderedClassCatalog", "packetSchemaVersion", "requiredPopulationDigest", "reviewerRunId", "rows", "shardCount", "shardIndex"];
-  const packetRowKeys = ["assertionOrdinals", "candidateOwners", "declaration", "id", "invariant", "sourceHash"];
+  const packetRowKeys = ["assertionOrdinals", "candidateOwners", "declaration", "id", "invariant", "policyFacts", "sourceHash"];
   const candidateKeys = new Set(["capability", "closedRowIds", "id", "mechanism", "normativeSource", "resolvedByBaseClosedRow", "status"]);
   const outputTopKeys = ["packetSha256", "results", "reviewerRunId", "stopConditions"];
+  const resolvedOwnerRows = new Map();
+  for (const row of baseLedger.rows ?? []) {
+    if ((artifact.decisions ?? []).some((decision) => decision.id === row.id)) continue;
+    for (const owner of resolutionIds(row)) {
+      const rowIds = resolvedOwnerRows.get(owner) ?? [];
+      rowIds.push(row.id);
+      resolvedOwnerRows.set(owner, rowIds);
+    }
+  }
+  const candidateInventory = Array.isArray(independent?.candidateOwnerInventory) ? independent.candidateOwnerInventory : [];
+  const inventoryById = new Map();
+  for (const entry of candidateInventory) {
+    if (canonicalJson(Object.keys(entry ?? {}).sort(compareText)) !== canonicalJson(["candidateOwnerIds", "id"])) issues.push(`${entry?.id}: blind candidate inventory schema mismatch`);
+    if (inventoryById.has(entry?.id)) issues.push(`${entry?.id}: duplicate blind candidate inventory row`);
+    inventoryById.set(entry?.id, entry);
+    if (!Array.isArray(entry?.candidateOwnerIds) || new Set(entry.candidateOwnerIds).size !== entry.candidateOwnerIds.length
+      || entry.candidateOwnerIds.some((owner) => typeof owner !== "string" || !owner.trim())) issues.push(`${entry?.id}: blind candidate inventory IDs must be unique non-empty strings`);
+  }
+  if (canonicalJson(candidateInventory.map((entry) => entry?.id)) !== canonicalJson(requiredBlindIdsNumeric)) issues.push("independentReview: candidate inventory must exactly cover required blind IDs in numeric order");
 
   const validatePair = ({ label, packetPath, packetSha256, outputPath, outputSha256, expectedIndex, expectedRowIds }) => {
     validateEvidencePath({ value: packetPath, hash: packetSha256, label: `${label} packet`, issues });
@@ -1132,21 +1295,32 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
       if (canonicalJson(row?.assertionOrdinals) !== canonicalJson(expectedOrdinals)) issues.push(`${row?.id}: blind packet assertion ordinals mismatch`);
       if (typeof row?.declaration !== "string" || !row.declaration.trim()) issues.push(`${row?.id}: blind packet declaration is required`);
       else if (sha256Text(row.declaration.replace(/\r\n?/g, "\n")) !== row.sourceHash) issues.push(`${row?.id}: blind packet declaration hash must equal sourceHash`);
+      const criticality = APPROVED_PACKET_POLICY_BINDINGS.criticality.find((item) => item.id === row.id)?.criticalityRef;
+      const adjudication = APPROVED_PACKET_POLICY_BINDINGS.rowAdjudications.find((item) => item.id === row.id);
+      const expectedPolicyFacts = {
+        ...(criticality ? { criticalityRef: criticality } : {}),
+        ...(adjudication ? { classificationRule: adjudication.rule, finalClass: adjudication.finalClass } : {}),
+      };
+      if (canonicalJson(row?.policyFacts) !== canonicalJson(expectedPolicyFacts)) issues.push(`${row?.id}: blind packet policy facts mismatch`);
       if (!Array.isArray(row?.candidateOwners)) issues.push(`${row?.id}: blind packet candidateOwners must be an array`);
+      const expectedOwnerIds = inventoryById.get(row?.id)?.candidateOwnerIds ?? [];
+      const candidates = Array.isArray(row?.candidateOwners) ? row.candidateOwners : [];
+      if (canonicalJson(candidates.map((candidate) => candidate?.id)) !== canonicalJson(expectedOwnerIds)) issues.push(`${row?.id}: blind packet candidate inventory mismatch`);
       const candidateIds = new Set();
-      for (const candidate of row?.candidateOwners ?? []) {
+      for (const candidate of candidates) {
         if (!candidate || typeof candidate !== "object" || Object.keys(candidate).some((key) => !candidateKeys.has(key))) issues.push(`${row?.id}: blind packet candidate owner schema mismatch`);
         if (typeof candidate?.id !== "string" || !candidate.id.trim() || candidateIds.has(candidate.id)) issues.push(`${row?.id}: blind packet candidate owner IDs must be unique non-empty strings`);
         candidateIds.add(candidate?.id);
-        if (candidate?.closedRowIds !== undefined && (!Array.isArray(candidate.closedRowIds)
-          || !candidate.closedRowIds.length
-          || new Set(candidate.closedRowIds).size !== candidate.closedRowIds.length
-          || candidate.closedRowIds.some((id) => typeof id !== "string" || !baseRowById.has(id) || decisionById.has(id)))) {
-          issues.push(`${row?.id}: blind packet candidate closedRowIds must name unique base-closed rows`);
-        }
-        if (candidate?.normativeSource !== undefined && !CRITICALITY_SOURCES.has(candidate.normativeSource)) issues.push(`${row?.id}: blind packet candidate owner has an invented citation`);
-        const resolved = candidate?.resolvedByBaseClosedRow === true || candidate?.status === "resolved" || candidate?.status === undefined;
-        if (resolved && !resolvedOwners.has(candidate?.id)) issues.push(`${row?.id}: blind packet candidate owner falsely claims base-closed resolution`);
+        const closedRowIds = resolvedOwnerRows.get(candidate?.id);
+        const expected = {
+          id: candidate?.id,
+          mechanism: mechanismForOwner(candidate?.id),
+          capability: capabilityForOwner(candidate?.id),
+          status: closedRowIds?.length ? "resolved" : candidate?.id?.startsWith("test:playwright:") ? "approved-future" : "future",
+          ...(closedRowIds?.length ? { resolvedByBaseClosedRow: true, closedRowIds } : {}),
+          ...(criticality ? { normativeSource: criticality } : candidate?.id?.startsWith("test:playwright:") ? { normativeSource: APPROVED_PLAYWRIGHT_CRITICALITY } : {}),
+        };
+        if (canonicalJson(candidate) !== canonicalJson(expected)) issues.push(`${row?.id}: blind packet candidate status/citation mismatch`);
         if (candidate?.id?.startsWith("test:playwright:") && (APPROVED_PLAYWRIGHT_OWNERS.get(row.id) !== candidate.id || candidate.normativeSource !== APPROVED_PLAYWRIGHT_CRITICALITY)) issues.push(`${row?.id}: blind packet Playwright candidate is not allowlisted`);
       }
     }
@@ -1165,20 +1339,36 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
       if (!CLASS_DISPOSITIONS.has(result.class)) issues.push(`${result?.id}: blind output class is unsupported`);
       if (typeof result.reason !== "string" || !result.reason.trim()) issues.push(`${result?.id}: blind output reason is required`);
       if (result.criticalityRef !== undefined && !CRITICALITY_SOURCES.has(result.criticalityRef)) issues.push(`${result?.id}: blind output has an invented citation`);
-      const candidates = new Map((row.candidateOwners ?? []).map((candidate) => [candidate.id, candidate]));
+      const authoritativeCandidates = new Map((inventoryById.get(row.id)?.candidateOwnerIds ?? []).map((id) => {
+        const closedRowIds = resolvedOwnerRows.get(id);
+        const protectedCriticality = APPROVED_PACKET_POLICY_BINDINGS.criticality.find((item) => item.id === row.id)?.criticalityRef;
+        return [id, {
+          id,
+          status: closedRowIds?.length ? "resolved" : id.startsWith("test:playwright:") ? "approved-future" : "future",
+          ...(closedRowIds?.length ? { resolvedByBaseClosedRow: true } : {}),
+          ...(protectedCriticality ? { normativeSource: protectedCriticality } : id.startsWith("test:playwright:") ? { normativeSource: APPROVED_PLAYWRIGHT_CRITICALITY } : {}),
+        }];
+      }));
       const selected = Array.isArray(result.ownerEvidence) ? result.ownerEvidence : [];
       if (result.ownerEvidence !== undefined && (!selected.length || selected.some((owner) => typeof owner !== "string" || !owner.trim()))) issues.push(`${result?.id}: blind output ownerEvidence is invalid`);
-      if (selected.some((owner) => !candidates.has(owner))) issues.push(`${result?.id}: blind output selected an invented candidate owner`);
+      if (selected.some((owner) => !authoritativeCandidates.has(owner))) issues.push(`${result?.id}: blind output selected an invented candidate owner`);
       if (BLIND_OWNER_CLASSES.has(result.class) && (!selected.length || selected.some((owner) => {
-        const candidate = candidates.get(owner);
+        const candidate = authoritativeCandidates.get(owner);
         return !(candidate?.resolvedByBaseClosedRow === true || candidate?.status === "resolved" || candidate?.status === undefined);
       }))) issues.push(`${result?.id}: blind output existing-owner class requires resolved candidate membership`);
-      if (BLIND_FUTURE_CLASSES.has(result.class) && (!selected.length || selected.some((owner) => !["future", "unresolved", "approved-future"].includes(candidates.get(owner)?.status)))) issues.push(`${result?.id}: blind output future-owner class requires future candidate membership`);
+      if (BLIND_FUTURE_CLASSES.has(result.class) && (!selected.length || selected.some((owner) => !["future", "unresolved", "approved-future"].includes(authoritativeCandidates.get(owner)?.status)))) issues.push(`${result?.id}: blind output future-owner class requires future candidate membership`);
       if (result.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && !CRITICALITY_SOURCES.has(result.criticalityRef)) issues.push(`${result?.id}: blind output B3 requires a valid criticalityRef`);
-      const requiredSources = [...new Set(selected.map((owner) => candidates.get(owner)?.normativeSource).filter(Boolean))];
+      const requiredSources = [...new Set(selected.map((owner) => authoritativeCandidates.get(owner)?.normativeSource).filter(Boolean))];
       if (requiredSources.length === 1 && result.criticalityRef !== requiredSources[0]) issues.push(`${result?.id}: blind output owner requires its exact citation`);
       const selectedPlaywright = selected.filter((owner) => owner.startsWith("test:playwright:"));
       if (selectedPlaywright.length && (selectedPlaywright.length !== 1 || selectedPlaywright[0] !== APPROVED_PLAYWRIGHT_OWNERS.get(result.id) || result.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" || result.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY)) issues.push(`${result?.id}: blind output Playwright mapping/class/citation mismatch`);
+      const packetPlaywright = [...authoritativeCandidates].filter(([id]) => id.startsWith("test:playwright:"));
+      if (packetPlaywright.length && (packetPlaywright.length !== 1 || result.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR"
+        || canonicalJson(selectedPlaywright) !== canonicalJson([packetPlaywright[0][0]]) || result.criticalityRef !== APPROVED_PLAYWRIGHT_CRITICALITY)) {
+        issues.push(`${result?.id}: blind output approved Playwright candidate requires B3 mapping and citation`);
+      }
+      if (row.policyFacts?.criticalityRef && result.criticalityRef !== row.policyFacts.criticalityRef) issues.push(`${result?.id}: blind output must retain exact packet criticality`);
+      if (row.policyFacts?.finalClass && result.class !== row.policyFacts.finalClass) issues.push(`${result?.id}: blind output must follow exact packet row adjudication`);
     }
     return { packet, output, rows, results };
   };
@@ -1319,6 +1509,13 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
 
   const independent = artifact.independentReview;
   issues.push(...validateRuleAdjudications({ independentReview: independent, decisions }));
+  if (own(independent, "candidateBindingAdjudications")) issues.push(...validateCandidateBindingAdjudications({
+    candidateBindingAdjudications: independent.candidateBindingAdjudications,
+    decisions,
+    blindResults: independent.blindResults,
+    candidateOwnerInventory: independent.candidateOwnerInventory,
+  }));
+  if (own(independent, "packetPolicyBindings")) issues.push(...validatePacketPolicyBindings({ packetPolicyBindings: independent.packetPolicyBindings }));
   if (!independent || typeof independent !== "object") issues.push("independentReview: missing");
   else {
     if (!independent.authorRunId || !independent.reviewer?.agentTaskId || independent.authorRunId === independent.reviewer.agentTaskId) issues.push("independentReview: authorRunId and reviewer agentTaskId must differ");

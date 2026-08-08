@@ -13,6 +13,8 @@ import {
   resolutionForDecision,
   sha256Text,
   validateRuleAdjudications,
+  validateCandidateBindingAdjudications,
+  validatePacketPolicyBindings,
   validateTailFingerprints,
   validateTailIterationProtocol,
   validateTailOutputScaffold,
@@ -62,6 +64,66 @@ const approvedRuleDisagreements = [
   { rowIds: approvedRuleAdjudications[2].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "B3_PROTECTED_EXPENSIVE_BEHAVIOR", groupRuleChange: approvedRuleAdjudications[2].rule },
   { rowIds: approvedRuleAdjudications[3].rowIds, oldClass: "B2_NEW_CHEAP_BEHAVIOR", newClass: "D2_IMPLEMENTATION_SHAPE", groupRuleChange: approvedRuleAdjudications[3].rule },
 ];
+const approvedCandidateBindingAdjudications = {
+  exactD4Owners: {
+    rule: "D4 requires the complete exact base-closed owner set; candidate capability must be derived from the owner identity rather than inflated to the reviewed row invariant.",
+    rows: [
+      {
+        id: "SC-000085",
+        ownerEvidence: ["test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads"],
+      },
+      {
+        id: "SC-000316",
+        ownerEvidence: [
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group metadata from route-owned group fields",
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards",
+          "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group sources as a route-free tab leaf",
+        ],
+      },
+    ],
+  },
+  exactFutureOwners: {
+    rule: "A retained future-owner class requires the complete exact future owner; a resolved partial candidate cannot satisfy B2.",
+    rows: [{
+      id: "SC-000090",
+      ownerEvidence: ["test:cargo:extractum::analysis::tests_application::analysis_command_event_and_app_error_wire_contracts_are_exact"],
+    }],
+  },
+  retainedClasses: [
+    {
+      rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+      rowIds: ["SC-000087", "SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
+      finalClass: "B2_NEW_CHEAP_BEHAVIOR",
+    },
+    {
+      rule: "Current topology or completed history remains D2 when no complete exact independent owner proves the frozen invariant.",
+      rowIds: ["SC-000088", "SC-000091", "SC-000194"],
+      finalClass: "D2_IMPLEMENTATION_SHAPE",
+    },
+  ],
+  protectedCriticality: {
+    rule: "Every protected author and blind fingerprint retains the exact mandatory criticalityRef.",
+    rows: reviewArtifact.protectedRows.map(({ id, criticalityRef }) => ({ id, criticalityRef })),
+  },
+};
+const approvedPacketPolicyBindings = {
+  criticality: [
+    { id: "SC-000015", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000023", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000387", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    { id: "SC-000389", criticalityRef: "TESTING_COVERAGE_FLAKE_QUARANTINE" },
+    ...reviewArtifact.protectedRows.map(({ id, criticalityRef }) => ({ id, criticalityRef })),
+  ].sort((left, right) => Number(left.id.slice(3)) - Number(right.id.slice(3))),
+  rowAdjudications: [
+    ...approvedRuleAdjudications.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    ...approvedCandidateBindingAdjudications.exactD4Owners.rows.map(({ id }) => ({ id, finalClass: "D4_DUPLICATE_EVIDENCE", rule: approvedCandidateBindingAdjudications.exactD4Owners.rule })),
+    ...approvedCandidateBindingAdjudications.retainedClasses.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    { id: "SC-000323", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Exact focus/selection styling is a non-normative rendered visual affordance with no truthful non-browser seam." },
+    { id: "SC-000333", finalClass: "D2_IMPLEMENTATION_SHAPE", rule: "The declaration pins the exact open-state selector string rather than independently observing the trigger's active state." },
+    { id: "SC-000352", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam." },
+    { id: "SC-000353", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Cell centering and overflow ellipsis are non-normative rendered-layout details with no truthful non-browser seam." },
+  ].sort((left, right) => Number(left.id.slice(3)) - Number(right.id.slice(3))),
+};
 const approvedCalibrationPairs = reviewArtifact.independentReview.calibrations.map(({ class: reasonClass, adjacentClass }) => ({ class: reasonClass, adjacentClass }));
 const approvedMandatoryCohortNames = reviewArtifact.independentReview.mandatoryCohorts.map(({ name }) => name);
 
@@ -228,7 +290,10 @@ function artifactFor(decisions = defaultDecisions()) {
     const groups = decision.resolution?.subgroups ?? [decision.resolution];
     for (const group of groups) {
       const mechanisms = new Set<string>((group?.replacementIds ?? []).flatMap((id: string) => {
-        if (id.startsWith("test:vitest:")) return ["jsdom"];
+        if (id.startsWith("test:vitest:")) {
+          const ownerPath = id.slice("test:vitest:".length).split("#", 1)[0].replaceAll("\\", "/");
+          return [ownerPath.endsWith(".component.test.ts") ? "jsdom" : "node"];
+        }
         if (id.startsWith("test:cargo:")) return ["cargo"];
         return [];
       }));
@@ -817,12 +882,12 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      B2_NEW_CHEAP_BEHAVIOR: 284,
+      B2_NEW_CHEAP_BEHAVIOR: 282,
       B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
       D1_COMPLETED_HISTORY_ONLY: 6,
-      D2_IMPLEMENTATION_SHAPE: 121,
-      D3_NON_OBSERVABLE_VISUAL: 11,
-      D4_DUPLICATE_EVIDENCE: 6,
+      D2_IMPLEMENTATION_SHAPE: 122,
+      D3_NON_OBSERVABLE_VISUAL: 10,
+      D4_DUPLICATE_EVIDENCE: 8,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
     expect(reviewArtifact.independentReview.blindResults).toHaveLength(95);
@@ -895,6 +960,22 @@ describe("source-contract redisposition review", () => {
     const playwrightProposal = artifactFor();
     playwrightProposal.decisions[0].resolution.replacementIds = ["test:playwright:future/proposal.spec.ts"];
     expect(validateReview(review({ artifact: playwrightProposal }))).toContain("SC-000001: browser owner requires program amendment");
+  });
+
+  it("derives future Vitest mechanisms from the frozen component path convention", () => {
+    const decisions = defaultDecisions();
+    decisions.find((decision) => decision.id === "SC-000002").resolution.replacementIds = [
+      "test:vitest:src/future.component.test.ts#component owner",
+    ];
+    const artifact = artifactFor(decisions);
+
+    expect(artifact.forecast.futureOwnersByMechanism).toEqual({
+      node: { rows: 13, assertionOrdinals: 26 },
+      jsdom: { rows: 1, assertionOrdinals: 2 },
+    });
+    expect(artifact.forecast.proposedNewJsdomRows).toBe(1);
+    expect(artifact.forecast.proposedNewJsdomOrdinals).toBe(2);
+    expect(validateReview(review({ artifact }))).toEqual([]);
   });
 
   it("allows only the exact approved three-row Playwright mapping outside jsdom timing", () => {
@@ -1416,6 +1497,116 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...realInput, artifact: declarationArtifact, evidenceBytes: declarationBytes })).toContain(
       `${targetId}: blind packet declaration hash must equal sourceHash`,
     );
+  });
+
+  it("binds Task 3 packet candidates and blind owner evidence to authoritative owner facts", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const realInput = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger: realBaseLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+    } as any;
+    const firstShard = (reviewArtifact as any).independentReview.shards[0];
+    const validatePacketMutation = (mutate: (packet: any) => void) => {
+      const bytes = new Map(loaded.evidenceBytes);
+      const packet = JSON.parse(evidenceText(bytes.get(firstShard.packetPath)));
+      mutate(packet);
+      bytes.set(firstShard.packetPath, `${JSON.stringify(packet, null, 2)}\n`);
+      return validateReview({ ...realInput, evidenceBytes: bytes });
+    };
+
+    const invented = validatePacketMutation((packet) => {
+      packet.rows.find((row: any) => row.id === "SC-000004").candidateOwners.push({
+        id: "test:vitest:scripts/invented.test.ts#invented",
+        mechanism: "node",
+        capability: "invented",
+        status: "future",
+      });
+    });
+    expect(invented).toContain("SC-000004: blind packet candidate inventory mismatch");
+
+    const omitted = validatePacketMutation((packet) => {
+      packet.rows.find((row: any) => row.id === "SC-000004").candidateOwners = [];
+    });
+    expect(omitted).toContain("SC-000004: blind packet candidate inventory mismatch");
+
+    for (const mutate of [
+      (candidate: any) => { delete candidate.capability; },
+      (candidate: any) => { candidate.capability = "arbitrary capability"; },
+      (candidate: any) => { delete candidate.mechanism; },
+      (candidate: any) => { candidate.mechanism = "arbitrary mechanism"; },
+      (candidate: any) => { delete candidate.status; },
+      (candidate: any) => { candidate.status = "arbitrary status"; },
+    ]) {
+      const issues = validatePacketMutation((packet) => {
+        mutate(packet.rows.find((row: any) => row.id === "SC-000004").candidateOwners[0]);
+      });
+      expect(issues).toContain("SC-000004: blind packet candidate status/citation mismatch");
+    }
+
+    const wrongResolvedSemantics = validatePacketMutation((packet) => {
+      const candidate = packet.rows.find((row: any) => row.id === "SC-000064").candidateOwners[0];
+      candidate.status = "future";
+      candidate.resolvedByBaseClosedRow = false;
+      delete candidate.closedRowIds;
+    });
+    expect(wrongResolvedSemantics).toContain("SC-000064: blind packet candidate status/citation mismatch");
+
+    const unboundBytes = new Map(loaded.evidenceBytes);
+    const packet = JSON.parse(evidenceText(unboundBytes.get(firstShard.packetPath)));
+    const output = JSON.parse(evidenceText(unboundBytes.get(firstShard.outputPath)));
+    const packetRow = packet.rows.find((row: any) => row.id === "SC-000004");
+    const outputRow = output.results.find((row: any) => row.id === "SC-000004");
+    const unboundOwner = "test:vitest:scripts/invented.test.ts#invented";
+    packetRow.candidateOwners = [{ id: unboundOwner, mechanism: "node", capability: packetRow.invariant, status: "future" }];
+    outputRow.ownerEvidence = [unboundOwner];
+    unboundBytes.set(firstShard.packetPath, `${JSON.stringify(packet, null, 2)}\n`);
+    unboundBytes.set(firstShard.outputPath, `${JSON.stringify(output, null, 2)}\n`);
+    expect(validateReview({ ...realInput, evidenceBytes: unboundBytes })).toContain(
+      "SC-000004: blind output selected an invented candidate owner",
+    );
+  });
+
+  it("pins the approved candidate-binding owner, retained-class, and protected-criticality adjudications", () => {
+    expect(validateCandidateBindingAdjudications({
+      candidateBindingAdjudications: approvedCandidateBindingAdjudications,
+    })).toEqual([]);
+
+    for (const mutate of [
+      (value: any) => { value.exactD4Owners.rows[1].ownerEvidence.pop(); },
+      (value: any) => { value.exactFutureOwners.rows[0].ownerEvidence = ["test:cargo:extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects"]; },
+      (value: any) => { value.retainedClasses[0].rowIds = value.retainedClasses[0].rowIds.filter((id: string) => id !== "SC-000416"); },
+      (value: any) => { value.protectedCriticality.rows[0].criticalityRef = "AGENTS_SECURITY"; },
+      (value: any) => { value.extra = true; },
+    ]) {
+      const changed = clone(approvedCandidateBindingAdjudications) as any;
+      mutate(changed);
+      expect(validateCandidateBindingAdjudications({ candidateBindingAdjudications: changed })).toContain(
+        "independentReview: candidateBindingAdjudications must equal the approved exact registry",
+      );
+    }
+  });
+
+  it("pins fail-closed packet policy facts independently of author decisions", () => {
+    expect(validatePacketPolicyBindings({ packetPolicyBindings: approvedPacketPolicyBindings })).toEqual([]);
+    for (const mutate of [
+      (value: any) => { value.criticality.shift(); },
+      (value: any) => { value.criticality[0].criticalityRef = "AGENTS_SECURITY"; },
+      (value: any) => { value.rowAdjudications[0].finalClass = "D3_NON_OBSERVABLE_VISUAL"; },
+      (value: any) => { value.criticality[0].id = "SC-999999"; },
+    ]) {
+      const changed = clone(approvedPacketPolicyBindings) as any;
+      mutate(changed);
+      expect(validatePacketPolicyBindings({ packetPolicyBindings: changed })).toContain(
+        "independentReview: packetPolicyBindings must equal the approved exact registry",
+      );
+    }
   });
 
   it("applies only resolutions in stable order, serializes canonically, and is idempotent", () => {
