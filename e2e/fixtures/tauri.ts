@@ -10,14 +10,7 @@ export async function installTauriScenario(page: Page, scenario: TauriScenario =
     type TauriEvent = { event: string; id: number; payload: unknown };
 
     const callbacks = new Map<number, { callback: (event: TauriEvent) => void; once: boolean }>();
-    const listeners = new Map<number, { event: string; callbackId: number }>();
     let nextCallbackId = 1;
-
-    function removeListener(listenerId: number) {
-      const listener = listeners.get(listenerId);
-      listeners.delete(listenerId);
-      if (listener) callbacks.delete(listener.callbackId);
-    }
 
     function runCallback(callbackId: number, event: TauriEvent) {
       const entry = callbacks.get(callbackId);
@@ -31,17 +24,15 @@ export async function installTauriScenario(page: Page, scenario: TauriScenario =
         if (command === "plugin:event|listen") {
           const event = String(args.event);
           const callbackId = Number(args.handler);
-          const listenerId = callbackId;
-          listeners.set(listenerId, { event, callbackId });
           queueMicrotask(() => {
             for (const payload of events[event] ?? []) {
-              runCallback(callbackId, { event, id: listenerId, payload });
+              runCallback(callbackId, { event, id: callbackId, payload });
             }
           });
           return callbackId;
         }
         if (command === "plugin:event|unlisten") {
-          removeListener(Number(args.eventId));
+          callbacks.delete(Number(args.eventId));
           return undefined;
         }
         if (!Object.hasOwn(invokes, command)) throw new Error(`Unexpected Tauri command: ${command}`);
@@ -55,13 +46,14 @@ export async function installTauriScenario(page: Page, scenario: TauriScenario =
       unregisterCallback(callbackId: number) {
         callbacks.delete(callbackId);
       },
+      callbacks,
     };
 
     Object.defineProperty(window, "__TAURI_INTERNALS__", { value: internals, configurable: true });
     Object.defineProperty(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
       value: {
         unregisterListener(_event: string, listenerId: number) {
-          removeListener(listenerId);
+          callbacks.delete(listenerId);
         },
       },
       configurable: true,

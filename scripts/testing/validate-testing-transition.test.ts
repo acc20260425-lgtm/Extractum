@@ -98,6 +98,8 @@ describe("runner census validation", () => {
       const internals = (window as typeof window & { __TAURI_INTERNALS__: {
         invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
         transformCallback(callback: (event: unknown) => void, once?: boolean): number;
+        unregisterCallback(callbackId: number): void;
+        callbacks: Map<number, unknown>;
       } }).__TAURI_INTERNALS__;
       const transformCallback = internals.transformCallback.bind(internals);
       const callbackIds: number[] = [];
@@ -126,6 +128,13 @@ describe("runner census validation", () => {
       expect(progress).toEqual(["first", "second"]);
       expect(complete).toEqual(["once"]);
       expect(manualOnce).toHaveBeenCalledTimes(1);
+      expect(internals.callbacks.has(manualOnceId)).toBe(false);
+
+      const manualUnregisterId = internals.transformCallback(() => {});
+      await internals.invoke("plugin:event|listen", { event: "manual_unregistered", handler: manualUnregisterId });
+      expect(internals.callbacks.has(manualUnregisterId)).toBe(true);
+      internals.unregisterCallback(manualUnregisterId);
+      expect(internals.callbacks.has(manualUnregisterId)).toBe(false);
 
       await unlistenProgress();
       await internals.invoke("plugin:event|listen", { event: "progress", handler: progressCallbackId });
