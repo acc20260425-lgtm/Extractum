@@ -272,6 +272,15 @@ function styleSelectorFact(selector) {
       value: selector.value ?? null,
     };
   }
+  if (selector.type === "PseudoClassSelector") {
+    return {
+      type: "pseudo",
+      name: selector.name,
+      arguments: (selector.args?.children ?? []).flatMap((complexSelector) =>
+        (complexSelector.children ?? []).flatMap((relativeSelector) =>
+          (relativeSelector.selectors ?? []).map(styleSelectorFact))),
+    };
+  }
   return { type: "unsupported", syntaxKind: selector.type };
 }
 
@@ -404,12 +413,22 @@ function defaultCargoMetadata(root) {
   });
 }
 
+function defaultRepositoryFiles(root) {
+  return execFileSync("git", ["ls-files", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    windowsHide: true,
+  }).split("\0").filter(Boolean);
+}
+
 export function createRepositoryIndex({
   root,
   readFile = (absolutePath) => readFileSync(absolutePath, "utf8"),
   ts = tsCompiler,
   svelte = svelteCompiler,
   loadCargoMetadata = () => defaultCargoMetadata(root),
+  listFiles = () => defaultRepositoryFiles(root),
 }) {
   const repositoryRoot = path.resolve(root);
   const rawSourceCache = new Map();
@@ -419,6 +438,7 @@ export function createRepositoryIndex({
   let cargoMetadata;
   let cargoError;
   let cargoLoaded = false;
+  let repositoryFiles;
 
   const cachedRawSource = (selected) => {
     if (rawSourceCache.has(selected.relativePath)) {
@@ -464,6 +484,13 @@ export function createRepositoryIndex({
   };
 
   return freeze({
+    listFiles() {
+      if (!repositoryFiles) {
+        repositoryFiles = freeze([...new Set(listFiles().map((inputPath) =>
+          repositoryPath(repositoryRoot, inputPath).relativePath))].sort());
+      }
+      return repositoryFiles;
+    },
     getText(inputPath) {
       return cachedRawSource(repositoryPath(repositoryRoot, inputPath));
     },

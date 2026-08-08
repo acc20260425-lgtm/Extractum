@@ -1,3 +1,6 @@
-export function reportCanvasGroupEditorProps(selectedGroupEditorId: string) {
-  return { selectedGroupEditorId };
+export function reportCanvasGroupEditorProps(
+  selectedGroupEditorId: string,
+  onChangeSelectedGroupId: (value: string) => void,
+) {
+  return { selectedGroupEditorId, onChangeSelectedGroupId };
 }

@@ -13,9 +13,9 @@ use crate::error::AppResult;
 use crate::llm::{resolve_profile_for_backend, LlmSchedulerState};
 use extractum_prompt_packs::{
     cancel_prompt_pack_run_in_pool, cleanup_interrupted_prompt_pack_runs_in_pool,
-    delete_prompt_pack_run_in_pool, execute_prepared_api_run, execute_prepared_browser_run,
-    fail_run_execution, list_active_prompt_pack_runs_in_pool, list_prompt_pack_run_stages_in_pool,
-    list_prompt_pack_runs_in_pool,
+    delete_prompt_pack_run_in_pool, dispatch_run_execution_ticket, execute_prepared_api_run,
+    execute_prepared_browser_run, fail_run_execution, list_active_prompt_pack_runs_in_pool,
+    list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
     preflight_youtube_summary_run as preflight_youtube_summary_run_service, prepare_run_execution,
     start_youtube_summary_run_service, update_prompt_pack_run_in_pool, ListPromptPackRunsRequest,
     PreflightYoutubeSummaryRunRequest, PreparedRunExecution, PromptPackEventSink,
@@ -30,14 +30,6 @@ use extractum_prompt_packs::{
 };
 
 type ExecutionTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
-
-fn dispatch_execution_ticket<T, Build, Spawn>(ticket: T, build: Build, spawn: Spawn)
-where
-    Build: FnOnce(T) -> ExecutionTask,
-    Spawn: FnOnce(ExecutionTask),
-{
-    spawn(build(ticket));
-}
 
 #[tauri::command]
 pub async fn preflight_youtube_summary_run(
@@ -126,7 +118,7 @@ fn spawn_youtube_summary_execution(
     ticket: RunExecutionTicket,
 ) {
     let build_handle = handle.clone();
-    dispatch_execution_ticket(
+    dispatch_run_execution_ticket(
         ticket,
         move |ticket| build_youtube_summary_execution_task(build_handle, pool, ticket),
         |task| {
@@ -308,7 +300,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use super::{dispatch_execution_ticket, ExecutionTask};
+    use extractum_prompt_packs::dispatch_run_execution_ticket;
+
+    use super::ExecutionTask;
 
     #[tokio::test]
     async fn execution_adapter_resolves_api_profile_only_inside_spawned_task() {
@@ -317,7 +311,7 @@ mod tests {
         let captured = Arc::new(Mutex::new(None::<ExecutionTask>));
         let captured_for_spawn = captured.clone();
 
-        dispatch_execution_ticket(
+        dispatch_run_execution_ticket(
             "opaque-ticket",
             move |_| {
                 Box::pin(async move {
@@ -337,18 +331,6 @@ mod tests {
             .expect("spawned task");
         task.await;
         assert_eq!(resolutions.load(Ordering::SeqCst), 1);
-
-        let source = include_str!("runtime_commands.rs");
-        let task_body = source
-            .split("fn build_youtube_summary_execution_task")
-            .nth(1)
-            .expect("execution task builder");
-        assert!(
-            task_body.find("Box::pin(async move").expect("async task")
-                < task_body
-                    .find("resolve_profile_for_backend")
-                    .expect("profile resolution")
-        );
     }
 
     #[test]
@@ -358,7 +340,7 @@ mod tests {
         let builds_for_task = builds.clone();
         let spawns_for_adapter = spawns.clone();
 
-        dispatch_execution_ticket(
+        dispatch_run_execution_ticket(
             "opaque-ticket",
             move |_| {
                 builds_for_task.fetch_add(1, Ordering::SeqCst);

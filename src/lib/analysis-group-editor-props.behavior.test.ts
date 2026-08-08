@@ -5,8 +5,13 @@ describe("analysis group editor props", () => {
     const modulePath = "./analysis-group-editor-props";
     const contract = await import(/* @vite-ignore */ modulePath);
 
-    expect(contract.reportCanvasGroupEditorProps("group-7")).toEqual({
+    const selections: string[] = [];
+    const props = contract.reportCanvasGroupEditorProps("group-7", (value: string) => selections.push(value));
+    expect(props).toEqual({
       selectedGroupEditorId: "group-7",
+      onChangeSelectedGroupId: expect.any(Function),
     });
+    props.onChangeSelectedGroupId("group-8");
+    expect(selections).toEqual(["group-8"]);
   });
 });

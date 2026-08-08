@@ -15,4 +15,23 @@ it("project source date columns use the shared formatter", () => {
   expect(sharedProjectDateColumn).toBeTypeOf("function");
   expect(sharedProjectDateColumn?.({ id: "lastCollectedAt" }))
     .toEqual({ id: "lastCollectedAt", dateTimeFormat: "datetime" });
+
+  const selectCell = { component: "select" };
+  const titleCell = { component: "title" };
+  const libraryColumns = projectSourceGrid.connectFromLibraryGridColumns(selectCell, titleCell);
+  expect(libraryColumns.map((column) => column.id)).toEqual([
+    "selected",
+    "title",
+    "typeLabel",
+    "projectCount",
+    "lastCollectedAt",
+    "localCopyLabel",
+    "status",
+  ]);
+  expect(libraryColumns[0]?.cell).toBe(selectCell);
+  expect(libraryColumns[1]?.cell).toBe(titleCell);
+  expect(libraryColumns[4]).toMatchObject({
+    id: "lastCollectedAt",
+    dateTimeFormat: "datetime",
+  });
 });

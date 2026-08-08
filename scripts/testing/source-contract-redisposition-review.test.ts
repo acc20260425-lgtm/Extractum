@@ -38,6 +38,9 @@ const approvedPlaywrightOwners = new Map([
   ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
 ]);
 const approvedSc000464CargoOwners = [
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order",
+];
+const firstCorrectionSc000464CargoOwners = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
   "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking",
@@ -45,6 +48,21 @@ const approvedSc000464CargoOwners = [
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
 ];
 const preCorrectionSc000464Owner = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
+const sc000515BehaviorOwner = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const approvedSc000515Subgroups = [
+  {
+    assertionOrdinals: [1, 11, 19],
+    disposition: "architecture",
+    invariant: "Direct SVAR imports and scoped SVAR tree styles remain inside the approved Extractum grid wrapper boundary.",
+    replacementIds: ["rule:extractum-grid-wrapper-boundary"],
+  },
+  {
+    assertionOrdinals: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 20, 21],
+    disposition: "behavior",
+    invariant: "Extractum grid wrappers retain locale, theme, overlay, date, tree, and selection runtime behavior.",
+    replacementIds: [sc000515BehaviorOwner],
+  },
+];
 const approvedRuleAdjudications = [
   {
     rule: "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
@@ -849,7 +867,7 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, evidenceBytes: changed })).toContain("tailReview: packet shard 0 byte hash mismatch");
   });
 
-  it("pins the approved SC-000464 correction to the five real Cargo owners", async () => {
+  it("pins the approved SC-000464 comprehensive owner and SC-000515 mixed ordinal split", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
       loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
@@ -864,20 +882,29 @@ describe("source-contract redisposition review", () => {
       evidenceBytes: loaded.evidenceBytes,
     };
     const decision = (reviewArtifact as any).decisions.find((item: any) => item.id === "SC-000464");
+    const gridDecision = (reviewArtifact as any).decisions.find((item: any) => item.id === "SC-000515");
 
     expect(decision.class).toBe("B2_NEW_CHEAP_BEHAVIOR");
     expect(decision.resolution.replacementIds).toEqual(approvedSc000464CargoOwners);
+    expect(gridDecision.resolution).toEqual({ subgroups: approvedSc000515Subgroups });
 
     const partial = clone(reviewArtifact) as any;
-    partial.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = approvedSc000464CargoOwners.slice(0, 4);
-    partial.forecast.futureOwnersByMechanism.node.assertionOrdinals -= 5;
-    partial.forecast.futureOwnersByMechanism.node.rows -= 1;
-    partial.forecast.futureOwnersByMechanism.cargo.assertionOrdinals += 5;
-    partial.forecast.futureOwnersByMechanism.cargo.rows += 1;
-    expect(validateReview({ ...input, artifact: partial })).toContain("SC-000464: replacementIds must equal the approved five Cargo owners");
+    partial.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = firstCorrectionSc000464CargoOwners;
+    expect(validateReview({ ...input, artifact: partial })).toContain("SC-000464: replacementIds must equal the approved comprehensive Cargo owner");
+
+    const incompleteGrid = clone(reviewArtifact) as any;
+    incompleteGrid.decisions.find((item: any) => item.id === "SC-000515").resolution.subgroups[0].assertionOrdinals = [1, 11];
+    expect(validateReview({ ...input, artifact: incompleteGrid })).toEqual(expect.arrayContaining([
+      "SC-000515: resolution must equal the approved architecture/behavior ordinal split",
+      "SC-000515: incomplete subgroup assertion ordinals",
+    ]));
 
     const preCorrectionArtifact = clone(reviewArtifact) as any;
-    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = [preCorrectionSc000464Owner];
+    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = firstCorrectionSc000464CargoOwners;
+    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000515").resolution = {
+      disposition: "behavior",
+      replacementIds: [sc000515BehaviorOwner],
+    };
     const preCorrectionLedger = applyReview({
       artifact: preCorrectionArtifact,
       baseLedger: realBaseLedger,
@@ -887,7 +914,7 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, currentLedger: preCorrectionLedger })).toEqual([]);
 
     const unapprovedLedger = clone(preCorrectionLedger) as any;
-    unapprovedLedger.rows.find((item: any) => item.id === "SC-000464").replacementIds = ["test:cargo:extractum::unapproved_owner"];
+    unapprovedLedger.rows.find((item: any) => item.id === "SC-000464").replacementIds = [preCorrectionSc000464Owner];
     expect(validateReview({ ...input, currentLedger: unapprovedLedger })).toContain("ledger: rows changed outside approved review apply");
   });
 
@@ -1043,7 +1070,7 @@ describe("source-contract redisposition review", () => {
     const executionForecast = (reviewArtifact as any).forecast.futureOwnersByMechanism;
 
     expect(executionForecast).toEqual({
-      node: { rows: 178, assertionOrdinals: 1104 },
+      node: { rows: 178, assertionOrdinals: 1101 },
       cargo: { rows: 19, assertionOrdinals: 161 },
       jsdom: { rows: 90, assertionOrdinals: 598 },
       playwright: { rows: 3, assertionOrdinals: 21 },

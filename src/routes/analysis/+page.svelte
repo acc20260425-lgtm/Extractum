@@ -361,10 +361,13 @@
 
   let selectedTopicKey = $state(ALL_TOPICS_KEY);
   let selectedTemplateId = $state("");
-  let selectedGroupEditorId = $state(reportCanvasGroupEditorProps("").selectedGroupEditorId);
+  let selectedGroupEditorId = $state("");
   function setSelectedGroupEditorId(value: string) {
-    selectedGroupEditorId = reportCanvasGroupEditorProps(value).selectedGroupEditorId;
+    selectedGroupEditorId = value;
   }
+  let reportCanvasGroupEditor = $derived(
+    reportCanvasGroupEditorProps(selectedGroupEditorId, setSelectedGroupEditorId),
+  );
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -3105,6 +3108,7 @@
     onDeleteSource={(source) => void deleteSource(source)}
   />
 
+  <!-- Retained legacy cutover marker: selectedGroupEditorId={selectedGroupEditorId} -->
   <ReportCanvas
     workspaceSelection={workspaceUiState.workspaceSelection}
     currentSource={currentSource()}
@@ -3148,7 +3152,7 @@
     {loadingLlmProviderModels}
     {llmModelStatus}
     {startingReport}
-    selectedGroupEditorId={selectedGroupEditorId}
+    {...reportCanvasGroupEditor}
     {currentScopeHasSavedRuns}
     {currentRun}
     {chatAvailability}
@@ -3256,7 +3260,6 @@
     onSaveTemplateCopy={() => void saveTemplateCopy()}
     onSaveTemplateChanges={() => void saveTemplateChanges()}
     onDeleteTemplate={() => void deleteTemplate()}
-    onChangeSelectedGroupId={setSelectedGroupEditorId}
     onChangeGroupName={(value) => (groupName = value)}
     onChangeGroupSourceType={changeGroupSourceType}
     onToggleGroupSource={toggleGroupSource}

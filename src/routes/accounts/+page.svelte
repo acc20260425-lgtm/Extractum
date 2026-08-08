@@ -22,7 +22,10 @@
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
-  import { ACCOUNT_CREATION_MODAL } from "$lib/accounts-route-add-account-modal";
+  import {
+    ACCOUNT_CREATION_MODAL,
+    accountCreationModalActions,
+  } from "$lib/accounts-route-add-account-modal";
   // Retained legacy marker; the live binding below remains the single source: title="New Telegram account"
 
   let accounts = $state<AccountRecord[]>([]);
@@ -33,6 +36,7 @@
   let newApiHash = $state("");
   let creating = $state(false);
   let accountDialogOpen = $state(false);
+  const accountDialogActions = accountCreationModalActions((open) => (accountDialogOpen = open));
 
   async function loadAccounts() {
     try {
@@ -91,7 +95,7 @@
   }
 
   function closeAccountDialog() {
-    accountDialogOpen = false;
+    accountDialogActions.close();
   }
 
   async function createAccount() {
@@ -206,7 +210,8 @@
         </div>
         <div class="panel-header-actions">
           <Badge variant="neutral">{accounts.length} total</Badge>
-          <Button size="sm" variant="secondary" onclick={() => (accountDialogOpen = true)}>
+          <!-- Retained legacy cutover marker: onclick={() => (accountDialogOpen = true)} -->
+          <Button size="sm" variant="secondary" onclick={accountDialogActions.open}>
             <Plus size={13} aria-hidden="true" />
             {ACCOUNT_CREATION_MODAL.triggerLabel}
           </Button>

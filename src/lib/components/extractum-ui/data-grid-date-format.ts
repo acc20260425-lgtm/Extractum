@@ -16,6 +16,15 @@ export type ExtractumDataGridResponsive = Record<
 
 const UNIX_MILLISECONDS_THRESHOLD = 100_000_000_000;
 
+export const EXTRACTUM_GRID_WILLOW_PROPS = Object.freeze({ fonts: false });
+
+export function extractumGridLocaleWords(
+  coreWords: Record<string, unknown>,
+  gridWords: Record<string, unknown>,
+) {
+  return { ...coreWords, ...gridWords };
+}
+
 export function extractumGridOverlay(rows: readonly unknown[], overlay: string | undefined): string | undefined {
   return rows.length === 0 ? overlay : undefined;
 }
@@ -30,6 +39,33 @@ export function extractumGridSelection(ids: readonly unknown[]): string[] {
 
 export function extractumTreeGridSelection(id: string | null): string[] {
   return id ? [id] : [];
+}
+
+export function extractumDataGridRuntime(
+  selectedRowIds: readonly unknown[],
+  rows: readonly unknown[],
+  overlay: string | undefined,
+) {
+  return {
+    selectedRows: extractumGridSelection(selectedRowIds),
+    overlay: extractumGridOverlay(rows, overlay),
+  };
+}
+
+export function extractumTreeGridRuntime(
+  selectedRowId: string | null,
+  rows: readonly unknown[],
+  overlay: string | undefined,
+  collapsed: boolean,
+) {
+  return {
+    selectedRows: extractumTreeGridSelection(selectedRowId),
+    overlay: extractumGridOverlay(rows, overlay),
+    tree: true as const,
+    select: true as const,
+    multiselect: false as const,
+    sizes: { rowHeight: 30, headerHeight: collapsed ? 0 : 30, columnWidth: 140 },
+  };
 }
 
 export function executeExtractumGridSelection(

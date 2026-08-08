@@ -51,11 +51,12 @@ pub use result_service::{
 pub use run_control::PromptPackRunState;
 pub use runtime::{
     cancel_prompt_pack_run_in_pool, cleanup_interrupted_prompt_pack_runs_in_pool,
-    delete_prompt_pack_run_in_pool, execute_prepared_api_run, execute_prepared_browser_run,
-    fail_run_execution, list_active_prompt_pack_runs_in_pool, list_prompt_pack_run_stages_in_pool,
-    list_prompt_pack_runs_in_pool, preflight_youtube_summary_run, prepare_run_execution,
-    start_youtube_summary_run_service, update_prompt_pack_run_in_pool, PreparedApiRunExecution,
-    PreparedBrowserRunExecution, PreparedRunExecution, RunExecutionTicket, StartServiceOutcome,
+    delete_prompt_pack_run_in_pool, dispatch_run_execution_ticket, execute_prepared_api_run,
+    execute_prepared_browser_run, fail_run_execution, list_active_prompt_pack_runs_in_pool,
+    list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
+    preflight_youtube_summary_run, prepare_run_execution, start_youtube_summary_run_service,
+    update_prompt_pack_run_in_pool, PreparedApiRunExecution, PreparedBrowserRunExecution,
+    PreparedRunExecution, RunExecutionTicket, StartServiceOutcome,
 };
 #[cfg(any(test, feature = "dev-fixtures"))]
 pub use runtime::{

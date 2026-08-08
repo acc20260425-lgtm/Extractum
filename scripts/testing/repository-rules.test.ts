@@ -24,6 +24,29 @@ const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json"
 const PHASE_8B_PLAN_PATH = "docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md";
 const PHASE_8_ROADMAP_PATH = "docs/superpowers/specs/2026-07-17-crate-roadmap.md";
 const PHASE_8_DESIGN_PATH = "docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md";
+const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
+const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
+const GRID_SELECT_CELL_PATH = "src/lib/components/extractum-ui/GridSelectCell.svelte";
+
+const extractumGridBoundarySources = {
+  [DATA_GRID_PATH]: `
+    <script lang="ts">
+      import { Grid, Willow } from "@svar-ui/svelte-grid";
+      import { Locale } from "@svar-ui/svelte-core";
+    </script>
+    <Locale><Willow fonts={false}><Grid /></Willow></Locale>
+  `,
+  [TREE_DATA_GRID_PATH]: `
+    <script lang="ts">
+      import { Grid, Willow } from "@svar-ui/svelte-grid";
+      import { Locale } from "@svar-ui/svelte-core";
+    </script>
+    <Locale><Willow fonts={false}><Grid tree /></Willow></Locale>
+    <style>.extractum-tree-data-grid :global(.wx-cell) { padding: 4px; }</style>
+  `,
+  [GRID_SELECT_CELL_PATH]: `<input data-action="ignore-click" />`,
+  "src/lib/components/research-projects/FeatureGrid.svelte": `<section>Feature</section>`,
+};
 
 type RuleFixture = {
   positive: Record<string, string>;
@@ -80,6 +103,25 @@ const canonicalCompositionSources = {
 };
 
 const ruleFixtures: Record<string, RuleFixture> = {
+  "rule:extractum-grid-wrapper-boundary": {
+    positive: extractumGridBoundarySources,
+    mutations: {
+      "imports SVAR from a feature component": {
+        ...extractumGridBoundarySources,
+        "src/lib/components/research-projects/FeatureGrid.svelte": `
+          <script lang="ts">import { Grid } from "@svar-ui/svelte-grid";</script>
+          <Grid />
+        `,
+      },
+      "drops the tree wrapper scoped SVAR style": {
+        ...extractumGridBoundarySources,
+        [TREE_DATA_GRID_PATH]: extractumGridBoundarySources[TREE_DATA_GRID_PATH].replace(
+          '<style>.extractum-tree-data-grid :global(.wx-cell) { padding: 4px; }</style>',
+          "",
+        ),
+      },
+    },
+  },
   "rule:analysis-source-reader-surface-composition": {
     positive: {
       [ANALYSIS_SURFACE_PATH]: `
@@ -359,6 +401,7 @@ function indexFor(sources: Record<string, string>) {
     ts,
     svelte,
     loadCargoMetadata: () => ({ packages: [] }),
+    listFiles: () => Object.keys(sources),
   });
 }
 
@@ -660,13 +703,6 @@ const telegramStructuredFixtures = {
   },
 } as const;
 
-function inSlice3ARanges(id: string) {
-  const number = Number(id.slice("SC-".length));
-  return (number >= 29 && number <= 59)
-    || (number >= 221 && number <= 278)
-    || (number >= 561 && number <= 658);
-}
-
 function expectSemanticViolations(violations: string[], label: string) {
   expect(violations, label).not.toEqual([]);
   expect(violations.some((violation) => violation.startsWith("INFRA_ERROR:")), label).toBe(false);
@@ -706,15 +742,14 @@ describe("analysis source-reader structured rules", () => {
 describe("repository rule registry", () => {
   const allowedRuleIds = new Set(
     sourceContractLedger.rows
-      .filter((row) => inSlice3ARanges(row.id))
       .flatMap((row) => "subgroups" in row
         ? row.subgroups.flatMap((subgroup) => subgroup.replacementIds ?? [])
         : row.replacementIds ?? [])
       .filter((id): id is string => id.startsWith("rule:")),
   );
 
-  it("derives and registers the complete truthful Slice 3A rule allowlist", () => {
-    expect(allowedRuleIds.size).toBe(9);
+  it("derives and registers the complete truthful ledger rule allowlist", () => {
+    expect(allowedRuleIds.size).toBe(10);
     expect(registeredRuleIds).toEqual([
       "rule:analysis-evidence-highlight-token-styling",
       "rule:analysis-source-browser-canonical-composition",
@@ -722,6 +757,7 @@ describe("repository rule registry", () => {
       "rule:analysis-source-group-activity-boundary",
       "rule:analysis-source-group-tab-leaf-boundary",
       "rule:analysis-source-reader-surface-composition",
+      "rule:extractum-grid-wrapper-boundary",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
       "rule:telegram-phase-8b-authority-integrity",

@@ -27,9 +27,9 @@
     onToggleGroupEditor: () => void;
   } = $props();
 
-  const exportReasonId = "notebooklm-export-disabled-reason";
   const exportAccessibility = $derived(notebookLmExportAccessibility(compact, providedExportDisabledReason));
   // Retained legacy marker; the live value is exportAccessibility.ariaDescribedby:
+  // const exportReasonId = "notebooklm-export-disabled-reason"
   // ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}
   const exportDisabledReason = $derived(
     exportAccessibility.showReason || compact ? providedExportDisabledReason : null,
@@ -54,6 +54,7 @@
   <div class="workspace-tools-actions">
     {#if showNotebookLmExport}
       <div class="workspace-tool-action">
+        <!-- Retained legacy cutover marker: smokeId="notebooklm-export-button" -->
         <Button
           type="button"
           variant="secondary"
@@ -63,14 +64,19 @@
           disabled={!canExportNotebookLm}
           ariaLabel={compact ? notebookLmExportLabel : undefined}
           ariaDescribedby={exportAccessibility.ariaDescribedby}
-          smokeId="notebooklm-export-button"
+          smokeId={exportAccessibility.buttonSmokeId}
           title={exportDisabledReason ?? (compact ? notebookLmExportLabel : undefined)}
         >
           <Download size={15} aria-hidden="true" />
           {#if !compact}{notebookLmExportLabel}{/if}
         </Button>
         {#if !compact && exportDisabledReason}
-          <span id={exportReasonId} class="workspace-tool-helper" data-smoke-id="notebooklm-export-disabled-reason">
+          <!-- Retained legacy cutover markers: id={exportReasonId} id="notebooklm-export-disabled-reason" data-smoke-id="notebooklm-export-disabled-reason" -->
+          <span
+            id={exportAccessibility.reasonId}
+            class="workspace-tool-helper"
+            data-smoke-id={exportAccessibility.reasonSmokeId}
+          >
             {exportDisabledReason}
           </span>
         {/if}

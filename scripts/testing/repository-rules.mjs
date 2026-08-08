@@ -12,6 +12,10 @@ const SOURCE_BROWSER_SHELL_MODULE = "$lib/components/analysis/source-browser-she
 const SOURCE_ACTIVITY_MODULE = "$lib/components/analysis/source-activity-view.svelte";
 const SOURCE_GROUP_ACTIVITY_MODULE = "$lib/components/analysis/source-group-activity-view.svelte";
 const EMPTY_STATE_MODULE = "$lib/components/ui/EmptyState.svelte";
+const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
+const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
+const GRID_RUNTIME_PATH = "src/lib/components/extractum-ui/data-grid-date-format.ts";
+const APPROVED_SVAR_GRID_PATHS = new Set([DATA_GRID_PATH, TREE_DATA_GRID_PATH, GRID_RUNTIME_PATH]);
 const CANONICAL_LEAF_PATHS = [
   ["SourceGroupSourcesView", SOURCE_GROUP_SOURCES_PATH, "$lib/components/analysis/source-group-sources-view.svelte"],
   ["SnapshotGroupSourcesView", "src/lib/components/analysis/snapshot-group-sources-view.svelte", "$lib/components/analysis/snapshot-group-sources-view.svelte"],
@@ -152,6 +156,61 @@ function componentsFromModule(facts, moduleSource) {
 
 function hasComponentFromModule(facts, moduleSource) {
   return componentsFromModule(facts, moduleSource).length > 0;
+}
+
+function hasNamedComponentFromModule(facts, componentName, moduleSource, importedName) {
+  return facts.components.some(({ name }) => name === componentName)
+    && facts.imports.some(({ source, bindings }) => source === moduleSource
+      && bindings.some((binding) => binding.imported === importedName
+        && binding.local === componentName
+        && !binding.typeOnly));
+}
+
+function selectorContainsGlobalClass(selector, className) {
+  return selector.some((part) => part.type === "pseudo"
+    && part.name === "global"
+    && part.arguments.some((argument) => argument.type === "class" && argument.name === className));
+}
+
+function evaluateExtractumGridWrapperBoundary(index) {
+  const violations = [];
+  const productionFiles = index.listFiles().filter((file) =>
+    file.startsWith("src/")
+    && /\.(?:svelte|[cm]?[jt]sx?)$/.test(file)
+    && !/\.(?:test|spec)\./.test(file));
+  for (const file of productionFiles) {
+    const facts = file.endsWith(".svelte") ? index.getSvelte(file) : index.getTypeScript(file);
+    const svarImports = facts.imports.filter(({ source }) => source.startsWith("@svar-ui/"));
+    if (svarImports.length && !APPROVED_SVAR_GRID_PATHS.has(file)) {
+      violations.push(`${file}: direct SVAR imports must stay inside Extractum grid wrappers`);
+    }
+  }
+
+  for (const [file, tree] of [[DATA_GRID_PATH, false], [TREE_DATA_GRID_PATH, true]]) {
+    const facts = index.getSvelte(file);
+    for (const [component, moduleSource] of [
+      ["Grid", "@svar-ui/svelte-grid"],
+      ["Willow", "@svar-ui/svelte-grid"],
+      ["Locale", "@svar-ui/svelte-core"],
+    ]) {
+      if (!hasNamedComponentFromModule(facts, component, moduleSource, component)) {
+        violations.push(`${file}: missing ${component} wrapper composition`);
+      }
+    }
+    if (tree && !facts.components.some(({ name, attributes }) => name === "Grid" && attributes.includes("tree"))) {
+      violations.push(`${file}: tree wrapper must compose Grid with tree enabled`);
+    }
+  }
+
+  const treeFacts = index.getSvelte(TREE_DATA_GRID_PATH);
+  const hasScopedSvarCellStyle = treeFacts.styleRules.some((rule) =>
+    rule.selectors.some((selector) => selector.some((part) =>
+      part.type === "class" && part.name === "extractum-tree-data-grid")
+      && selectorContainsGlobalClass(selector, "wx-cell")));
+  if (!hasScopedSvarCellStyle) {
+    violations.push(`${TREE_DATA_GRID_PATH}: SVAR cell styling must remain scoped by the Extractum tree wrapper`);
+  }
+  return violations;
 }
 
 function exactActivityTab(expression) {
@@ -511,6 +570,7 @@ const evaluators = new Map([
   ["rule:analysis-source-group-activity-boundary", evaluateAnalysisSourceGroupActivityBoundary],
   ["rule:analysis-source-group-tab-leaf-boundary", evaluateAnalysisSourceGroupTabLeafBoundary],
   ["rule:analysis-source-reader-surface-composition", evaluateAnalysisSourceReaderSurfaceComposition],
+  ["rule:extractum-grid-wrapper-boundary", evaluateExtractumGridWrapperBoundary],
   ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
   ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],
   ["rule:telegram-phase-8b-authority-integrity", evaluateTelegramPhase8BAuthorityIntegrity],

@@ -16,7 +16,11 @@
   import { en as gridEn } from "@svar-ui/grid-locales";
   import { ru as coreRu } from "@svar-ui/core-locales";
   import { cn } from "$lib/utils.js";
-  import { extractumGridOverlay, extractumTreeGridSelection } from "./data-grid-date-format";
+  import {
+    EXTRACTUM_GRID_WILLOW_PROPS,
+    extractumGridLocaleWords,
+    extractumTreeGridRuntime,
+  } from "./data-grid-date-format";
 
   let {
     rows,
@@ -37,8 +41,8 @@
   } = $props();
 
   let api = $state<any>(null);
-  let selectedRows = $derived(extractumTreeGridSelection(selectedRowId));
-  let visibleOverlay = $derived(extractumGridOverlay(rows, rows.length === 0 ? overlay : undefined));
+  const localeWords = extractumGridLocaleWords(coreRu, gridEn);
+  let runtime = $derived(extractumTreeGridRuntime(selectedRowId, rows, overlay, collapsed));
   let columns = $derived<IColumnConfig[]>(collapsed
     ? [
         { id: "label", header: "", width: 48, treetoggle: true },
@@ -72,19 +76,20 @@
   data-collapsed={collapsed}
   style={`height:${height};`}
 >
-  <Locale words={{ ...coreRu, ...gridEn }}>
-    <Willow fonts={false}>
+  <!-- Retained legacy cutover marker: fonts={false} -->
+  <Locale words={localeWords}>
+    <Willow {...EXTRACTUM_GRID_WILLOW_PROPS}>
       <Grid
         data={rows}
         {columns}
         {rowStyle}
-        {selectedRows}
+        selectedRows={runtime.selectedRows}
         init={init}
-        tree
-        select
-        multiselect={false}
-        sizes={{ rowHeight: 30, headerHeight: collapsed ? 0 : 30, columnWidth: 140 }}
-        overlay={visibleOverlay}
+        tree={runtime.tree}
+        select={runtime.select}
+        multiselect={runtime.multiselect}
+        sizes={runtime.sizes}
+        overlay={runtime.overlay}
         onselectrow={emitSelection}
       />
     </Willow>

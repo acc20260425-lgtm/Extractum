@@ -25,7 +25,14 @@ function fixtureIndex(sources: Record<string, string>, cargoMetadata: unknown = 
   const loadCargoMetadata = vi.fn(() => JSON.stringify(cargoMetadata));
 
   return {
-    index: createRepositoryIndex({ root, readFile, ts: typescript, svelte, loadCargoMetadata }),
+    index: createRepositoryIndex({
+      root,
+      readFile,
+      ts: typescript,
+      svelte,
+      loadCargoMetadata,
+      listFiles: () => Object.keys(sources),
+    }),
     loadCargoMetadata,
     readFile,
     svelte,
@@ -34,6 +41,16 @@ function fixtureIndex(sources: Record<string, string>, cargoMetadata: unknown = 
 }
 
 describe("RepositoryIndex", () => {
+  it("returns the frozen repository-relative file inventory", () => {
+    const { index } = fixtureIndex({
+      "src/zeta.svelte": "<p>Zeta</p>",
+      "src/alpha.ts": "export const alpha = true;",
+    });
+
+    expect(index.listFiles()).toEqual(["src/alpha.ts", "src/zeta.svelte"]);
+    expect(Object.isFrozen(index.listFiles())).toBe(true);
+  });
+
   it("returns parsed TypeScript import facts", () => {
     const { index } = fixtureIndex({
       "src/example.ts": 'import fallback, { parse as parseValue, type Options } from "@scope/parser";\nexport const value = 1;',

@@ -59,6 +59,17 @@ impl RunExecutionTicket {
     }
 }
 
+pub fn dispatch_run_execution_ticket<Ticket, Task, Build, Spawn>(
+    ticket: Ticket,
+    build: Build,
+    spawn: Spawn,
+) where
+    Build: FnOnce(Ticket) -> Task,
+    Spawn: FnOnce(Task),
+{
+    spawn(build(ticket));
+}
+
 pub enum PreparedRunExecution {
     Api(PreparedApiRunExecution),
     GeminiBrowser(PreparedBrowserRunExecution),
@@ -103,18 +114,42 @@ pub async fn start_youtube_summary_run_service(
     events: &dyn PromptPackEventSink,
     request: StartYoutubeSummaryRunRequest,
 ) -> AppResult<StartServiceOutcome> {
+    start_youtube_summary_run_service_with_observer(
+        pool,
+        state,
+        source,
+        browser,
+        events,
+        request,
+        &|_| {},
+    )
+    .await
+}
+
+async fn start_youtube_summary_run_service_with_observer(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    source: &dyn PromptPackSourceReader,
+    browser: &dyn PromptPackBrowserExecutor,
+    events: &dyn PromptPackEventSink,
+    request: StartYoutubeSummaryRunRequest,
+    observe: &(dyn Fn(&'static str) + Sync),
+) -> AppResult<StartServiceOutcome> {
     if request.client_request_id().trim().is_empty() {
         return Err(AppError::validation("client_request_id cannot be empty"));
     }
 
+    observe("first-idempotency-lookup");
     let response = if let Some(run) =
         load_youtube_summary_run_by_client_request_id_in_pool(pool, request.client_request_id())
             .await?
     {
         StartYoutubeSummaryRunOutcomeDto::Started { run }
     } else {
+        observe("readiness");
         let runtime_failures =
             browser_runtime_start_failures_for_request(browser, &request).await?;
+        observe("second-idempotency-lookup");
         if let Some(run) =
             load_youtube_summary_run_by_client_request_id_in_pool(pool, request.client_request_id())
                 .await?
@@ -133,6 +168,7 @@ pub async fn start_youtube_summary_run_service(
                 request.evidence_mode.clone(),
                 request.include_comments,
             );
+            observe("preflight");
             let mut preflight = preflight_youtube_summary_run(source, preflight_request).await?;
             preflight.blocking_failures.extend(runtime_failures);
             if preflight.included_videos.is_empty() || !preflight.blocking_failures.is_empty() {
@@ -155,6 +191,7 @@ pub async fn start_youtube_summary_run_service(
         StartYoutubeSummaryRunOutcomeDto::Started { run }
             if run.run_status == "queued" && state.track_if_absent(run.run_id).await? =>
         {
+            observe("tracking");
             emit_prompt_pack_run_event(
                 state,
                 events,
@@ -175,6 +212,7 @@ pub async fn start_youtube_summary_run_service(
                 },
             )
             .await;
+            observe("queued-event");
             Some(RunExecutionTicket { run_id: run.run_id })
         }
         _ => None,
@@ -703,10 +741,11 @@ mod tests {
     use super::{
         browser_runtime_start_blocking_failure, cleanup_interrupted_prompt_pack_runs_in_pool,
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
-        fail_run_execution, list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
-        now_string, prepare_run_execution, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
-        start_youtube_summary_run_service, update_prompt_pack_run_in_pool, PreparedRunExecution,
-        PromptPackRunState, RunExecutionTicket,
+        dispatch_run_execution_ticket, fail_run_execution, list_prompt_pack_run_stages_in_pool,
+        list_prompt_pack_runs_in_pool, now_string, prepare_run_execution,
+        seed_prompt_pack_cancellation_smoke_fixture_in_pool, start_youtube_summary_run_service,
+        start_youtube_summary_run_service_with_observer, update_prompt_pack_run_in_pool,
+        PreparedRunExecution, PromptPackRunState, RunExecutionTicket,
     };
     use crate::browser_port::{
         PromptPackBrowserCancelRequest, PromptPackBrowserExecutor, PromptPackBrowserFuture,
@@ -919,6 +958,138 @@ mod tests {
         assert_eq!(emitted[0].kind, "queued");
         assert_eq!(emitted[0].run_id, run_id);
         assert_eq!(browser.status_reads.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(71, None, "complete", "2026-07-20T00:00:00Z")]).await;
+        sqlx::query(
+            "UPDATE prompt_pack_runs
+             SET client_request_id = 'existing-ordered', runtime_provider = 'gemini_browser'
+             WHERE id = 71",
+        )
+        .execute(&pool)
+        .await
+        .expect("mark existing ordered request");
+        insert_youtube_video(&pool, 72, "video-72").await;
+
+        let state = PromptPackRunState::new();
+        let source = ready_source(72);
+        let browser = RecordingBrowser::default();
+        let events = RecordingEvents::default();
+        let trace = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let observe = {
+            let trace = trace.clone();
+            move |step| trace.lock().expect("ordering trace").push(step)
+        };
+
+        let empty = start_youtube_summary_run_service_with_observer(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            browser_start_request("   ", 72),
+            &observe,
+        )
+        .await;
+        assert!(empty.is_err());
+        assert!(trace.lock().expect("ordering trace").is_empty());
+
+        let existing = start_youtube_summary_run_service_with_observer(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            browser_start_request("existing-ordered", 72),
+            &observe,
+        )
+        .await
+        .expect("existing ordered outcome");
+        assert!(existing.execution_ticket.is_none());
+        assert_eq!(
+            *trace.lock().expect("ordering trace"),
+            ["first-idempotency-lookup"]
+        );
+
+        trace.lock().expect("ordering trace").clear();
+        let outcome = start_youtube_summary_run_service_with_observer(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            browser_start_request("new-ordered", 72),
+            &observe,
+        )
+        .await
+        .expect("new ordered outcome");
+        let run_id = match &outcome.response {
+            StartYoutubeSummaryRunOutcomeDto::Started { run } => run.run_id,
+            StartYoutubeSummaryRunOutcomeDto::Blocked { .. } => panic!("expected queued run"),
+        };
+        assert!(state.active_run_ids().await.contains(&run_id));
+        assert_eq!(
+            *trace.lock().expect("ordering trace"),
+            [
+                "first-idempotency-lookup",
+                "readiness",
+                "second-idempotency-lookup",
+                "preflight",
+                "tracking",
+                "queued-event",
+            ]
+        );
+
+        let captured = Arc::new(Mutex::new(None));
+        let captured_for_spawn = captured.clone();
+        let build_trace = trace.clone();
+        let spawn_trace = trace.clone();
+        dispatch_run_execution_ticket(
+            outcome.execution_ticket.expect("execution ticket"),
+            move |_| {
+                build_trace
+                    .lock()
+                    .expect("ordering trace")
+                    .push("execution-ticket-dispatch");
+                let profile_trace = build_trace.clone();
+                Box::pin(async move {
+                    profile_trace
+                        .lock()
+                        .expect("ordering trace")
+                        .push("profile-resolution");
+                })
+            },
+            move |task| {
+                spawn_trace.lock().expect("ordering trace").push("spawn");
+                *captured_for_spawn.lock().expect("captured task") = Some(task);
+            },
+        );
+        assert_eq!(
+            *trace.lock().expect("ordering trace"),
+            [
+                "first-idempotency-lookup",
+                "readiness",
+                "second-idempotency-lookup",
+                "preflight",
+                "tracking",
+                "queued-event",
+                "execution-ticket-dispatch",
+                "spawn",
+            ]
+        );
+        let task = captured
+            .lock()
+            .expect("captured task")
+            .take()
+            .expect("spawned task");
+        task.await;
+        assert_eq!(
+            trace.lock().expect("ordering trace").last(),
+            Some(&"profile-resolution")
+        );
     }
 
     #[tokio::test]
@@ -1201,49 +1372,6 @@ mod tests {
             *order.lock().expect("complete order"),
             ["browser_cancel", "terminal_persistence", "terminal_event"]
         );
-    }
-
-    #[test]
-    fn start_source_applies_queued_state_and_event_before_spawned_profile_resolution() {
-        let source = include_str!("runtime.rs");
-        let start_begin = source
-            .find("async fn start_youtube_summary_run_service(")
-            .expect("start service");
-        let start_end = source[start_begin..]
-            .find("async fn browser_runtime_start_failures_for_request(")
-            .map(|offset| start_begin + offset)
-            .expect("start service end");
-        let start = &source[start_begin..start_end];
-        let first_lookup = start
-            .find("load_youtube_summary_run_by_client_request_id_in_pool(")
-            .expect("first idempotency lookup");
-        let readiness = start
-            .find("browser_runtime_start_failures_for_request(")
-            .expect("Browser readiness");
-        let second_lookup = start[readiness..]
-            .find("load_youtube_summary_run_by_client_request_id_in_pool(")
-            .map(|offset| readiness + offset)
-            .expect("second idempotency lookup");
-        let preflight = start
-            .find("preflight_youtube_summary_run(source, preflight_request).await")
-            .expect("outer preflight");
-        assert!(first_lookup < readiness);
-        assert!(readiness < second_lookup);
-        assert!(second_lookup < preflight);
-
-        let emitter_begin = source
-            .find("async fn emit_prompt_pack_run_event(")
-            .expect("event helper");
-        let emitter_end = source[emitter_begin..]
-            .find("fn now_string()")
-            .map(|offset| emitter_begin + offset)
-            .expect("event helper end");
-        let emitter = &source[emitter_begin..emitter_end];
-        let apply_state = emitter
-            .find("state.apply_event(&event).await")
-            .expect("state transition");
-        let publish = emitter.find("events.emit(event)").expect("event emission");
-        assert!(apply_state < publish);
     }
 
     #[tokio::test]

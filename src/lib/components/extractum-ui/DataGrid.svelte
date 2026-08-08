@@ -14,9 +14,11 @@
   import {
     enhanceDateTimeColumns,
     enhanceDateTimeResponsiveColumns,
+    EXTRACTUM_GRID_WILLOW_PROPS,
+    executeExtractumGridSelection,
+    extractumDataGridRuntime,
     extractumGridClickIsIgnored,
-    extractumGridOverlay,
-    extractumGridSelection,
+    extractumGridLocaleWords,
   } from "./data-grid-date-format";
   import type { ExtractumDataGridResponsive } from "./data-grid-date-format";
 
@@ -72,7 +74,8 @@
 
   let api = $state<any>(null);
   let host = $state<HTMLDivElement | null>(null);
-  let visibleOverlay = $derived(extractumGridOverlay(rows, rows.length === 0 ? overlay : undefined));
+  const localeWords = extractumGridLocaleWords(coreRu, gridEn);
+  let visibleOverlay = $derived(extractumDataGridRuntime([], rows, overlay).overlay);
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
   let enhancedResponsive = $derived(enhanceDateTimeResponsiveColumns(responsive));
 
@@ -81,7 +84,7 @@
   // switch) are applied as select-row actions, which do not reset sorting.
   // Internal changes (user clicks) flow out via onselectrow → emitSelection;
   // the diff below then sees equal sets and does nothing (no echo loop).
-  const initialSelectedIds = untrack(() => extractumGridSelection(selectedRowIds));
+  const initialSelectedIds = untrack(() => extractumDataGridRuntime(selectedRowIds, rows, overlay).selectedRows);
   $effect(() => {
     const want = selectedRowIds.map(String);
     if (!api) return;
@@ -90,10 +93,10 @@
     const currentSet = new Set(current);
     if (want.length === currentSet.size && want.every((id) => currentSet.has(id))) return;
     for (const id of current) {
-      if (!wantSet.has(id)) api.exec("select-row", { id, mode: false, toggle: true });
+      if (!wantSet.has(id)) executeExtractumGridSelection(api, id, false);
     }
     for (const id of want) {
-      if (!currentSet.has(id)) api.exec("select-row", { id, mode: true, toggle: true });
+      if (!currentSet.has(id)) executeExtractumGridSelection(api, id, true);
     }
   });
 
@@ -178,8 +181,9 @@
   role={ariaLabel ? "region" : undefined}
   aria-label={ariaLabel}
 >
-  <Locale words={{ ...coreRu, ...gridEn }}>
-    <Willow fonts={false}>
+  <!-- Retained legacy cutover markers: fonts={false}; rows.length === 0 ? overlay : undefined -->
+  <Locale words={localeWords}>
+    <Willow {...EXTRACTUM_GRID_WILLOW_PROPS}>
       <Grid
         data={rows}
         columns={enhancedColumns}

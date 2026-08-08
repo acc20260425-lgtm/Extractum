@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement only the classes, dispositions, paths, declaration titles, invariants, deletion reasons, and criticality decisions frozen in `testing/source-contract-redisposition-review.json` and `testing/source-contract-ledger.json`.
-- The two approved ownership corrections are exact: `src/lib/components/**/*.behavior.test.ts` belongs to `component`, and SC-000464 belongs jointly to its five existing Cargo owners listed in Task 4. The final forecast is Node 178 rows/1,104 ordinals, jsdom 90/598, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; SC-000464 was not a sampled blind result.
+- The approved ownership corrections are exact: `src/lib/components/**/*.behavior.test.ts` belongs to `component`; SC-000464 belongs to the comprehensive Cargo owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its focused Vitest behavior owner for the other 18 ordinals. The final forecast is Node 178 rows/1,101 ordinals, jsdom 90/598, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; SC-000464 was not a sampled blind result and SC-000515's prior blind packet remains historical evidence.
 - Do not use `?raw`, `readFileSync`, or another direct production-source reader in a replacement test. Do not add a `sourceReaderExceptions` entry.
 - A small behavior-neutral pure-function or adapter extraction is allowed only when the frozen behavior has no truthful existing seam. Stop the connected component if path, title, mechanism, invariant, disposition, or criticality would need to change.
 - Do not add Nx, a migration scheduler, a second ledger, a subset transition validator, timing thresholds, warmups, medians, or benchmark artifacts.
@@ -118,11 +118,13 @@ Every behavior task uses this order:
 6. If that cutover makes the filesystem legacy inventory empty, remove `LEGACY_TEST_FILES` and the `legacy-contract` project from `vitest.config.ts`, its census owner from `testing/runner-census.json`, `test:legacy-contract` from `package.json`, and its gate from `scripts/verify.mjs`; update the owning runner/conventions tests in the same staged diff before validation and commit.
 7. Run `git diff --check`, one read-only integration review, one combined fix wave if required, and commit the bounded batch with the task's listed subject.
 
-Do not edit resolution metadata during ordinary cutover. The user-approved SC-000464 correction is the sole replacement-identity amendment in this plan and is applied through the fail-closed carrier before Task 4 completes. A component closes because its legacy declaration disappears and its approved replacement already resolves.
+Do not edit resolution metadata during ordinary cutover. The user-approved SC-000464 comprehensive Cargo correction and SC-000515 mixed ordinal correction are the only Task 4 resolution amendments and are applied through the fail-closed carrier before Task 4 completes. A component closes because its legacy declaration disappears and its approved replacement already resolves.
 
 ## Rust Verification Loops
 
 Affected packages are `extractum`, `extractum-analysis`, `extractum-llm`, and `extractum-prompt-packs`.
+
+Task 4 affects `extractum-prompt-packs` and its immediate `extractum` consumer. Its narrow RED/GREEN owner is `runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`; the retained application adapter checks are `prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket` and `prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`.
 
 - Exact RED/GREEN: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact`.
 - If the exact name is not collected, first run `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib -- --list` and reject a zero-test selection.
@@ -148,7 +150,7 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 **Interfaces:**
 - Produces `COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts"` in both component include and unit exclusion.
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
-- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; Task 4 applies the approved SC-000464 final forecast `178/1104`, `90/598`, `19/161`, `3/21`.
+- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; Task 4 applies the approved SC-000464 and SC-000515 corrections for the final forecast `178/1101`, `90/598`, `19/161`, `3/21`.
 
 - [ ] **Step 1: Generate the complete replacement map once**
 
@@ -333,7 +335,7 @@ git commit -m "test: establish application playwright owner"
 
 Do not run complete `verify`.
 
-### Task 4: Add the 17 non-component one-row Vitest targets and verify SC-000464 Cargo ownership
+### Task 4: Add the 17 non-component one-row Vitest targets and implement SC-000464 Cargo ownership
 
 **Files — create or extend exactly:**
 
@@ -357,23 +359,24 @@ Do not run complete `verify`.
 | `src/routes/projects/next/page-keyboard.behavior.test.ts` | SC-000671 |
 | `src/routes/settings/settings-focus.behavior.test.ts` | SC-000552 |
 
-**SC-000464 existing Cargo owners -- verify exactly:**
+**SC-000464 comprehensive Cargo owner -- implement and verify exactly:**
 
-- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports`
-- `test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure`
-- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking`
-- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket`
-- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`
 
-**Interfaces:** The 17 files above are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. SC-000464 preserves ID, invariant, assertion count 5, class `B2_NEW_CHEAP_BEHAVIOR`, and behavior disposition, but uses the five exact existing Cargo owners above instead of a false Vitest orchestration model. The carrier accepts only the previously applied false identity as input to this one correction and only the exact five-owner output; any partial, mixed, or arbitrary owner set fails closed. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
+**SC-000515 exact mixed split:**
+
+- Architecture ordinals `1, 11, 19`: `rule:extractum-grid-wrapper-boundary`.
+- Behavior ordinals `2-10, 12-18, 20-21`: `test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers`.
+
+**Interfaces:** The 17 files above are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. SC-000464 preserves ID, invariant, assertion count 5, class `B2_NEW_CHEAP_BEHAVIOR`, and behavior disposition, but uses the comprehensive Cargo owner above to observe real production ordering. SC-000515 preserves ID, source hash, assertion count 21, lineage, class, and criticality while removing its top-level behavior resolution in favor of the exact mixed split above. The carrier accepts only the immediately preceding SC-000464 five-owner and SC-000515 top-level-behavior state as the correction input, and only the exact comprehensive/mixed output; partial or arbitrary owner sets and ordinal partitions fail closed. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
 
 - [ ] **Step 1: Read and pin the exact titles**
 
-Read all 17 Vitest target sections plus the five SC-000464 Cargo sections from `tmp/analysis-smoke/slice-3c-replacement-map.md`. Record each complete Vitest replacement title in the `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one.
+Read all 17 Vitest target sections and SC-000464 from `tmp/analysis-smoke/slice-3c-replacement-map.md`. Record each complete Vitest replacement title in the `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one. Mechanically document SC-000515's exact 21-ordinal split before implementation.
 
 - [ ] **Step 2: Add target-file REDs in two bounded groups**
 
-Group A is `scripts/**`; Group B is `src/**`. Each Vitest target imports a production module or a behavior-neutral extracted adapter. Route targets test exported request/callback/selection logic under Node; they do not render Svelte and do not read route source text. SC-000464 is a characterization of existing Rust behavior: list if necessary, then run each exact non-empty Cargo owner without manufacturing a RED or a JavaScript order model.
+Group A is `scripts/**`; Group B is `src/**`. Each Vitest target imports a production module or a behavior-neutral extracted adapter. Route targets test exported request/callback/selection logic under Node; they do not render Svelte and do not read route source text. SC-000464 uses an exact Rust RED/GREEN cycle for a behavior-neutral observer/dispatcher seam over the real service and application adapter; it must not use a JavaScript order model or Rust source-order assertion. SC-000515's behavior owner consumes a neutral configuration seam used by the real wrappers, while its architecture owner derives structured imports/styles from the repository index.
 
 Run the exact new file paths through `node scripts/run-vitest.mjs run --project unit-node ...`, except SC-000023 through `--project os-integration`. Expected: every declaration is collected and fails for the missing observable behavior; no target reports zero tests.
 
@@ -389,11 +392,11 @@ Preserve the artifact invariant for each row:
 
 - [ ] **Step 4: Run focused GREEN**
 
-Run Group A and Group B as at most two concurrent frontend commands, then run SC-000023 under `os-integration` separately if it was not part of the OS command. Run the five SC-000464 exact Cargo selections sequentially from the Rust Verification Loops and require one collected test each. Run `npm.cmd run check` only if a TypeScript/Svelte production seam changed. Expected: all 17 Vitest declarations and all five Cargo identities pass.
+Run Group A and Group B as at most two concurrent frontend commands, then run SC-000023 under `os-integration` separately if it was not part of the OS command. Run the SC-000464 exact Cargo selection and both affected-package checks/checkpoints sequentially from the Rust Verification Loops; require one collected exact test. Run `npm.cmd run check` because TypeScript/Svelte production seams changed. Expected: all 17 Vitest declarations, the repository rule, and the comprehensive Cargo identity pass.
 
 - [ ] **Step 5: Commit the additive targets**
 
-Stage only the 17 Vitest targets, any narrowly required production seam files, the SC-000023 `OS_INTEGRATION_FILES` addition, and the approved SC-000464 plan/spec/artifact/carrier/ledger correction. Remove the false SC-000464 Vitest target. Do not delete any legacy file in a later-wave component.
+Stage only the 17 Vitest targets, any narrowly required production seam files, the SC-000023 `OS_INTEGRATION_FILES` addition, and the approved SC-000464/SC-000515 plan/spec/artifact/carrier/ledger corrections. Remove the false SC-000464 Vitest target. Do not delete any legacy file in a later-wave component.
 
 ```powershell
 git commit -m "test: add single-row node contract owners"
@@ -771,7 +774,7 @@ SC-000484 extractum-prompt-packs::run_control::tests::terminal_events_clear_requ
 SC-000492 extractum-prompt-packs::runtime_config::tests::invalid_persisted_runtime_configuration_is_reported
 ```
 
-**Delete exactly after the 18 Wave 3 Cargo identities, the five existing SC-000464 Cargo owners, and Task 4 Node companions are green:**
+**Delete exactly after the 18 Wave 3 Cargo identities, the comprehensive SC-000464 Cargo owner, and Task 4 Node companions are green:**
 
 ```text
 src/lib/analysis-crate-boundary-contract.test.ts

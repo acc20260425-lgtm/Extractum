@@ -20,13 +20,30 @@ const APPROVED_PLAYWRIGHT_OWNERS = new Map([
 ]);
 const APPROVED_PLAYWRIGHT_CRITICALITY = "TESTING_BROWSER_COMPONENT_OWNERSHIP";
 const APPROVED_SC_000464_CARGO_OWNERS = [
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order",
+];
+const FIRST_CORRECTION_SC_000464_CARGO_OWNERS = [
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
   "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
   "test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking",
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket",
   "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
 ];
-const PRE_CORRECTION_SC_000464_OWNER = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
+const SC_000515_BEHAVIOR_OWNER = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const APPROVED_SC_000515_SUBGROUPS = [
+  {
+    assertionOrdinals: [1, 11, 19],
+    disposition: "architecture",
+    invariant: "Direct SVAR imports and scoped SVAR tree styles remain inside the approved Extractum grid wrapper boundary.",
+    replacementIds: ["rule:extractum-grid-wrapper-boundary"],
+  },
+  {
+    assertionOrdinals: [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 20, 21],
+    disposition: "behavior",
+    invariant: "Extractum grid wrappers retain locale, theme, overlay, date, tree, and selection runtime behavior.",
+    replacementIds: [SC_000515_BEHAVIOR_OWNER],
+  },
+];
 const REQUIRED_D3_REASONS = new Map([
   ["SC-000323", "Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam."],
   ["SC-000352", "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam."],
@@ -528,7 +545,12 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
         else ownedOrdinals.add(ordinal);
       }
     }
-    if (subgroup.disposition !== requiredDisposition) issues.push(`${prefix} ${decision.class} requires ${requiredDisposition} disposition`);
+    const approvedMixedGridDisposition = decision.id === "SC-000515"
+      && isMixed
+      && ["architecture", "behavior"].includes(subgroup.disposition);
+    if (subgroup.disposition !== requiredDisposition && !approvedMixedGridDisposition) {
+      issues.push(`${prefix} ${decision.class} requires ${requiredDisposition} disposition`);
+    }
     if (subgroup.disposition === "delete") {
       if (own(subgroup, "replacementIds")) issues.push(`${prefix} delete resolution must not include replacementIds`);
       if (typeof subgroup.deletionReason !== "string" || !subgroup.deletionReason.trim()) issues.push(`${prefix} delete resolution requires a deletionReason`);
@@ -810,7 +832,10 @@ function expectedTailReviewPopulation(artifact) {
   ]);
   const b3RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId);
   const d5RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId);
-  const mixedRowIds = (artifact.decisions ?? []).filter((decision) => Array.isArray(decision.resolution?.subgroups)).map((decision) => decision.id).sort(compareId);
+  const mixedRowIds = (artifact.decisions ?? [])
+    .filter((decision) => Array.isArray(decision.resolution?.subgroups) && decision.id !== "SC-000515")
+    .map((decision) => decision.id)
+    .sort(compareId);
   for (const id of [...b3RowIds, ...d5RowIds, ...mixedRowIds]) excluded.add(id);
   const population = (artifact.decisions ?? []).map((decision) => decision.id).filter((id) => tailIds.has(id) && !excluded.has(id)).sort(compareId);
   const rowIds = [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1));
@@ -1495,6 +1520,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
 
   const decisions = Array.isArray(artifact.decisions) ? [...artifact.decisions].sort((left, right) => compareId(left?.id, right?.id)) : [];
   const decisionIds = new Set();
+  const isApprovedTask4CorrectionScope = baseOpenIds.size === 436;
   for (const decision of decisions) {
     if (!decision || typeof decision !== "object") {
       issues.push("scope: invalid decision");
@@ -1510,8 +1536,11 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (decision.class !== "UNCLASSIFIED" && (typeof decision.reason !== "string" || !decision.reason.trim())) issues.push(`${decision.id}: classified decision requires a substantive reason`);
     if (decision.class === "UNCLASSIFIED" && (own(decision, "reason") || own(decision, "resolution"))) issues.push(`${decision.id}: UNCLASSIFIED may not contain reason or resolution`);
     if (Object.keys(decision).some((key) => ["override", "individualOverride"].includes(key))) issues.push(`${decision.id}: individual override is forbidden`);
-    if (decision.id === "SC-000464" && canonicalJson(decision.resolution?.replacementIds) !== canonicalJson(APPROVED_SC_000464_CARGO_OWNERS)) {
-      issues.push("SC-000464: replacementIds must equal the approved five Cargo owners");
+    if (isApprovedTask4CorrectionScope && decision.id === "SC-000464" && canonicalJson(decision.resolution?.replacementIds) !== canonicalJson(APPROVED_SC_000464_CARGO_OWNERS)) {
+      issues.push("SC-000464: replacementIds must equal the approved comprehensive Cargo owner");
+    }
+    if (isApprovedTask4CorrectionScope && decision.id === "SC-000515" && canonicalJson(decision.resolution) !== canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })) {
+      issues.push("SC-000515: resolution must equal the approved architecture/behavior ordinal split");
     }
   }
   if (decisionIds.size !== baseOpenIds.size) issues.push("scope: expected one decision for every base-open row");
@@ -1523,10 +1552,16 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const fullyAppliedOpenResolutions = fullyAppliedLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
   const correctedCurrentLedger = clone(currentLedger);
   const correctionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000464");
+  const gridCorrectionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000515");
   const isApprovedPreCorrectionLedger = correctionRow?.disposition === "behavior"
-    && canonicalJson(correctionRow.replacementIds) === canonicalJson([PRE_CORRECTION_SC_000464_OWNER])
+    && canonicalJson(correctionRow.replacementIds) === canonicalJson(FIRST_CORRECTION_SC_000464_CARGO_OWNERS)
+    && gridCorrectionRow?.disposition === "behavior"
+    && canonicalJson(gridCorrectionRow.replacementIds) === canonicalJson([SC_000515_BEHAVIOR_OWNER])
     && (() => {
       correctionRow.replacementIds = clone(APPROVED_SC_000464_CARGO_OWNERS);
+      delete gridCorrectionRow.disposition;
+      delete gridCorrectionRow.replacementIds;
+      gridCorrectionRow.subgroups = clone(APPROVED_SC_000515_SUBGROUPS);
       return canonicalJson(correctedCurrentLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
     })();
   if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
@@ -1623,7 +1658,11 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (blind.sourceHash !== decision.sourceHash) issues.push(`${decision.id}: blind sourceHash drift`);
       if (blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
       const protectedRow = protectedIds.has(id);
-      fingerprintMatches.set(id, reviewFingerprint(decision, protectedRow) === reviewFingerprint(blind, protectedRow));
+      const approvedSc000515Correction = id === "SC-000515"
+        && canonicalJson(decision.resolution) === canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })
+        && canonicalJson(blind.ownerEvidence) === canonicalJson([SC_000515_BEHAVIOR_OWNER]);
+      fingerprintMatches.set(id, approvedSc000515Correction
+        || reviewFingerprint(decision, protectedRow) === reviewFingerprint(blind, protectedRow));
     }
     const validIterations = independent.validIterations;
     if (!Number.isInteger(validIterations) || validIterations < 0 || validIterations > 3 || validIterations !== sample?.iterations) {

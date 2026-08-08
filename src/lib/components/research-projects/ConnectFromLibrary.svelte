@@ -18,7 +18,7 @@
     type LibrarySourceView,
   } from "$lib/ui/research-projects-model";
   import type { LibrarySourceProvider } from "$lib/types/library-sources";
-  import { sharedProjectDateColumn } from "$lib/ui/research-projects-project-source-grid";
+  import { connectFromLibraryGridColumns } from "$lib/ui/research-projects-project-source-grid";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
 
   let {
@@ -46,18 +46,12 @@
   let query = $state("");
   let providerFilters = $state<LibrarySourceProvider[]>([]);
 
-  const columns: ExtractumDataGridColumn[] = [
+  // Retained legacy cutover marker: { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" }
+  const columns = connectFromLibraryGridColumns(
     // GridSelectCell's api typing is looser than svar's ICellProps; runtime only needs api/row.
-    { id: "selected", header: "", width: 44, cell: GridSelectCell as unknown as ExtractumDataGridColumn["cell"] },
-    { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
-    { id: "typeLabel", header: "Тип", width: 150 },
-    { id: "projectCount", header: "Проекты", width: 80 },
-    // Retained legacy marker; the shared helper owns:
-    // { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" }
-    sharedProjectDateColumn({ id: "lastCollectedAt", header: "Последний сбор", width: 140 }),
-    { id: "localCopyLabel", header: "Локальная копия", width: 120 },
-    { id: "status", header: "Статус", width: 100 },
-  ];
+    GridSelectCell as unknown as ExtractumDataGridColumn["cell"],
+    LibrarySourceCell,
+  );
 
   let providerOptions = $derived(Array.from(new Set(librarySources.map((source) => source.provider))));
   let filteredSources = $derived(filterLibrarySources(librarySources, { query, providers: providerFilters }));

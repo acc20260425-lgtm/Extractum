@@ -18,13 +18,14 @@ decision gate.
 
 The scope is exactly 436 validator-open rows in 86 legacy files:
 
-- 290 behavior rows with exact future owner identities;
+- 289 behavior rows with exact future owner identities;
+- 1 mixed row with an exact architecture/behavior ordinal split;
 - 146 accepted deletion rows;
-- 178 Node/Vitest rows covering 1,104 assertion ordinals;
+- 178 Node/Vitest rows covering 1,101 assertion ordinals;
 - 90 jsdom/Vitest rows covering 598 assertion ordinals;
 - 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 71 Vitest target files, 23 Cargo identities, and 3 Playwright target files.
+- 71 Vitest target files, 19 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
@@ -34,8 +35,11 @@ design: paths and declaration titles remain unchanged, while the 27
 `src/lib/components/**/*.behavior.test.ts` targets move from the artifact's
 filename-only Node forecast to the truthful component project. The second
 approved correction preserves SC-000464's class, invariant, disposition, and
-five assertion ordinals while replacing its false Vitest identity with the five
-existing focused Cargo identities that jointly prove the Rust-owned invariant.
+five assertion ordinals while replacing its insufficient owner set with one
+comprehensive Cargo identity that behaviorally proves the Rust-owned invariant.
+The third correction preserves SC-000515's frozen row fields while assigning
+ordinals 1/11/19 to a structured repository rule and the other 18 ordinals to
+the real grid-wrapper configuration/selection behavior owner.
 
 ## Connected Closure Components
 
@@ -78,9 +82,9 @@ that wave.
    commit plus transition validation, with no RED/GREEN cycle. The remaining
    76 accepted delete rows close incidentally when their 25 mixed legacy files
    later leave the graph.
-2. **Wave 1 -- one-row owners.** Implement the 29 Vitest target files that each
-   own one behavior row, and verify SC-000464 through its five existing focused
-   Cargo identities.
+2. **Wave 1 -- one-row owners.** Implement the 29 Vitest target files, including
+   SC-000515's behavior subgroup and structured rule, and implement SC-000464
+   through its comprehensive focused Cargo identity.
 3. **Wave 2 -- multi-row Vitest targets.** Implement the remaining 42 Vitest
    target files. Large targets are independent batches rather than one
    analysis- or product-wide checkpoint.
@@ -156,7 +160,7 @@ The following rules are fail-closed:
   refactoring is outside scope.
 - D1 through D4 rows close by deleting legacy evidence. D4 does not cause an
   already existing owner to be reimplemented.
-- Except for the component-project and SC-000464 corrections explicitly approved here, a
+- Except for the component-project, SC-000464, and SC-000515 corrections explicitly approved here, a
   required path, title, mechanism, disposition, invariant, or criticality
   change stops the affected connected component for a reviewed design
   amendment. It does not stop unrelated components and is never corrected
@@ -185,14 +189,19 @@ file. The existing `src/lib/telegram-checkpoint-2.behavior.test.ts` and
 The implementation's first runner-ownership change updates the redisposition
 forecast and its forecast validator from 269 Node rows and 0 jsdom rows to the
 corrected 179 Node rows and 90 jsdom rows. The approved SC-000464 correction
-then moves one five-ordinal row from Node to Cargo, producing the final 178
-Node rows/1,104 ordinals and 19 Cargo rows/161 ordinals. Its exact owner set is:
+then moves one five-ordinal row from Node to Cargo, and SC-000515 moves three
+source-shape ordinals from Node behavior ownership to architecture ownership,
+producing the final 178 Node rows/1,101 ordinals and 19 Cargo rows/161 ordinals.
+SC-000464's exact owner is:
 
-- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports`
-- `test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure`
-- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking`
-- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket`
-- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`
+
+SC-000515's architecture subgroup is ordinals `1, 11, 19`, invariant
+"Direct SVAR imports and scoped SVAR tree styles remain inside the approved
+Extractum grid wrapper boundary," owned by `rule:extractum-grid-wrapper-boundary`.
+Its behavior subgroup is ordinals `2-10, 12-18, 20-21`, invariant "Extractum
+grid wrappers retain locale, theme, overlay, date, tree, and selection runtime
+behavior," owned by the frozen grid-wrapper Vitest declaration.
 
 Historical packet transport remains content-addressed evidence of the earlier
 review convention and is not rewritten or re-reviewed; the carrier uses a
@@ -326,8 +335,9 @@ Slice 3C is complete only when:
 
 - validator-open rows fall from 436 to 0;
 - all 86 legacy files are absent;
-- all 290 behavior rows resolve through their exact owners and all 146 delete
-  rows close through their accepted deletion reasons;
+- all 289 behavior rows and both subgroups of the one mixed row resolve through
+  their exact owners, and all 146 delete rows close through their accepted
+  deletion reasons;
 - the legacy Vitest project, census owner, npm script, and verify gate are
   absent;
 - Vitest and Playwright census validation is total, disjoint, and non-empty;
