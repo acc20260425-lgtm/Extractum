@@ -1,0 +1,772 @@
+{
+  "reviewerRunId": "redisposition-task-3-final-complete-policy-binding",
+  "packetSha256": "95dc9a221bd12973911921d61d2b33dd7d22da2514b10eebe0d36a95f4fdd408",
+  "stopConditions": [],
+  "results": [
+    {
+      "id": "SC-000004",
+      "sourceHash": "59a0cd7fd21384d39bc1466468ce70af66ca9cdd22c93748e64915481fccdb18",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The invariant is future behavior through a cheap Node seam, and the packet supplies one exact future owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > materializes missing terminal projections across both publication windows"
+      ]
+    },
+    {
+      "id": "SC-000008",
+      "sourceHash": "29fa25a9a0329171974a7ba544b295c0c7ae2b234a8b8d272c4e36a26ed3b89d",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The protocol-pin invalidation is future behavior through a cheap Node seam with an exact future owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > invalidates a valid Cargo result when the protocol root changes mid-flight"
+      ]
+    },
+    {
+      "id": "SC-000011",
+      "sourceHash": "bc82f00090463acf91aa1b7ce96ee67340884dda9424d9bcdc78663c5573fc2f",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The publication and recovery behavior has a focused future Node owner and does not require a browser or OS-process owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/report.behavior.test.ts#process shell diagnostic report > allows only its output and replays index-link and between-publication crashes"
+      ]
+    },
+    {
+      "id": "SC-000015",
+      "sourceHash": "39cb9abfb1991d4b32a0644e8dd3deda30c41207ce2ae29258f19fc658dab883",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "This requires a real Windows process-tree runtime test, and the packet supplies an approved criticality source for deterministic cleanup.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > does not return until an owned grandchild tree is dead"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000017",
+      "sourceHash": "75e837e67dcc880615d18db32d8e17cd05efd6fe463a7d5bab76bd8e6d173289",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The termination-proof failure behavior is exercised through injected cheap Node seams with one exact future owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > downgrades any survivor-proof exception to termination_unconfirmed evidence"
+      ]
+    },
+    {
+      "id": "SC-000018",
+      "sourceHash": "aad982e657454c81cfcbe9ca3144f279f035b725158cadec8c13045d0c4b86d8",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The durable recovery behavior is covered through a focused injected Node seam and has one exact future owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > halts with durable pending recovery after an unconfirmed Cargo-tree termination"
+      ]
+    },
+    {
+      "id": "SC-000020",
+      "sourceHash": "1fb31ce33261b8cd0f8b0f72142aa5472e07cf2d9480ab35d6920eb44d716c10",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Vitest discovery exclusion is a cheap Node-wrapper behavior; the browser-ownership citation does not make this a browser-runtime test.",
+      "ownerEvidence": [
+        "test:vitest:scripts/run-vitest.behavior.test.ts#run vitest wrapper > excludes Playwright specs from Vitest discovery"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000023",
+      "sourceHash": "a27aa984e2cbfda4f3fb8ee20c7a4a7e8079a5f71e64519e786a0eca669d397b",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "The invariant requires observing a real child and grandchild process tree, with deterministic cleanup required by the supplied normative source.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/run-observation.behavior.test.ts#runObservedCommand > does not resolve until a real child and grandchild are dead"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000064",
+      "sourceHash": "bdec37cc91272ef5904c878ce51963ea9231395fd0bfa8fdeafaaa77b20ad8a1",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The packet marks the exact jsdom owner as resolved by a base-closed row proving the complete selected-source behavior.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > uses the shared takeout recovery notice in the selected source surface"
+      ]
+    },
+    {
+      "id": "SC-000077",
+      "sourceHash": "73a97d741dc3ad57fd587756b7422ef95732d92ac1e69726760831032aea616f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class identifies the exact manifest and mechanical-move topology as implementation shape, not completed history or duplicate behavior."
+    },
+    {
+      "id": "SC-000078",
+      "sourceHash": "1d97bcedb0b38bccd7ac166e260b0d7177adf9ed9891386b7ce51bb52ceca8f4",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The row freezes exact manifest text, dependency identities, and lock composition without an independent candidate owner."
+    },
+    {
+      "id": "SC-000079",
+      "sourceHash": "e9b5cebc3ca3c4ad76c05106b2a7f1ff7063a11b22e1ac3b01b3510ac2c8bec3",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The exhaustive symbol, visibility, layout, and API allowlists freeze exact implementation shape, and no independent owner is supplied."
+    },
+    {
+      "id": "SC-000080",
+      "sourceHash": "37f49ada4a4621c885bd76590fc5b744e103202593ed195bb81e752792e5174f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class treats exact baseline identities and owner topology as current implementation shape rather than completed history."
+    },
+    {
+      "id": "SC-000081",
+      "sourceHash": "b92f47f31433662a5a56f443a808d6dfa10865b91938cb46eb7e73912f1a6a25",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class applies because the row freezes legacy test identity and topology beyond the adjacent resolved behavior owners."
+    },
+    {
+      "id": "SC-000082",
+      "sourceHash": "c92b40c78f1fe5a9cea64a1b5d7311c1a8cc0417470cbc5051a070e379b34a36",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The exact six-table SQL ownership and source placement are implementation topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000083",
+      "sourceHash": "a5f7a252ed08fcc1bf93a8924f0cc4bbe955fe441da029f6ea599da140daf48c",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The exact pool API names and four workflow-family composition constraints freeze implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000084",
+      "sourceHash": "8e0d3ad953a124adfdbe5bb83cbeb996cf0b7c54aef38a9e9ff65c822aad2ab6",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Transaction sharing across coordinators is a future Cargo behavior contract with one exact focused owner.",
+      "ownerEvidence": [
+        "test:cargo:extractum::analysis::tests_application::analysis_coordinators_share_one_app_owned_transaction"
+      ]
+    },
+    {
+      "id": "SC-000085",
+      "sourceHash": "42a6bb81046a71dcbe701688d51578e2850907da1d09fe82a9999503eb15138b",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed corpus-port owner as complete duplicate evidence.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads"
+      ]
+    },
+    {
+      "id": "SC-000086",
+      "sourceHash": "5132d1cb01ba92e3c2a201ac464f077e5b3dc9c46096cf9dd08ce0b7681037d1",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact command registration, source ownership, spawning, migration, and fixture placement are implementation topology without an independent candidate owner."
+    },
+    {
+      "id": "SC-000087",
+      "sourceHash": "7628287415527ca9e7f1c1a7c53169e3faaa9c7b0e7a21cc5fb8235a865e31b2",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the focused future Cargo owner; the resolved adjacent jsdom owner does not prove this complete invariant.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"
+      ]
+    },
+    {
+      "id": "SC-000088",
+      "sourceHash": "8cc82f5f0dba0a281d89855b4acc79faf4021df47e5a69256bcd2e0629c6b0a3",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class treats exact fixture syntax, path, and module topology as implementation shape; adjacent resolved UI owners do not prove it."
+    },
+    {
+      "id": "SC-000089",
+      "sourceHash": "db6074fce23d53f5f8ad7d71291913b8a84fcafe9e442b61c0d534290ccc3363",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact import text, direct dependency placement, and crate ownership freeze implementation topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000090",
+      "sourceHash": "414f093b4c95bbc9b5a0d206176dfbc22661e61f021e1fac4598b1ea8d3ec8a1",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Cargo wire-contract owner for the complete invariant.",
+      "ownerEvidence": [
+        "test:cargo:extractum::analysis::tests_application::analysis_command_event_and_app_error_wire_contracts_are_exact"
+      ]
+    },
+    {
+      "id": "SC-000091",
+      "sourceHash": "562fa4d527d7086a626dd32d7f135571b295ae0640286582305e669285e1178e",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class treats exact source portability patterns and topology as implementation shape; the adjacent resolved jsdom owner is not complete evidence."
+    },
+    {
+      "id": "SC-000092",
+      "sourceHash": "6a6898de7f435ba780208dbeb493c238d1b92f6b859c2c21a1aee0460b04588c",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class treats exact dead-code and facade-surface topology as implementation shape rather than completed history."
+    },
+    {
+      "id": "SC-000118",
+      "sourceHash": "61b6efb1bc2236d1b7d63eaa382a01565cae1676c8e64016c1d44e6899b25b8e",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The two exact resolved base-closed Cargo owners jointly prove the completed-run and trace no-live-fallback invariant.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows",
+        "test:cargo:extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot"
+      ]
+    },
+    {
+      "id": "SC-000121",
+      "sourceHash": "0cb00961ac2c7e0dca37eed1d5e1b88490ebb5f0eb70e1b06c18dfe747435de6",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The exact resolved base-closed jsdom owner proves the complete Telegram metadata-first timeline behavior.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders Telegram as a metadata-rich timeline without binary previews"
+      ]
+    },
+    {
+      "id": "SC-000130",
+      "sourceHash": "38541383ae101e3a6c1b58b033acf10229740ac7d95817e7370099cddee092a8",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node route-wiring owner; adjacent resolved component owners are incomplete.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes persisted canvas mode and source basis from workspace UI state"
+      ]
+    },
+    {
+      "id": "SC-000136",
+      "sourceHash": "87f823f39a97d06c7bca7705273c60cd417bd34f15dd535a143096064b72c1b2",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node route-wiring owner for source metrics passed into preflight.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes source metrics into report launch preflight"
+      ]
+    },
+    {
+      "id": "SC-000165",
+      "sourceHash": "a8c6ec6f91227bd96d9b70933262cfaa7bec6e348e931881b145e3a0776b5716",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Snapshot-availability probing is future behavior through a cheap Node route-effects seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > probes opened-run snapshot availability before the user switches to Source mode"
+      ]
+    },
+    {
+      "id": "SC-000171",
+      "sourceHash": "e07d278c936c576fb1f4736878d465f8b8d9f859e3f933bedbdcecc9cfd1c98c",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Focused-load comparison is future behavior through a cheap Node route-effects seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > compares focused-load requests against current route scope and source basis"
+      ]
+    },
+    {
+      "id": "SC-000176",
+      "sourceHash": "9f1def0b061ef13d530155fe02f9ef2015d6cb32232ec0e51422017027e8af72",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The invariant explicitly identifies imported helper names as implementation detail, and the packet supplies no independent exact candidate owner for this row."
+    },
+    {
+      "id": "SC-000192",
+      "sourceHash": "2ce78fef53aed2cc67566fb4839cd49a03a048668c78c4ecde92383a843cf132",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node companion-route owner; the resolved adjacent owners do not prove the full filtering behavior.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-run-companion-route.behavior.test.ts#analysis route run companion wiring > keeps Runs filters durable and source ingest jobs out of Runs"
+      ]
+    },
+    {
+      "id": "SC-000194",
+      "sourceHash": "241616928cceb2a3fa9c65fcf7b979344c128266adf205cdea5209e712af3266",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class retires the obsolete inspector-mode patch shape while leaving independently covered navigation behavior outside this row."
+    },
+    {
+      "id": "SC-000203",
+      "sourceHash": "2db29d1f74260998d771ef9bf0b30aed40dda153c7b260e9ba4ccda0371ab986",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class treats removal of the temporary ReportCanvas chat surface as exact current component topology."
+    },
+    {
+      "id": "SC-000210",
+      "sourceHash": "0b08eafc7bc27cf82fc8cc122a159b292a585094325e755b5e53fa976edb458a",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node source-reader route owner; resolved component owners are adjacent only.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers-route.behavior.test.ts#analysis source reader route wiring > passes source reader props into ReportSourceSurface"
+      ]
+    },
+    {
+      "id": "SC-000289",
+      "sourceHash": "59ffe63c0fbbccb1df99d777454502cb53fdbfd654e7797971310294a9c5d85b",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node component-contract owner for explicit workspace button types.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-workspace-tools.behavior.test.ts#analysis workspace tools component contract > uses explicit button types for workspace actions"
+      ]
+    },
+    {
+      "id": "SC-000297",
+      "sourceHash": "9479b66bf53d907bf016be038b67ea692000adeb006c4db1300ab82c0e79ae61",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Top-level Jobs navigation in both modes is future behavior through a cheap Node seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/apalis-jobs-route-contract.behavior.test.ts#apalis jobs inspector frontend source contracts > adds Jobs as a separate top-level navigation item in both modes"
+      ]
+    },
+    {
+      "id": "SC-000298",
+      "sourceHash": "6133207b3cd0d7d194aa722a9138c72c21fcfe9798c71c9b6f1470fa17dfa719",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exclusive Tauri invocation by one named API wrapper is exact source ownership and call topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000304",
+      "sourceHash": "68c2d8a1cf6513652290d2def746c8ed37e0751a2d89cea2f603c575afec59ef",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The direct wrapper composition and absence of logging or transformation freeze implementation shape without an independent candidate owner."
+    },
+    {
+      "id": "SC-000305",
+      "sourceHash": "e349ec77c4eff9d28b3161273dfa3ea479197b963dd75e4b01d61794262643ba",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact wrapper return, logging, and transformation composition is implementation shape with no independent candidate owner."
+    },
+    {
+      "id": "SC-000312",
+      "sourceHash": "58f368ffa463e9253fc309d831f63e2232db8316136bd59dd2aaa89dd9ee09b1",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Responsive visibility requires a real browser viewport, and the approved future Playwright owner carries the required browser-ownership citation.",
+      "ownerEvidence": [
+        "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000316",
+      "sourceHash": "8a2542834a462d3dfcacfd6fa974cb47c9e242c1d11347b895626d0494bb387e",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact three resolved base-closed jsdom owners as the complete metadata, activity, and sources-tab evidence set.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group metadata from route-owned group fields",
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards",
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group sources as a route-free tab leaf"
+      ]
+    },
+    {
+      "id": "SC-000323",
+      "sourceHash": "3a365dd43a846f82eb9e36df96ba2877fbc653c1e733434bea8311e2820a3a8f",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The authoritative policy class identifies exact focus and selection styling as non-normative rendered visual detail without a truthful non-browser seam."
+    },
+    {
+      "id": "SC-000333",
+      "sourceHash": "c8de76024f284ed0eb55fe865eed998b865783e98b96c7ca7eb3645f868250e0",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class applies because the declaration pins an exact open-state selector string instead of independently observing behavior."
+    },
+    {
+      "id": "SC-000335",
+      "sourceHash": "9f5ea67a1d856c87137c0b00c038f67ea958017f652b744b64a6c337283bba9f",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Source-row activation forwarding is future behavior through a cheap Node shell seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/research-projects/ResearchProjectsShell.behavior.test.ts#ResearchProjectsShell > forwards source row activation to the grid"
+      ]
+    },
+    {
+      "id": "SC-000344",
+      "sourceHash": "6e33f0cdc0cd45ad19034a693eb7a80010f35a00fc2b55140471bd5d6b878b09",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Filter availability across responsive layouts requires real browser viewports, and the approved future Playwright owner carries the required citation.",
+      "ownerEvidence": [
+        "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000349",
+      "sourceHash": "14af1dda1db6f9d06231d7945b7ca15a0d04f8f87bd72f0372eaa28898b35068",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The invariant explicitly identifies the exact materials-column alignment mechanism as styling implementation detail with no independent contract."
+    },
+    {
+      "id": "SC-000352",
+      "sourceHash": "f18150ff4a6c39907a5439d7620a9caa04cb7c8c317271748ecfc5e04aed4433",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The authoritative policy class identifies two-line title clipping as non-normative rendered layout with no truthful non-browser seam."
+    },
+    {
+      "id": "SC-000353",
+      "sourceHash": "105e4acb1d88e33345b1f848a5f82a899264337e49ec653c1c905142f532917d",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The authoritative policy class identifies centering and overflow ellipsis as non-normative rendered layout with no truthful non-browser seam."
+    },
+    {
+      "id": "SC-000356",
+      "sourceHash": "6494facabe668c6fb044caffb48860249d6def15cdac63e182a12cda4ba20e47",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for duplicate resolved packages.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000357",
+      "sourceHash": "e935ce6830ba89027514ff6a82e0fdc09722955cc5a4784e662e2f5087f58f19",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for malformed feature definitions.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000358",
+      "sourceHash": "5cb1fc3f2ad2d2058def23c3d990786678511b1d31ccc7c28ea80af5e4390324",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for the locked Grammers source URL.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000359",
+      "sourceHash": "badc6aa646872e1200408cdb9c4bf820b91639098deb8e14575f480f06c74bd8",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact runtime file location and package-script text across an extraction move are implementation topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000360",
+      "sourceHash": "d804c87056db98da85aaa8d8ccae4aca477ce58796b487d21d503e1acf39e28f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The declaration freezes exact documentation wording and sampling-policy composition, and the packet supplies no independent structured owner."
+    },
+    {
+      "id": "SC-000361",
+      "sourceHash": "b3d8caded33a9c98ca583a17300fb766d40a7042d6d1f1275464edb5ca680756",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 3 and Phase 4 records and claims no independent future executable contract."
+    },
+    {
+      "id": "SC-000362",
+      "sourceHash": "4e9f3f03ed53212427c8bd0808e2df04f80b598726388c9f71ccaf697e0c4339",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 5 ownership and Phase 6 authorization records with no independent future contract."
+    },
+    {
+      "id": "SC-000363",
+      "sourceHash": "93661c8ca686d9dbcc0dc291deaa745def8e3ff916af5dd0c26af170492a305c",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 6 prompt-pack boundary prose with no independent future contract."
+    },
+    {
+      "id": "SC-000364",
+      "sourceHash": "017ea4ff0b5d9dd853a39fd28936798d135d455f33314ba7d58f56dc7822983f",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 7 analysis-boundary prose with no independent future contract."
+    },
+    {
+      "id": "SC-000365",
+      "sourceHash": "6eabbf9d380746baac0c4d50baa8ed5ba740d7207181cb92d72881f86ca071f5",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly historical Phase 8 lifecycle wording; the adjacent vocabulary-path owner does not create an independent contract for the prose itself."
+    },
+    {
+      "id": "SC-000383",
+      "sourceHash": "70489046565f53280a48f3d1fba33acc2df4e3c2240465af2bddb19e0daa9d60",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Explicit dialog dismissal behavior has a focused future Node owner and does not require a real browser seam.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/desktop-dialog.behavior.test.ts#desktop dialog > requires explicit dismissal"
+      ]
+    },
+    {
+      "id": "SC-000385",
+      "sourceHash": "79ea9a43b5059b6604eb347c27bda9fff49469cce3b153e05bf722642f8f7f6e",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Portal layering, visibility, and interactivity require a real browser, and the approved future Playwright owner carries the required citation.",
+      "ownerEvidence": [
+        "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000386",
+      "sourceHash": "0e1373de4e22b79db3140d1f2ab252c7f218405a7675006ee999c87be2a31daf",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact module registration, lifecycle state names, timing constants, and serialization exclusions are internal implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000387",
+      "sourceHash": "483d87d6c2be5333d965ad71034cf46cf96592ed8028b280e1bb72b3d1b099d4",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Owned Windows descendant containment and reaping require real OS-process observation, with deterministic cleanup required by the supplied normative source.",
+      "ownerEvidence": [
+        "test:cargo:extractum::process_tree::tests::windows_guard_contains_and_reaps_owned_descendants"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000388",
+      "sourceHash": "5152c6c9bc6c5708bc2c49b45d4d51c8a57fffb528d23ddb22aa84c26f5baf60",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact Tokio command ownership, forbidden shell-plugin names, call ordering, and configurator call count freeze implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000389",
+      "sourceHash": "ef9b4492397677201c5597d32b7348f945134b4a983b89dc06d47eaeece0aa2a",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Complete CDP Chrome child-tree lifetime requires real OS-process observation, and the supplied normative source requires deterministic cleanup.",
+      "ownerEvidence": [
+        "test:cargo:extractum::gemini_browser::tests::cdp_child_guard_reaps_the_complete_owned_tree"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000390",
+      "sourceHash": "d20932bb4200bc71733983312754bdaf7f0d3587c20a0e34234a87b0bd0a7250",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Exit delegation and bounded cleanup coordination have a focused future Cargo behavior owner without an approved expensive-runtime requirement.",
+      "ownerEvidence": [
+        "test:cargo:extractum::shutdown::tests::exit_requests_delegate_once_and_complete_bounded_cleanup"
+      ]
+    },
+    {
+      "id": "SC-000396",
+      "sourceHash": "f4cc658b853625dc51459892fe766dc155a79fda338e4b2136c75bc75ebfdaea",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact crate-root and private-facade text plus forbidden public declarations are implementation shape with no independent candidate owner."
+    },
+    {
+      "id": "SC-000399",
+      "sourceHash": "e654a0e8ea9bd4a2a714d7bd4d72b378d0287c9a8105be5e5dc9a90a92dae076",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Source-level forbidden dependency strings and app-versus-crate placement freeze exact infrastructure topology without an independent owner."
+    },
+    {
+      "id": "SC-000414",
+      "sourceHash": "8e23fa3b97b2edee0cc3b44c9046f7f353936cc0bd9fcbdf26a6d21f66aa3e87",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Scheduler token-guard routing is future behavior through a cheap Node panel seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/settings/gemini-browser-provider-panel.behavior.test.ts#gemini browser provider panel copy contract > routes selected run detail through scheduler token guard"
+      ]
+    },
+    {
+      "id": "SC-000416",
+      "sourceHash": "8441f5383e8a89042a41ff9dea77939ee0bb9cd4672a4de88f39f94f9bcd8b9a",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node polling-controller owner for prompt-pack run discovery.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/gemini-browser-polling.test.ts#gemini browser polling controller > idle polling discovers prompt-pack runs through scheduler light refresh without live status"
+      ]
+    },
+    {
+      "id": "SC-000420",
+      "sourceHash": "984d323dbc8aa30c22fa100368bddeb27a033d1bd16eaebc4150346436c9556f",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "The authoritative policy class requires real Windows process-launch observation for hidden-console behavior and supplies the exact normative citation.",
+      "ownerEvidence": [
+        "test:cargo:extractum::child_process::tests::gemini_sidecar_launches_hide_console_window_on_windows"
+      ],
+      "criticalityRef": "AGENTS_WINDOWS_SANDBOX"
+    },
+    {
+      "id": "SC-000423",
+      "sourceHash": "5f85ce4400bf4c7b7fedd335536f8bc7b6dc942ad12599f8ad5ffc30eb5f3a82",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node panel owner; the resolved adjacent YouTube owners do not prove tab placement.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/research-projects/LibraryYoutubeAddPanel.behavior.test.ts#library add source contract > keeps YouTube mode tabs inside the YouTube panel"
+      ]
+    },
+    {
+      "id": "SC-000441",
+      "sourceHash": "093561de910b2cd887cc9a23796094020d13d9fa1c1d234af875a01276b58700",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Curated public API and credential visibility are covered by a focused future Cargo test; the security citation alone does not require an expensive runtime seam.",
+      "ownerEvidence": [
+        "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    },
+    {
+      "id": "SC-000443",
+      "sourceHash": "27d6d2b8f4b3100d03b6a3e425fbd8187315bcce27448f3ab731cbdc855f6484",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Application-scoped profile and transport ownership has one exact focused future Cargo owner without an expensive-runtime requirement.",
+      "ownerEvidence": [
+        "test:cargo:extractum::llm::tests::secure_profile_and_transport_ownership_remains_application_scoped"
+      ]
+    },
+    {
+      "id": "SC-000449",
+      "sourceHash": "89777577926813797e004d7ad97ac3f4ab72b9eeda717a480abe23c244192ab9",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The authoritative policy class applies because one-owner and no-copy placement topology is not proven by the adjacent future behavior tests."
+    },
+    {
+      "id": "SC-000453",
+      "sourceHash": "a05611f7d9315e05d445cbced34e420f3f21deb2cabd24437ee3b3757ea62107",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node modal-behavior owner; the resolved run-detail owner is adjacent only.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/research-projects/ProjectRunsScreen.behavior.test.ts#project runs screen > uses the shared confirm modal before deleting or cancelling prompt-pack runs"
+      ]
+    },
+    {
+      "id": "SC-000465",
+      "sourceHash": "4da2eabf9c8180ede43532ab9fa6a9a12bb8df7e7792df10990e74c70de5437f",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Startup ordering between seed and interrupted-run cleanup has one exact focused future Cargo behavior owner.",
+      "ownerEvidence": [
+        "test:cargo:extractum::tests::startup_seeds_prompt_packs_before_interrupted_run_cleanup"
+      ]
+    },
+    {
+      "id": "SC-000471",
+      "sourceHash": "2a7abe20116908676dfe427198015f3268d6a1f193647d584538b1f5a68132cb",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Excluding named responsibility categories from the completion transport is source and module composition with no independent candidate owner."
+    },
+    {
+      "id": "SC-000474",
+      "sourceHash": "3f2522d69529f9f3d11c04319bf26d9ff3c9baf97f75e7bd82c79a499b5bd0ee",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Test-only cancellation fixture visibility has one exact focused future Cargo public-API owner.",
+      "ownerEvidence": [
+        "test:cargo:extractum-prompt-packs::public_api_tests::cancellation_smoke_services_remain_test_only"
+      ]
+    },
+    {
+      "id": "SC-000481",
+      "sourceHash": "ccbf643116c720ee96ecb81aefae7b270d0fcb4b417c32b264a4da761102c6f8",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "A named module remaining private is exact visibility and implementation topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000484",
+      "sourceHash": "26952ec253e32e9d11d0fa3676d2c6f5512ac289ec3ef156aa4677ca436ccf47",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Terminal-event state clearing is behavior through a focused future Cargo seam with one exact owner.",
+      "ownerEvidence": [
+        "test:cargo:extractum-prompt-packs::run_control::tests::terminal_events_clear_required_run_state"
+      ]
+    },
+    {
+      "id": "SC-000492",
+      "sourceHash": "45f88cee99cdf739706958af9341ca97246fa2b1142588a920ca77794d8bf1cb",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Invalid persisted runtime configuration reporting has one exact focused future Cargo behavior owner.",
+      "ownerEvidence": [
+        "test:cargo:extractum-prompt-packs::runtime_config::tests::invalid_persisted_runtime_configuration_is_reported"
+      ]
+    },
+    {
+      "id": "SC-000509",
+      "sourceHash": "b6f48745ef92e10aba35f640834853417353b75b2d4b93135c6083b138afcba7",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Lower-case wrapper locations and preservation of legacy components are exact path and topology constraints without an independent candidate owner."
+    },
+    {
+      "id": "SC-000511",
+      "sourceHash": "8f6854a67363da20b84dd795a08442c49dc78f854e6de9b0920e7df464b23919",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node import-boundary owner; adjacent component owners are incomplete.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#feature screens use Extractum UI wrappers"
+      ],
+      "criticalityRef": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+    },
+    {
+      "id": "SC-000512",
+      "sourceHash": "f8e1f024fcfe969c1e21c02c176e8e32bdfcdffa2dcec33751c00f0ad90533c7",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Lower-level UI import ownership has one exact maintained future Node boundary test, with the supplied replacement-policy citation.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#lower-level UI imports stay in wrapper modules"
+      ],
+      "criticalityRef": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+    },
+    {
+      "id": "SC-000513",
+      "sourceHash": "efc92ba1f80ae9f29a449e5dd92b47ee079dbc7619798f18b416967fbd44c070",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Library wrapper-boundary enforcement has one exact future Node owner, with the supplied source-contract replacement citation.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/research-projects-import-boundary.behavior.test.ts#Library screens do not bypass Extractum wrappers"
+      ],
+      "criticalityRef": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+    },
+    {
+      "id": "SC-000514",
+      "sourceHash": "94c1677b8908e0e64bc9f31967abd628ccee6b7d1a5b9acdda2f8c85fa179dea",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Shared grid date-time formatting has one exact future Node behavior owner, with the supplied source-contract replacement citation.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/research-projects-grid-date-formatting.behavior.test.ts#project source date columns use the shared formatter"
+      ],
+      "criticalityRef": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+    },
+    {
+      "id": "SC-000515",
+      "sourceHash": "0cc9cdec2930890158b1319e0ed68aa871a1d70d384b3d5d231a8b1b00c5f4d5",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "SVAR grid boundary enforcement has one exact future Node owner, with the supplied source-contract replacement citation.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers"
+      ],
+      "criticalityRef": "TESTING_SOURCE_CONTRACT_REPLACEMENT"
+    },
+    {
+      "id": "SC-000555",
+      "sourceHash": "05e9d424fbc2a99e68362a7fa6ef5f995e9362567463a1789dca3052ad93f732",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Restrictive production Tauri configuration is covered by a focused future Cargo test; the security citation does not require an expensive runtime seam.",
+      "ownerEvidence": [
+        "test:cargo:extractum::security_config_tests::base_tauri_configuration_is_production_restrictive"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    },
+    {
+      "id": "SC-000556",
+      "sourceHash": "ac61de784efdb85a134fa8b4e761c98a2429d9a54b96c224ab6506c557b93636",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Production image CSP origin restrictions have one exact focused future Cargo owner; the security citation alone does not make the seam expensive.",
+      "ownerEvidence": [
+        "test:cargo:extractum::security_config_tests::production_image_csp_rejects_remote_origins"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    },
+    {
+      "id": "SC-000557",
+      "sourceHash": "9315b6377120eacb727cd5485b52760c5b1c01fc38029126058b7ce0fd686ba4",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Development-only MCP capability configuration has one exact future Node owner and the supplied security citation.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/tauri-security-config.behavior.test.ts#MCP capabilities are development only"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    },
+    {
+      "id": "SC-000558",
+      "sourceHash": "8d013a717623984fa266a48cd8b3f7234185b5e63434406f508fa4cfe23f2c33",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Absence of frontend SQL permissions has one exact focused future Cargo owner and the supplied database-ownership citation.",
+      "ownerEvidence": [
+        "test:cargo:extractum::security_config_tests::frontend_capabilities_contain_no_sql_permission"
+      ],
+      "criticalityRef": "AGENTS_DATABASE_OWNERSHIP"
+    },
+    {
+      "id": "SC-000559",
+      "sourceHash": "6cfb2dc2bb8ef37452ec20d96c3bfd1190cf890f4364102d63d34fec5a0c17a1",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Localhost-development-only command compilation has one exact future Cargo owner and the supplied security citation.",
+      "ownerEvidence": [
+        "test:cargo:extractum::security_config_tests::mcp_and_fixture_commands_are_localhost_dev_only"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    },
+    {
+      "id": "SC-000560",
+      "sourceHash": "6f9a5f62cc8a46d07ea4559a813a3017cb7627dd4778847f4a94d59e2ba5a60e",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Production DevTools feature gating has one exact future Cargo owner and the supplied security citation.",
+      "ownerEvidence": [
+        "test:cargo:extractum::security_config_tests::production_devtools_require_csp_verification"
+      ],
+      "criticalityRef": "AGENTS_SECURITY"
+    }
+  ]
+}
