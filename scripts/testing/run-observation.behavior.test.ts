@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +25,12 @@ async function waitForPidFile(file: string) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     try {
-      return (await readFile(file, "utf8")).trim().split(",").map(Number);
+      const handle = await open(file, "r");
+      try {
+        return (await handle.readFile("utf8")).trim().split(",").map(Number);
+      } finally {
+        await handle.close();
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       await new Promise((resolve) => setTimeout(resolve, 25));

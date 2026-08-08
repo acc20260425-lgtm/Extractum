@@ -16,34 +16,29 @@ export type ExtractumDataGridResponsive = Record<
 
 const UNIX_MILLISECONDS_THRESHOLD = 100_000_000_000;
 
-export const EXTRACTUM_GRID_WRAPPER_CONTRACT = Object.freeze({
-  package: "@svar-ui/svelte-grid",
-  publicWrappers: Object.freeze(["ExtractumDataGrid", "ExtractumTreeDataGrid"]),
-  dataGrid: Object.freeze({
-    selection: "selectedRows",
-    rowStyle: true,
-    locale: true,
-    theme: "Willow",
-    fonts: false,
-    emptyOverlay: "visibleOverlay",
-    dateTimeColumns: true,
-    responsiveDateTimeColumns: true,
-  }),
-  treeDataGrid: Object.freeze({
-    tree: true,
-    toggleEvent: "treetoggle",
-    selection: "selectedRows",
-    selectionEvent: "onselectrow",
-    locale: true,
-    theme: "Willow",
-    fonts: false,
-  }),
-  selectCell: Object.freeze({
-    ignoredClickAttribute: "data-action",
-    ignoredClickValue: "ignore-click",
-    selectionCommand: "select-row",
-  }),
-});
+export function extractumGridOverlay(rows: readonly unknown[], overlay: string | undefined): string | undefined {
+  return rows.length === 0 ? overlay : undefined;
+}
+
+export function extractumGridClickIsIgnored(target: Pick<Element, "closest">): boolean {
+  return target.closest('[data-action="ignore-click"]') !== null;
+}
+
+export function extractumGridSelection(ids: readonly unknown[]): string[] {
+  return ids.map(String);
+}
+
+export function extractumTreeGridSelection(id: string | null): string[] {
+  return id ? [id] : [];
+}
+
+export function executeExtractumGridSelection(
+  api: { exec: (command: string, data: Record<string, unknown>) => void },
+  id: string,
+  selected: boolean,
+) {
+  api.exec("select-row", { id, mode: selected, toggle: true });
+}
 
 export function parseDataGridDateTimeValue(value: unknown): Date | null {
   if (value instanceof Date) {

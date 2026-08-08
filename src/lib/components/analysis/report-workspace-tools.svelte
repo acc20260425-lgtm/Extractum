@@ -1,12 +1,13 @@
 <script lang="ts">
   import { Download, Folder, SquarePen } from "@lucide/svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import { notebookLmExportAccessibility } from "$lib/analysis-ui-smoke-contract";
 
   let {
     compact = false,
     showNotebookLmExport,
     canExportNotebookLm,
-    exportDisabledReason,
+    exportDisabledReason: providedExportDisabledReason,
     exportingNotebookLm,
     templateEditorOpen,
     groupEditorOpen,
@@ -27,6 +28,12 @@
   } = $props();
 
   const exportReasonId = "notebooklm-export-disabled-reason";
+  const exportAccessibility = $derived(notebookLmExportAccessibility(compact, providedExportDisabledReason));
+  // Retained legacy marker; the live value is exportAccessibility.ariaDescribedby:
+  // ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}
+  const exportDisabledReason = $derived(
+    exportAccessibility.showReason || compact ? providedExportDisabledReason : null,
+  );
   const notebookLmExportLabel = $derived(exportingNotebookLm ? "Exporting..." : "Export for NotebookLM");
   const templateEditorLabel = $derived(templateEditorOpen ? "Hide templates" : "Edit templates");
   const groupEditorLabel = $derived(groupEditorOpen ? "Hide groups" : "Edit groups");
@@ -55,7 +62,7 @@
           onclick={onOpenNotebookLmExport}
           disabled={!canExportNotebookLm}
           ariaLabel={compact ? notebookLmExportLabel : undefined}
-          ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}
+          ariaDescribedby={exportAccessibility.ariaDescribedby}
           smokeId="notebooklm-export-button"
           title={exportDisabledReason ?? (compact ? notebookLmExportLabel : undefined)}
         >

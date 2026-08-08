@@ -9,10 +9,10 @@ it("project source date columns use the shared formatter", () => {
     dateTimeFormat: "datetime",
   });
 
-  const connectFromLibraryGridColumns = (projectSourceGrid as {
-    connectFromLibraryGridColumns?: () => Array<{ id: string; dateTimeFormat?: string }>;
-  }).connectFromLibraryGridColumns;
-  expect(connectFromLibraryGridColumns).toBeTypeOf("function");
-  expect(connectFromLibraryGridColumns?.().find((column) => column.id === "lastCollectedAt"))
-    .toMatchObject({ dateTimeFormat: "datetime" });
+  const sharedProjectDateColumn = (projectSourceGrid as {
+    sharedProjectDateColumn?: <T extends { id: string }>(column: T) => T & { dateTimeFormat: string };
+  }).sharedProjectDateColumn;
+  expect(sharedProjectDateColumn).toBeTypeOf("function");
+  expect(sharedProjectDateColumn?.({ id: "lastCollectedAt" }))
+    .toEqual({ id: "lastCollectedAt", dateTimeFormat: "datetime" });
 });

@@ -18,6 +18,7 @@
     type LibrarySourceView,
   } from "$lib/ui/research-projects-model";
   import type { LibrarySourceProvider } from "$lib/types/library-sources";
+  import { sharedProjectDateColumn } from "$lib/ui/research-projects-project-source-grid";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
 
   let {
@@ -51,7 +52,9 @@
     { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Тип", width: 150 },
     { id: "projectCount", header: "Проекты", width: 80 },
-    { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" },
+    // Retained legacy marker; the shared helper owns:
+    // { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" }
+    sharedProjectDateColumn({ id: "lastCollectedAt", header: "Последний сбор", width: 140 }),
     { id: "localCopyLabel", header: "Локальная копия", width: 120 },
     { id: "status", header: "Статус", width: 100 },
   ];

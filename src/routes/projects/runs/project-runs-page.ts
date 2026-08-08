@@ -1,6 +1,1 @@
-export const PROJECT_RUNS_PAGE = Object.freeze({
-  id: "project-runs",
-  href: "/projects/runs",
-  label: "Runs",
-  screen: "ProjectRunsScreen",
-});
+export { PROJECT_ICON_RAIL_ROUTES, PROJECT_RUNS_PAGE } from "$lib/ui/research-projects-navigation";

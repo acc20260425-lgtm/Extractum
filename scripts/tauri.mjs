@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+/** @param {string[]} args */
 export function buildTauriArgs(args) {
   const delimiter = args.indexOf("--");
   const commandArgs = args.slice(0, delimiter < 0 ? args.length : delimiter);

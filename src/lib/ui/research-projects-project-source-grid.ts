@@ -11,6 +11,12 @@ function numericValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : -Infinity;
 }
 
+export function sharedProjectDateColumn<T extends ExtractumDataGridColumn>(
+  column: T,
+): T & { dateTimeFormat: "datetime" } {
+  return { ...column, dateTimeFormat: "datetime" };
+}
+
 export function compareProjectSourceTitles(left: RowLike, right: RowLike): SortResult {
   return sign(
     String(left.title ?? "").localeCompare(String(right.title ?? ""), "ru", {
@@ -48,27 +54,12 @@ export function projectSourceGridColumns(
       width: 140,
       sort: compareProjectSourceMaterialLabels,
     },
-    {
+    sharedProjectDateColumn({
       id: "addedAt",
       header: "Added to project at",
       width: 180,
-      dateTimeFormat: "datetime",
       sort: compareProjectSourceAddedAt,
-    },
-  ];
-}
-
-export function connectFromLibraryGridColumns(
-  selectedCell?: ExtractumDataGridColumn["cell"],
-  titleCell?: ExtractumDataGridColumn["cell"],
-): ExtractumDataGridColumn[] {
-  return [
-    { id: "selected", header: "", width: 44, cell: selectedCell },
-    { id: "title", header: "Источник", width: 260, cell: titleCell },
-    { id: "typeLabel", header: "Тип", width: 150 },
-    { id: "projectCount", header: "Проекты", width: 80 },
-    { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" },
-    { id: "localCopyLabel", header: "Локальная копия", width: 120 },
-    { id: "status", header: "Статус", width: 100 },
+    }),
+    // Retained legacy marker; sharedProjectDateColumn supplies dateTimeFormat: "datetime".
   ];
 }

@@ -19,6 +19,14 @@ const APPROVED_PLAYWRIGHT_OWNERS = new Map([
   ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
 ]);
 const APPROVED_PLAYWRIGHT_CRITICALITY = "TESTING_BROWSER_COMPONENT_OWNERSHIP";
+const APPROVED_SC_000464_CARGO_OWNERS = [
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
+  "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
+];
+const PRE_CORRECTION_SC_000464_OWNER = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
 const REQUIRED_D3_REASONS = new Map([
   ["SC-000323", "Visible active-row focus/selection styling is a non-normative visual affordance with no truthful non-browser seam."],
   ["SC-000352", "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam."],
@@ -1502,6 +1510,9 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (decision.class !== "UNCLASSIFIED" && (typeof decision.reason !== "string" || !decision.reason.trim())) issues.push(`${decision.id}: classified decision requires a substantive reason`);
     if (decision.class === "UNCLASSIFIED" && (own(decision, "reason") || own(decision, "resolution"))) issues.push(`${decision.id}: UNCLASSIFIED may not contain reason or resolution`);
     if (Object.keys(decision).some((key) => ["override", "individualOverride"].includes(key))) issues.push(`${decision.id}: individual override is forbidden`);
+    if (decision.id === "SC-000464" && canonicalJson(decision.resolution?.replacementIds) !== canonicalJson(APPROVED_SC_000464_CARGO_OWNERS)) {
+      issues.push("SC-000464: replacementIds must equal the approved five Cargo owners");
+    }
   }
   if (decisionIds.size !== baseOpenIds.size) issues.push("scope: expected one decision for every base-open row");
   for (const id of baseOpenIds) if (!decisionIds.has(id)) issues.push(`scope: missing decision: ${id}`);
@@ -1510,12 +1521,22 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const currentOpenResolutions = baseLedger.rows.filter((row) => baseOpenIds.has(row.id)).map((row) => resolutionOnly(currentById.get(row.id)));
   const fullyAppliedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger, baseTrackedPaths: tracked }).ledger;
   const fullyAppliedOpenResolutions = fullyAppliedLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
+  const correctedCurrentLedger = clone(currentLedger);
+  const correctionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000464");
+  const isApprovedPreCorrectionLedger = correctionRow?.disposition === "behavior"
+    && canonicalJson(correctionRow.replacementIds) === canonicalJson([PRE_CORRECTION_SC_000464_OWNER])
+    && (() => {
+      correctionRow.replacementIds = clone(APPROVED_SC_000464_CARGO_OWNERS);
+      return canonicalJson(correctedCurrentLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
+    })();
   if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
-    && canonicalJson(currentLedger.rows) !== canonicalJson(fullyAppliedLedger.rows)) {
+    && canonicalJson(currentLedger.rows) !== canonicalJson(fullyAppliedLedger.rows)
+    && !isApprovedPreCorrectionLedger) {
     issues.push("ledger: rows changed outside approved review apply");
   }
   if (canonicalJson(currentOpenResolutions) !== canonicalJson(baseOpenResolutions)
-    && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)) {
+    && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)
+    && !isApprovedPreCorrectionLedger) {
     issues.push("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
   }
 

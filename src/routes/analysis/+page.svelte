@@ -362,6 +362,9 @@
   let selectedTopicKey = $state(ALL_TOPICS_KEY);
   let selectedTemplateId = $state("");
   let selectedGroupEditorId = $state(reportCanvasGroupEditorProps("").selectedGroupEditorId);
+  function setSelectedGroupEditorId(value: string) {
+    selectedGroupEditorId = reportCanvasGroupEditorProps(value).selectedGroupEditorId;
+  }
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -1129,7 +1132,7 @@
 
     const next = dispatchWorkspaceEvent(event);
     if (next.workspaceSelection.kind === "source_group") {
-      selectedGroupEditorId = String(next.workspaceSelection.sourceGroupId);
+      setSelectedGroupEditorId(String(next.workspaceSelection.sourceGroupId));
     }
     resetGroupLiveReader();
     resetYoutubeTranscriptReader();
@@ -1199,7 +1202,7 @@
     if ("templates" in patch) templates = patch.templates ?? [];
     if ("groups" in patch) groups = patch.groups ?? [];
     if ("selectedTemplateId" in patch) selectedTemplateId = patch.selectedTemplateId ?? "";
-    if ("selectedGroupId" in patch) selectedGroupEditorId = patch.selectedGroupId ?? "";
+    if ("selectedGroupId" in patch) setSelectedGroupEditorId(patch.selectedGroupId ?? "");
     if ("loadingTemplates" in patch) loadingTemplates = patch.loadingTemplates ?? false;
     if ("loadingGroups" in patch) loadingGroups = patch.loadingGroups ?? false;
     if ("savingTemplate" in patch) savingTemplate = patch.savingTemplate ?? false;
@@ -2150,7 +2153,7 @@
     }
     clearCurrentRunForWorkspaceSwitch();
 
-    selectedGroupEditorId = String(groupId);
+    setSelectedGroupEditorId(String(groupId));
     sourceTopics = [];
     selectedTopicKey = ALL_TOPICS_KEY;
     resetYoutubeDetailState();
@@ -2815,7 +2818,7 @@
   }
 
   function startNewGroup() {
-    selectedGroupEditorId = "";
+    setSelectedGroupEditorId("");
     bindEditorToGroup(null);
   }
 
@@ -3253,7 +3256,7 @@
     onSaveTemplateCopy={() => void saveTemplateCopy()}
     onSaveTemplateChanges={() => void saveTemplateChanges()}
     onDeleteTemplate={() => void deleteTemplate()}
-    onChangeSelectedGroupId={(value) => (selectedGroupEditorId = value)}
+    onChangeSelectedGroupId={setSelectedGroupEditorId}
     onChangeGroupName={(value) => (groupName = value)}
     onChangeGroupSourceType={changeGroupSourceType}
     onToggleGroupSource={toggleGroupSource}

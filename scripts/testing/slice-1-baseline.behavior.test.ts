@@ -35,19 +35,35 @@ describe("slice one baseline", () => {
     const root = await mkdtemp(path.join(tmpdir(), "extractum-baseline-contract-"));
     roots.push(root);
     const calls: string[] = [];
+    const deferred = BASELINE_COMMANDS.map(() => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => { resolve = done; });
+      return { promise, resolve };
+    });
     const runCommand = vi.fn(async (command) => {
+      const callIndex = calls.length;
       calls.push(command.command);
+      await deferred[callIndex].promise;
       await writeReporter(command);
       return {
         command: command.command,
         startedAt: "2026-08-08T00:00:00.000Z",
         duration: 1,
-        exitCode: calls.length === 2 ? 1 : 0,
+        exitCode: callIndex === 1 ? 1 : 0,
         termination: "exit",
       };
     });
 
-    const report = await runBaseline({ repoRoot: root, runCommand });
+    const reportPromise = runBaseline({ repoRoot: root, runCommand });
+    await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
+    for (let index = 0; index < deferred.length; index += 1) {
+      deferred[index].resolve();
+      if (index + 1 < deferred.length) {
+        await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(index + 2));
+        expect(calls).toHaveLength(index + 2);
+      }
+    }
+    const report = await reportPromise;
 
     expect(runCommand).toHaveBeenCalledTimes(BASELINE_COMMANDS.length);
     expect(report).toMatchObject({ exitCode: 0, baselineStatus: "observed-failures" });

@@ -1,6 +1,6 @@
 type InspectorRow = {
   title: string;
-  handle: string;
+  handle: string | null;
   typeLabel: string;
   typeDot: string;
 };

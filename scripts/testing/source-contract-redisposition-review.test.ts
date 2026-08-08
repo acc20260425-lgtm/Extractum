@@ -37,6 +37,14 @@ const approvedPlaywrightOwners = new Map([
   ["SC-000344", "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts"],
   ["SC-000385", "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"],
 ]);
+const approvedSc000464CargoOwners = [
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
+  "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
+  "test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket",
+  "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task",
+];
+const preCorrectionSc000464Owner = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
 const approvedRuleAdjudications = [
   {
     rule: "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
@@ -841,6 +849,48 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, evidenceBytes: changed })).toContain("tailReview: packet shard 0 byte hash mismatch");
   });
 
+  it("pins the approved SC-000464 correction to the five real Cargo owners", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const input: any = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger: realBaseLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    };
+    const decision = (reviewArtifact as any).decisions.find((item: any) => item.id === "SC-000464");
+
+    expect(decision.class).toBe("B2_NEW_CHEAP_BEHAVIOR");
+    expect(decision.resolution.replacementIds).toEqual(approvedSc000464CargoOwners);
+
+    const partial = clone(reviewArtifact) as any;
+    partial.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = approvedSc000464CargoOwners.slice(0, 4);
+    partial.forecast.futureOwnersByMechanism.node.assertionOrdinals -= 5;
+    partial.forecast.futureOwnersByMechanism.node.rows -= 1;
+    partial.forecast.futureOwnersByMechanism.cargo.assertionOrdinals += 5;
+    partial.forecast.futureOwnersByMechanism.cargo.rows += 1;
+    expect(validateReview({ ...input, artifact: partial })).toContain("SC-000464: replacementIds must equal the approved five Cargo owners");
+
+    const preCorrectionArtifact = clone(reviewArtifact) as any;
+    preCorrectionArtifact.decisions.find((item: any) => item.id === "SC-000464").resolution.replacementIds = [preCorrectionSc000464Owner];
+    const preCorrectionLedger = applyReview({
+      artifact: preCorrectionArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger: realBaseLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+    }).ledger;
+    expect(validateReview({ ...input, currentLedger: preCorrectionLedger })).toEqual([]);
+
+    const unapprovedLedger = clone(preCorrectionLedger) as any;
+    unapprovedLedger.rows.find((item: any) => item.id === "SC-000464").replacementIds = ["test:cargo:extractum::unapproved_owner"];
+    expect(validateReview({ ...input, currentLedger: unapprovedLedger })).toContain("ledger: rows changed outside approved review apply");
+  });
+
   it("recomputes final disposition forecasts and accepted loss from decisions", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
@@ -993,8 +1043,8 @@ describe("source-contract redisposition review", () => {
     const executionForecast = (reviewArtifact as any).forecast.futureOwnersByMechanism;
 
     expect(executionForecast).toEqual({
-      node: { rows: 179, assertionOrdinals: 1109 },
-      cargo: { rows: 18, assertionOrdinals: 156 },
+      node: { rows: 178, assertionOrdinals: 1104 },
+      cargo: { rows: 19, assertionOrdinals: 161 },
       jsdom: { rows: 90, assertionOrdinals: 598 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });

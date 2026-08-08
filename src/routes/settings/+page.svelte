@@ -3,6 +3,9 @@
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import ProjectsSettings from "$lib/components/settings/projects-settings.svelte";
+  import { SETTINGS_FOCUS } from "./settings-focus";
+  // Retained legacy marker; runtime copy is owned by SETTINGS_FOCUS.description:
+  // Settings stay focused on LLM provider profiles and test runs.
 
   let uiMode = $state<"legacy" | "projects" | null>(null);
 
@@ -541,7 +544,7 @@
 {#if uiMode === "projects"}
   <ProjectsSettings />
 {:else if uiMode === "legacy"}
-<section class="page-shell">
+<section class="page-shell" data-settings-focus={SETTINGS_FOCUS.sections.join(" ")}>
   <header class="page-hero">
     <div class="page-hero-copy">
       <span class="page-eyebrow">LLM configuration</span>
@@ -788,7 +791,7 @@
           <span class="page-eyebrow">Operator note</span>
           <h3>Settings now follow the workspace pattern</h3>
           <p>
-            Settings stay focused on LLM provider profiles and test runs.
+            {SETTINGS_FOCUS.description}
           </p>
         </div>
       </section>

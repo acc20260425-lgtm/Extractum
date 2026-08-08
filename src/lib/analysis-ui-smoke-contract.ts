@@ -1,6 +1,4 @@
-export const NOTEBOOKLM_EXPORT_DISABLED_REASON_ID = "notebooklm-export-disabled-reason";
-export const YOUTUBE_GROUP_NOTEBOOKLM_DISABLED_REASON =
-  "YouTube source-group NotebookLM export is not implemented yet.";
+const NOTEBOOKLM_EXPORT_DISABLED_REASON_ID = "notebooklm-export-disabled-reason";
 
 export function notebookLmExportAccessibility(compact: boolean, exportDisabledReason: string | null) {
   const showReason = !compact && Boolean(exportDisabledReason);

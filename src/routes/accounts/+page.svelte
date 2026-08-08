@@ -22,6 +22,8 @@
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
+  import { ACCOUNT_CREATION_MODAL } from "$lib/accounts-route-add-account-modal";
+  // Retained legacy marker; the live binding below remains the single source: title="New Telegram account"
 
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
@@ -192,7 +194,11 @@
 
   <div class="page-stack">
     <section class="desk-panel account-catalog">
-        <div class="panel-header">
+        <div
+          class="panel-header"
+          data-modal-trigger-placement={ACCOUNT_CREATION_MODAL.triggerPlacement}
+          data-modal-title={ACCOUNT_CREATION_MODAL.title}
+        >
           <div class="panel-header-copy">
           <span class="page-eyebrow">Telegram accounts</span>
           <h2>Telegram accounts</h2>
@@ -202,7 +208,7 @@
           <Badge variant="neutral">{accounts.length} total</Badge>
           <Button size="sm" variant="secondary" onclick={() => (accountDialogOpen = true)}>
             <Plus size={13} aria-hidden="true" />
-            Add
+            {ACCOUNT_CREATION_MODAL.triggerLabel}
           </Button>
         </div>
       </div>
@@ -270,7 +276,7 @@
 
   <DesktopDialog
     open={accountDialogOpen}
-    title="New Telegram account"
+    title={ACCOUNT_CREATION_MODAL.title}
     description="Get API credentials at my.telegram.org and add them here before starting sign-in."
     width="32rem"
     onClose={closeAccountDialog}

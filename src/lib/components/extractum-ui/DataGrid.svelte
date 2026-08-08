@@ -14,6 +14,9 @@
   import {
     enhanceDateTimeColumns,
     enhanceDateTimeResponsiveColumns,
+    extractumGridClickIsIgnored,
+    extractumGridOverlay,
+    extractumGridSelection,
   } from "./data-grid-date-format";
   import type { ExtractumDataGridResponsive } from "./data-grid-date-format";
 
@@ -69,7 +72,7 @@
 
   let api = $state<any>(null);
   let host = $state<HTMLDivElement | null>(null);
-  let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
+  let visibleOverlay = $derived(extractumGridOverlay(rows, rows.length === 0 ? overlay : undefined));
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
   let enhancedResponsive = $derived(enhanceDateTimeResponsiveColumns(responsive));
 
@@ -78,7 +81,7 @@
   // switch) are applied as select-row actions, which do not reset sorting.
   // Internal changes (user clicks) flow out via onselectrow → emitSelection;
   // the diff below then sees equal sets and does nothing (no echo loop).
-  const initialSelectedIds = untrack(() => [...selectedRowIds]);
+  const initialSelectedIds = untrack(() => extractumGridSelection(selectedRowIds));
   $effect(() => {
     const want = selectedRowIds.map(String);
     if (!api) return;
@@ -101,7 +104,7 @@
     const handler = (event: MouseEvent) => {
       if (!onRowClick) return;
       const target = event.target as HTMLElement;
-      if (target.closest('[data-action="ignore-click"]')) return;
+      if (extractumGridClickIsIgnored(target)) return;
       if (target.closest(".wx-header")) return;
       const rowEl = target.closest(".wx-row") as HTMLElement | null;
       if (!rowEl || !element?.contains(rowEl)) return;

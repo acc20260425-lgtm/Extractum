@@ -16,6 +16,7 @@
   import { en as gridEn } from "@svar-ui/grid-locales";
   import { ru as coreRu } from "@svar-ui/core-locales";
   import { cn } from "$lib/utils.js";
+  import { extractumGridOverlay, extractumTreeGridSelection } from "./data-grid-date-format";
 
   let {
     rows,
@@ -36,8 +37,8 @@
   } = $props();
 
   let api = $state<any>(null);
-  let selectedRows = $derived(selectedRowId ? [selectedRowId] : []);
-  let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
+  let selectedRows = $derived(extractumTreeGridSelection(selectedRowId));
+  let visibleOverlay = $derived(extractumGridOverlay(rows, rows.length === 0 ? overlay : undefined));
   let columns = $derived<IColumnConfig[]>(collapsed
     ? [
         { id: "label", header: "", width: 48, treetoggle: true },

@@ -13,12 +13,14 @@ export function createLibraryPageWorkflow({
   state,
   listCatalog,
   formatError,
+  createWorkflow = createLibraryCatalogWorkflow,
 }: {
   state: LibraryCatalogWorkflowState;
   listCatalog: Parameters<typeof createLibraryCatalogWorkflow>[0]["listCatalog"];
   formatError: Parameters<typeof createLibraryCatalogWorkflow>[0]["formatError"];
+  createWorkflow?: typeof createLibraryCatalogWorkflow;
 }) {
-  return createLibraryCatalogWorkflow({
+  return createWorkflow({
     getState: () => state,
     patch: (patch) => Object.assign(state, patch),
     listCatalog,

@@ -6,16 +6,18 @@ it("passes keyboard navigation callbacks to the source grid", async () => {
   const activate = vi.fn();
   const inspect = vi.fn();
   const escape = vi.fn(() => true);
-  const callbacks = keyboard.projectSourceKeyboardCallbacks({ activate, inspect, escape });
-
-  expect(keyboard.projectSourceKeyboardEnabled({
+  const callbacks = keyboard.projectSourceKeyboardContract({
     hasProject: true,
     activeSection: "sources",
-    connectOpen: false,
-    addSourceOpen: false,
-    disconnectOpen: false,
-  })).toBe(true);
-  expect(keyboard.PROJECT_SOURCE_KEYBOARD_HINT).toBe("↑↓ строка · Enter инспектор");
+    dialogsClosed: true,
+    keyboardHint: "↑↓ строка · Enter инспектор",
+    activate,
+    inspect,
+    escape,
+  });
+
+  expect(callbacks.enabled).toBe(true);
+  expect(callbacks.keyboardHint).toBe("↑↓ строка · Enter инспектор");
   callbacks.onKeyboardActivateSource("12");
   callbacks.onKeyboardInspectSource("13");
   expect(callbacks.onKeyboardEscape()).toBe(true);

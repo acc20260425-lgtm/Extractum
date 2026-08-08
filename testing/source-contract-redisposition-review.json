@@ -4711,11 +4711,15 @@
       "sourceHash": "e26d4c998996ae0471341bb03a7da35c742653cf8d0463b1448389796535367b",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps start idempotency readiness preflight queued-event spawn and profile-resolution order. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps start idempotency readiness preflight queued-event spawn and profile-resolution order. The approved Slice 3C ownership correction binds the five existing focused Cargo owners that jointly prove the complete Rust-owned invariant.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order"
+          "test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports",
+          "test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure",
+          "test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking",
+          "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket",
+          "test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task"
         ]
       }
     },
@@ -8410,12 +8414,12 @@
     },
     "futureOwnersByMechanism": {
       "node": {
-        "rows": 179,
-        "assertionOrdinals": 1109
+      "rows": 178,
+      "assertionOrdinals": 1104
       },
       "cargo": {
-        "rows": 18,
-        "assertionOrdinals": 156
+      "rows": 19,
+      "assertionOrdinals": 161
       },
       "jsdom": {
         "rows": 90,

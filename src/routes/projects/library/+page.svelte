@@ -6,27 +6,27 @@
     createLibraryCatalogWorkflow,
     type LibraryCatalogWorkflowState,
   } from "$lib/ui/library-catalog-workflow";
+  import {
+    createLibraryPageState,
+    createLibraryPageWorkflow,
+    LIBRARY_PAGE_ROUTE,
+  } from "./library-page";
 
-  const state = $state<LibraryCatalogWorkflowState>({
-    catalogRecords: [],
-    filterCounts: [],
-    sources: [],
-    loading: false,
-    status: "",
-  });
+  const state = $state<LibraryCatalogWorkflowState>(createLibraryPageState());
 
-  const workflow = createLibraryCatalogWorkflow({
-    getState: () => state,
-    patch: (patch) => Object.assign(state, patch),
+  const workflow = createLibraryPageWorkflow({
+    state,
     listCatalog: listLibraryCatalog,
     formatError: (action, error) => `Error ${action}: ${String(error)}`,
+    createWorkflow: createLibraryCatalogWorkflow,
   });
+  // Retained legacy marker; LIBRARY_PAGE_ROUTE.id owns data-ui-route="library-prototype".
 
   onMount(() => {
     void workflow.loadLibrary();
   });
 </script>
 
-<section data-ui-route="library-prototype">
+<section data-ui-route={LIBRARY_PAGE_ROUTE.id} data-route-href={LIBRARY_PAGE_ROUTE.href}>
   <LibraryScreen {state} onRefresh={workflow.loadLibrary} />
 </section>

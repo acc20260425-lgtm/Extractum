@@ -60,6 +60,12 @@
   import { syncYoutubeSource } from "$lib/api/source-jobs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
   import type { ProjectSourceRecord } from "$lib/types/projects";
+  import {
+    projectInspectorActions,
+    projectInspectorSelection,
+    youtubeProjectSourceUrl as buildYoutubeProjectSourceUrl,
+  } from "./page-inspector";
+  import { projectSourceKeyboardContract } from "./page-keyboard";
 
   const now = Math.floor(Date.now() / 1000);
 
@@ -176,6 +182,25 @@
   let activeSourceOpenUrl = $derived(
     selectedSourceRecord ? youtubeProjectSourceUrl(selectedSourceRecord) : null,
   );
+  let inspectorActions = $derived(projectInspectorActions({
+    url: activeSourceOpenUrl,
+    openUrl: async (url) => { await openUrl(url); },
+    onError: (error) => {
+      railState = { ...railState, status: `Не удалось открыть источник (${String(error)})` };
+    },
+  }));
+  let sourceKeyboard = $derived(projectSourceKeyboardContract({
+    hasProject: selectedProject !== null,
+    activeSection,
+    dialogsClosed: !connectOpen && !addSourceOpen && !disconnectOpen,
+    keyboardHint: "↑↓ строка · Enter инспектор",
+    activate: (id) => (activeSourceId = id),
+    inspect: (id) => {
+      activeSourceId = id;
+      inspectorOpen = true;
+    },
+    escape: handleSourceKeyboardEscape,
+  }));
   let syncableIds = $derived(
     sources
       .filter(
@@ -204,13 +229,16 @@
   let inspectorSource = $derived.by((): InspectorSource | null => {
     const row = selectedSourceRow;
     if (!row) return null;
-    return {
+    const selection = projectInspectorSelection({
       title: row.title,
       handle: row.handle,
-      statusLabel: row.statusLabel,
-      syncStatus: row.syncStatus,
       typeLabel: row.typeLabel,
       typeDot: row.typeDot,
+    })!;
+    return {
+      ...selection,
+      statusLabel: row.statusLabel,
+      syncStatus: row.syncStatus,
       materialsLabel: row.materialsLabel,
       lastSyncLabel: row.lastSyncedAt
         ? new Date(row.lastSyncedAt * 1000).toLocaleString("ru-RU")
@@ -501,30 +529,11 @@
   }
 
   function youtubeProjectSourceUrl(source: ProjectSourceRecord): string | null {
-    const externalId = source.handle?.trim();
-    if (source.provider !== "youtube" || !externalId) return null;
-    if (source.source_subtype === "video") {
-      return `https://www.youtube.com/watch?v=${encodeURIComponent(externalId)}`;
-    }
-    if (source.source_subtype === "playlist") {
-      return `https://www.youtube.com/playlist?list=${encodeURIComponent(externalId)}`;
-    }
-    if (source.source_subtype === "channel") {
-      return externalId.startsWith("@")
-        ? `https://www.youtube.com/${encodeURIComponent(externalId)}`
-        : `https://www.youtube.com/channel/${encodeURIComponent(externalId)}`;
-    }
-    return null;
+    return buildYoutubeProjectSourceUrl(source);
   }
 
   async function openActiveSource() {
-    const url = activeSourceOpenUrl;
-    if (!url) return;
-    try {
-      await openUrl(url);
-    } catch (error) {
-      railState = { ...railState, status: `Не удалось открыть источник (${String(error)})` };
-    }
+    await inspectorActions.onOpen();
   }
 
   function handleSourceKeyboardEscape(): boolean {
@@ -577,7 +586,7 @@
           onClearAll: () => (filters = emptySourceFilters()),
           shownCount: visibleSources.length,
           totalCount: sources.length,
-          keyboardHint: "↑↓ строка · Enter инспектор",
+          keyboardHint: sourceKeyboard.keyboardHint,
           onAddSource: () => (addSourceOpen = true),
           onConnectFromLibrary: () => void openConnectSources(),
         }
@@ -591,13 +600,10 @@
     {activeSourceId}
     onActivateSource={(id) => (activeSourceId = id)}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
-    keyboardNavigationEnabled={selectedProject !== null && activeSection === "sources" && !connectOpen && !addSourceOpen && !disconnectOpen}
-    onKeyboardActivateSource={(id) => (activeSourceId = id)}
-    onKeyboardInspectSource={(id) => {
-      activeSourceId = id;
-      inspectorOpen = true;
-    }}
-    onKeyboardEscape={handleSourceKeyboardEscape}
+    keyboardNavigationEnabled={sourceKeyboard.enabled}
+    onKeyboardActivateSource={sourceKeyboard.onKeyboardActivateSource}
+    onKeyboardInspectSource={sourceKeyboard.onKeyboardInspectSource}
+    onKeyboardEscape={sourceKeyboard.onKeyboardEscape}
     toolbar={selectedProject
       ? {
           title: selectedProject.name,

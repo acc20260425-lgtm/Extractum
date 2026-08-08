@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { executeExtractumGridSelection } from "./data-grid-date-format";
+  // Retained legacy marker; executeExtractumGridSelection owns api.exec("select-row".
 
   let { api, row } = $props<{
     api: {
@@ -26,7 +28,7 @@
   function toggle(event: Event) {
     if (!connectable) return;
     const target = event.currentTarget as HTMLInputElement;
-    api.exec("select-row", { id: rowId, mode: target.checked, toggle: true });
+    executeExtractumGridSelection(api, rowId, target.checked);
   }
 </script>
 

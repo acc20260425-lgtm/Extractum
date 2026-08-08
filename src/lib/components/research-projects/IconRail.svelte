@@ -5,15 +5,20 @@
   import Library from "@lucide/svelte/icons/library";
   import Settings from "@lucide/svelte/icons/settings";
   import ShieldCheck from "@lucide/svelte/icons/shield-check";
-  import { PROJECT_RUNS_PAGE } from "../../../routes/projects/runs/project-runs-page";
+  import { PROJECT_ICON_RAIL_ROUTES, PROJECT_RUNS_PAGE } from "$lib/ui/research-projects-navigation";
+  // Retained legacy marker; PROJECT_ICON_RAIL_ROUTES owns href: "/projects/runs".
 
-  const items = [
-    { href: "/projects", label: "Projects", icon: FolderKanban },
-    { href: "/projects/library", label: "Library", icon: Library },
-    { href: "/projects/runs", label: "Runs", icon: Activity },
-    { href: "/diagnostics", label: "Diagnostics", icon: ShieldCheck },
-    { href: "/settings", label: "Settings", icon: Settings },
-  ];
+  const icons = {
+    projects: FolderKanban,
+    "library-prototype": Library,
+    "project-runs": Activity,
+    diagnostics: ShieldCheck,
+    settings: Settings,
+  };
+  const items = PROJECT_ICON_RAIL_ROUTES.map((item) => ({
+    ...item,
+    icon: icons[item.id as keyof typeof icons],
+  }));
 
   function isActive(href: string) {
     if (href === "/projects") return page.url.pathname === "/projects";

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement only the classes, dispositions, paths, declaration titles, invariants, deletion reasons, and criticality decisions frozen in `testing/source-contract-redisposition-review.json` and `testing/source-contract-ledger.json`.
-- The one approved ownership correction is exact: `src/lib/components/**/*.behavior.test.ts` belongs to `component`; Node becomes 179 rows/1,109 ordinals and jsdom becomes 90 rows/598 ordinals. Do not rewrite accepted blind-review bytes.
+- The two approved ownership corrections are exact: `src/lib/components/**/*.behavior.test.ts` belongs to `component`, and SC-000464 belongs jointly to its five existing Cargo owners listed in Task 4. The final forecast is Node 178 rows/1,104 ordinals, jsdom 90/598, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; SC-000464 was not a sampled blind result.
 - Do not use `?raw`, `readFileSync`, or another direct production-source reader in a replacement test. Do not add a `sourceReaderExceptions` entry.
 - A small behavior-neutral pure-function or adapter extraction is allowed only when the frozen behavior has no truthful existing seam. Stop the connected component if path, title, mechanism, invariant, disposition, or criticality would need to change.
 - Do not add Nx, a migration scheduler, a second ledger, a subset transition validator, timing thresholds, warmups, medians, or benchmark artifacts.
@@ -58,7 +58,7 @@ for (const decision of artifact.decisions) {
   covered.add(decision.id);
 }
 const targetGroups = [...groups.keys()].filter((key) => !key.startsWith("delete:"));
-if (covered.size !== 436 || groups.size !== 141 || targetGroups.length !== 93) {
+if (covered.size !== 436 || groups.size !== 145 || targetGroups.length !== 97) {
   throw new Error(`incomplete replacement map: ${covered.size}/${groups.size}/${targetGroups.length}`);
 }
 const body = [...groups.entries()]
@@ -98,7 +98,7 @@ Permanent runner and evidence files:
 - Modify `vitest.config.ts`: add component behavior ownership; replace legacy exclusions only at final cutover.
 - Modify `scripts/testing/test-conventions.test.ts`: guard component behavior ownership and source-reader policy.
 - Modify `scripts/testing/source-contract-redisposition-review.mjs` and its test: separate execution forecast classification from historical packet classification.
-- Modify `testing/source-contract-redisposition-review.json` and the pre-Slice 3C verification record: forecast-only Node/jsdom correction.
+- Modify `testing/source-contract-redisposition-review.json`, `testing/source-contract-ledger.json`, and the pre-Slice 3C verification record: the approved component forecast correction and exact SC-000464 owner correction.
 - Create `e2e/playwright.config.ts` and `e2e/fixtures/tauri.ts`: isolated application Playwright owner and narrow IPC setup.
 - Modify `testing/runner-census.json`, `package.json`, `scripts/verify.mjs`, `scripts/verify.test.ts`: add application E2E; remove legacy ownership only at the final cutover.
 - Create `docs/superpowers/verification/2026-08-08-testing-redesign-slice-3c.md`: final evidence and Slice 4 handoff.
@@ -118,7 +118,7 @@ Every behavior task uses this order:
 6. If that cutover makes the filesystem legacy inventory empty, remove `LEGACY_TEST_FILES` and the `legacy-contract` project from `vitest.config.ts`, its census owner from `testing/runner-census.json`, `test:legacy-contract` from `package.json`, and its gate from `scripts/verify.mjs`; update the owning runner/conventions tests in the same staged diff before validation and commit.
 7. Run `git diff --check`, one read-only integration review, one combined fix wave if required, and commit the bounded batch with the task's listed subject.
 
-Do not edit resolution metadata during ordinary cutover. A component closes because its legacy declaration disappears and its frozen replacement already resolves.
+Do not edit resolution metadata during ordinary cutover. The user-approved SC-000464 correction is the sole replacement-identity amendment in this plan and is applied through the fail-closed carrier before Task 4 completes. A component closes because its legacy declaration disappears and its approved replacement already resolves.
 
 ## Rust Verification Loops
 
@@ -148,7 +148,7 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 **Interfaces:**
 - Produces `COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts"` in both component include and unit exclusion.
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
-- Produces forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`.
+- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; Task 4 applies the approved SC-000464 final forecast `178/1104`, `90/598`, `19/161`, `3/21`.
 
 - [ ] **Step 1: Generate the complete replacement map once**
 
@@ -333,7 +333,7 @@ git commit -m "test: establish application playwright owner"
 
 Do not run complete `verify`.
 
-### Task 4: Add the 18 non-component one-row Vitest targets
+### Task 4: Add the 17 non-component one-row Vitest targets and verify SC-000464 Cargo ownership
 
 **Files — create or extend exactly:**
 
@@ -350,7 +350,6 @@ Do not run complete `verify`.
 | `src/lib/analysis-group-editor-props.behavior.test.ts` | SC-000095 |
 | `src/lib/analysis-ui-smoke-contract.behavior.test.ts` | SC-000283 |
 | `src/lib/gemini-browser-polling.test.ts` | SC-000416 |
-| `src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts` | SC-000464 |
 | `src/lib/tauri-security-config.behavior.test.ts` | SC-000557 |
 | `src/routes/projects/library/library-page.behavior.test.ts` | SC-000435 |
 | `src/routes/projects/runs/project-runs-page.behavior.test.ts` | SC-000450 |
@@ -358,15 +357,23 @@ Do not run complete `verify`.
 | `src/routes/projects/next/page-keyboard.behavior.test.ts` | SC-000671 |
 | `src/routes/settings/settings-focus.behavior.test.ts` | SC-000552 |
 
-**Interfaces:** All targets are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
+**SC-000464 existing Cargo owners -- verify exactly:**
+
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports`
+- `test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure`
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`
+
+**Interfaces:** The 17 files above are Node/Vitest. SC-000023 is a real child/grandchild B3 test and must be assigned to `os-integration`; the remaining pure files stay in `unit-node`. SC-000464 preserves ID, invariant, assertion count 5, class `B2_NEW_CHEAP_BEHAVIOR`, and behavior disposition, but uses the five exact existing Cargo owners above instead of a false Vitest orchestration model. The carrier accepts only the previously applied false identity as input to this one correction and only the exact five-owner output; any partial, mixed, or arbitrary owner set fails closed. Targets whose connected component belongs to Wave 2 or Wave 3 are additive only in this task.
 
 - [ ] **Step 1: Read and pin the exact titles**
 
-Read all 18 target sections from `tmp/analysis-smoke/slice-3c-replacement-map.md`. Record the complete replacement title in the new `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one.
+Read all 17 Vitest target sections plus the five SC-000464 Cargo sections from `tmp/analysis-smoke/slice-3c-replacement-map.md`. Record each complete Vitest replacement title in the `it` or `test` declaration without adding a `describe` prefix unless the frozen ID already contains one.
 
 - [ ] **Step 2: Add target-file REDs in two bounded groups**
 
-Group A is `scripts/**`; Group B is `src/**`. Each target imports a production module or a behavior-neutral extracted adapter. Route targets test exported request/callback/selection logic under Node; they do not render Svelte and do not read route source text.
+Group A is `scripts/**`; Group B is `src/**`. Each Vitest target imports a production module or a behavior-neutral extracted adapter. Route targets test exported request/callback/selection logic under Node; they do not render Svelte and do not read route source text. SC-000464 is a characterization of existing Rust behavior: list if necessary, then run each exact non-empty Cargo owner without manufacturing a RED or a JavaScript order model.
 
 Run the exact new file paths through `node scripts/run-vitest.mjs run --project unit-node ...`, except SC-000023 through `--project os-integration`. Expected: every declaration is collected and fails for the missing observable behavior; no target reports zero tests.
 
@@ -382,11 +389,11 @@ Preserve the artifact invariant for each row:
 
 - [ ] **Step 4: Run focused GREEN**
 
-Run Group A and Group B as at most two concurrent frontend commands, then run SC-000023 under `os-integration` separately if it was not part of the OS command. Run `npm.cmd run check` only if a TypeScript/Svelte production seam changed. Expected: all 18 exact declarations pass.
+Run Group A and Group B as at most two concurrent frontend commands, then run SC-000023 under `os-integration` separately if it was not part of the OS command. Run the five SC-000464 exact Cargo selections sequentially from the Rust Verification Loops and require one collected test each. Run `npm.cmd run check` only if a TypeScript/Svelte production seam changed. Expected: all 17 Vitest declarations and all five Cargo identities pass.
 
 - [ ] **Step 5: Commit the additive targets**
 
-Stage only the 18 targets, any narrowly required production seam files, and the SC-000023 `OS_INTEGRATION_FILES` addition. Do not delete any legacy file in a later-wave component.
+Stage only the 17 Vitest targets, any narrowly required production seam files, the SC-000023 `OS_INTEGRATION_FILES` addition, and the approved SC-000464 plan/spec/artifact/carrier/ledger correction. Remove the false SC-000464 Vitest target. Do not delete any legacy file in a later-wave component.
 
 ```powershell
 git commit -m "test: add single-row node contract owners"
@@ -764,7 +771,7 @@ SC-000484 extractum-prompt-packs::run_control::tests::terminal_events_clear_requ
 SC-000492 extractum-prompt-packs::runtime_config::tests::invalid_persisted_runtime_configuration_is_reported
 ```
 
-**Delete exactly after all 18 Cargo identities and Task 4 Node companions are green:**
+**Delete exactly after the 18 Wave 3 Cargo identities, the five existing SC-000464 Cargo owners, and Task 4 Node companions are green:**
 
 ```text
 src/lib/analysis-crate-boundary-contract.test.ts

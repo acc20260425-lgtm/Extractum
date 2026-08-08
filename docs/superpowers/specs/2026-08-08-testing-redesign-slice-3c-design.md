@@ -8,10 +8,11 @@ owners already frozen in `testing/source-contract-redisposition-review.json`,
 deletes accepted legacy evidence, removes the empty `legacy-contract` runner,
 and hands a zero-open-row inventory to Slice 4.
 
-This slice does not repeat the redisposition review. It does not change a
-reviewed class, invariant, disposition, replacement identity, deletion reason,
-or criticality citation. Nx remains outside the repository until the separate
-post-Slice-4 decision gate.
+This slice does not repeat the redisposition review. Except for the two exact
+ownership corrections approved below, it does not change a reviewed class,
+invariant, disposition, replacement identity, deletion reason, or criticality
+citation. Nx remains outside the repository until the separate post-Slice-4
+decision gate.
 
 ## Frozen Scope
 
@@ -19,19 +20,22 @@ The scope is exactly 436 validator-open rows in 86 legacy files:
 
 - 290 behavior rows with exact future owner identities;
 - 146 accepted deletion rows;
-- 179 Node/Vitest rows covering 1,109 assertion ordinals;
+- 178 Node/Vitest rows covering 1,104 assertion ordinals;
 - 90 jsdom/Vitest rows covering 598 assertion ordinals;
-- 18 Cargo owners covering 156 assertion ordinals;
+- 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 72 Vitest target files, 18 Cargo identities, and 3 Playwright target files.
+- 71 Vitest target files, 23 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
 those files rather than copying 290 identities into a second hand-maintained
-map. The Node/jsdom split above is the one forecast correction approved by
-this design: paths and declaration titles remain unchanged, while the 27
+map. The Node/jsdom split is the first forecast correction approved by this
+design: paths and declaration titles remain unchanged, while the 27
 `src/lib/components/**/*.behavior.test.ts` targets move from the artifact's
-filename-only Node forecast to the truthful component project.
+filename-only Node forecast to the truthful component project. The second
+approved correction preserves SC-000464's class, invariant, disposition, and
+five assertion ordinals while replacing its false Vitest identity with the five
+existing focused Cargo identities that jointly prove the Rust-owned invariant.
 
 ## Connected Closure Components
 
@@ -42,10 +46,10 @@ forest. Its 84 connected components are the unit of closure and rollback:
 | --- | ---: |
 | `(1, 0)` | 23 |
 | `(1, 1)` | 44 |
-| `(1, 2)` | 7 |
+| `(1, 2)` | 6 |
 | `(1, 3)` | 5 |
 | `(1, 5)` | 2 |
-| `(1, 6)` | 1 |
+| `(1, 6)` | 2 |
 | `(2, 2)` | 2 |
 | **Total** | **84** |
 
@@ -74,22 +78,22 @@ that wave.
    commit plus transition validation, with no RED/GREEN cycle. The remaining
    76 accepted delete rows close incidentally when their 25 mixed legacy files
    later leave the graph.
-2. **Wave 1 -- one-row Vitest targets.** Implement the 30 Vitest target files
-   that each own one behavior row, batched in groups of roughly 8--10 by
-   directory and shared fixture surface.
+2. **Wave 1 -- one-row owners.** Implement the 29 Vitest target files that each
+   own one behavior row, and verify SC-000464 through its five existing focused
+   Cargo identities.
 3. **Wave 2 -- multi-row Vitest targets.** Implement the remaining 42 Vitest
    target files. Large targets are independent batches rather than one
    analysis- or product-wide checkpoint.
-4. **Wave 3 -- Cargo.** Implement the 18 exact Cargo identities, grouped by
-   package and connected component.
+4. **Wave 3 -- Cargo.** Implement the remaining 18 exact Cargo identities,
+   grouped by package and connected component.
 5. **Browser track.** Start the three Playwright targets after Wave 0 and
    implement them independently of Waves 1--3. A component containing both
    browser and Vitest targets closes only after both sides are green, but the
    browser cutover may occur before or after Cargo according to actual
    readiness.
 
-Ten components span more than one implementation wave: six span Waves 1 and
-2, two span Waves 1 and 3, and two span a Vitest wave and the browser track.
+Nine components span more than one implementation wave: six span Waves 1 and
+2, one spans Waves 1 and 3, and two span a Vitest wave and the browser track.
 Their additive targets may land earlier, but their legacy files are assigned
 to the maximum numbered cutover wave, or to the browser track when they contain
 a Playwright target. Consequently Wave 1 does not claim that all 30 one-row
@@ -152,7 +156,7 @@ The following rules are fail-closed:
   refactoring is outside scope.
 - D1 through D4 rows close by deleting legacy evidence. D4 does not cause an
   already existing owner to be reimplemented.
-- Except for the component-project correction explicitly approved here, a
+- Except for the component-project and SC-000464 corrections explicitly approved here, a
   required path, title, mechanism, disposition, invariant, or criticality
   change stops the affected connected component for a reviewed design
   amendment. It does not stop unrelated components and is never corrected
@@ -180,10 +184,22 @@ file. The existing `src/lib/telegram-checkpoint-2.behavior.test.ts` and
 
 The implementation's first runner-ownership change updates the redisposition
 forecast and its forecast validator from 269 Node rows and 0 jsdom rows to the
-corrected 179 Node rows and 90 jsdom rows. Historical packet transport remains
-content-addressed evidence of the earlier review convention and is not
-rewritten or re-reviewed; the carrier uses a separate execution-owner
-classifier for this approved forecast correction.
+corrected 179 Node rows and 90 jsdom rows. The approved SC-000464 correction
+then moves one five-ordinal row from Node to Cargo, producing the final 178
+Node rows/1,104 ordinals and 19 Cargo rows/161 ordinals. Its exact owner set is:
+
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_returns_existing_before_browser_or_source_ports`
+- `test:cargo:extractum-prompt-packs::runtime::tests::browser_runtime_start_gate_maps_unready_status_to_preflight_failure`
+- `test:cargo:extractum-prompt-packs::runtime::tests::start_service_issues_ticket_after_queued_event_and_new_tracking`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_spawns_exactly_once_per_ticket`
+- `test:cargo:extractum::prompt_packs::runtime_commands::tests::execution_adapter_resolves_api_profile_only_inside_spawned_task`
+
+Historical packet transport remains content-addressed evidence of the earlier
+review convention and is not rewritten or re-reviewed; the carrier uses a
+separate execution-owner classifier and an exact fail-closed owner-set check
+for these approved corrections. SC-000464 was not a sampled blind result, so
+its correction does not invalidate or require rewriting accepted evidence
+bytes.
 
 Replacement files that spawn, interrupt, or audit real child-process trees
 belong to `os-integration` and retain its fork pool and process-safety policy.
