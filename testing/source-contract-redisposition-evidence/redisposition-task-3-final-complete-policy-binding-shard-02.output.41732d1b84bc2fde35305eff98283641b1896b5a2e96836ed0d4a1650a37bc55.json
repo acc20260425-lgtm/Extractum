@@ -1,0 +1,188 @@
+{
+  "reviewerRunId": "redisposition-task-3-final-complete-policy-binding",
+  "packetSha256": "63b2d2a0fb95beed2944905c3424fb7c34e23edae949919419197687f68c2619",
+  "results": [
+    {
+      "id": "SC-000352",
+      "sourceHash": "f18150ff4a6c39907a5439d7620a9caa04cb7c8c317271748ecfc5e04aed4433",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The authoritative policy class identifies two-line title clipping as non-normative rendered layout with no truthful non-browser seam."
+    },
+    {
+      "id": "SC-000353",
+      "sourceHash": "105e4acb1d88e33345b1f848a5f82a899264337e49ec653c1c905142f532917d",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "The authoritative policy class identifies centering and overflow ellipsis as non-normative rendered layout with no truthful non-browser seam."
+    },
+    {
+      "id": "SC-000356",
+      "sourceHash": "6494facabe668c6fb044caffb48860249d6def15cdac63e182a12cda4ba20e47",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for duplicate resolved packages.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000357",
+      "sourceHash": "e935ce6830ba89027514ff6a82e0fdc09722955cc5a4784e662e2f5087f58f19",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for malformed feature definitions.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000358",
+      "sourceHash": "5cb1fc3f2ad2d2058def23c3d990786678511b1d31ccc7c28ea80af5e4390324",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The authoritative policy class identifies the exact resolved base-closed dependency-ownership rule as complete evidence for the locked Grammers source URL.",
+      "ownerEvidence": [
+        "rule:telegram-crate-dependency-ownership"
+      ]
+    },
+    {
+      "id": "SC-000359",
+      "sourceHash": "badc6aa646872e1200408cdb9c4bf820b91639098deb8e14575f480f06c74bd8",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact runtime file location and package-script text across an extraction move are implementation topology with no independent candidate owner."
+    },
+    {
+      "id": "SC-000360",
+      "sourceHash": "d804c87056db98da85aaa8d8ccae4aca477ce58796b487d21d503e1acf39e28f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The declaration freezes exact documentation wording and sampling-policy composition, and the packet supplies no independent structured owner."
+    },
+    {
+      "id": "SC-000361",
+      "sourceHash": "b3d8caded33a9c98ca583a17300fb766d40a7042d6d1f1275464edb5ca680756",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 3 and Phase 4 records and claims no independent future executable contract."
+    },
+    {
+      "id": "SC-000362",
+      "sourceHash": "4e9f3f03ed53212427c8bd0808e2df04f80b598726388c9f71ccaf697e0c4339",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 5 ownership and Phase 6 authorization records with no independent future contract."
+    },
+    {
+      "id": "SC-000363",
+      "sourceHash": "93661c8ca686d9dbcc0dc291deaa745def8e3ff916af5dd0c26af170492a305c",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 6 prompt-pack boundary prose with no independent future contract."
+    },
+    {
+      "id": "SC-000364",
+      "sourceHash": "017ea4ff0b5d9dd853a39fd28936798d135d455f33314ba7d58f56dc7822983f",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly limited to retained historical Phase 7 analysis-boundary prose with no independent future contract."
+    },
+    {
+      "id": "SC-000365",
+      "sourceHash": "6eabbf9d380746baac0c4d50baa8ed5ba740d7207181cb92d72881f86ca071f5",
+      "class": "D1_COMPLETED_HISTORY_ONLY",
+      "reason": "The invariant is expressly historical Phase 8 lifecycle wording; the adjacent vocabulary-path owner does not create an independent contract for the prose itself."
+    },
+    {
+      "id": "SC-000383",
+      "sourceHash": "70489046565f53280a48f3d1fba33acc2df4e3c2240465af2bddb19e0daa9d60",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Explicit dialog dismissal behavior has a focused future Node owner and does not require a real browser seam.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/desktop-dialog.behavior.test.ts#desktop dialog > requires explicit dismissal"
+      ]
+    },
+    {
+      "id": "SC-000385",
+      "sourceHash": "79ea9a43b5059b6604eb347c27bda9fff49469cce3b153e05bf722642f8f7f6e",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Portal layering, visibility, and interactivity require a real browser, and the approved future Playwright owner carries the required citation.",
+      "ownerEvidence": [
+        "test:playwright:e2e/dialog-layering.spec.ts#dialog-content-visible-interactive-above-overlay"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000386",
+      "sourceHash": "0e1373de4e22b79db3140d1f2ab252c7f218405a7675006ee999c87be2a31daf",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact module registration, lifecycle state names, timing constants, and serialization exclusions are internal implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000387",
+      "sourceHash": "483d87d6c2be5333d965ad71034cf46cf96592ed8028b280e1bb72b3d1b099d4",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Owned Windows descendant containment and reaping require real OS-process observation, with deterministic cleanup required by the supplied normative source.",
+      "ownerEvidence": [
+        "test:cargo:extractum::process_tree::tests::windows_guard_contains_and_reaps_owned_descendants"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000388",
+      "sourceHash": "5152c6c9bc6c5708bc2c49b45d4d51c8a57fffb528d23ddb22aa84c26f5baf60",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact Tokio command ownership, forbidden shell-plugin names, call ordering, and configurator call count freeze implementation shape without an independent owner."
+    },
+    {
+      "id": "SC-000389",
+      "sourceHash": "ef9b4492397677201c5597d32b7348f945134b4a983b89dc06d47eaeece0aa2a",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Complete CDP Chrome child-tree lifetime requires real OS-process observation, and the supplied normative source requires deterministic cleanup.",
+      "ownerEvidence": [
+        "test:cargo:extractum::gemini_browser::tests::cdp_child_guard_reaps_the_complete_owned_tree"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000390",
+      "sourceHash": "d20932bb4200bc71733983312754bdaf7f0d3587c20a0e34234a87b0bd0a7250",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Exit delegation and bounded cleanup coordination have a focused future Cargo behavior owner without an approved expensive-runtime requirement.",
+      "ownerEvidence": [
+        "test:cargo:extractum::shutdown::tests::exit_requests_delegate_once_and_complete_bounded_cleanup"
+      ]
+    },
+    {
+      "id": "SC-000396",
+      "sourceHash": "f4cc658b853625dc51459892fe766dc155a79fda338e4b2136c75bc75ebfdaea",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact crate-root and private-facade text plus forbidden public declarations are implementation shape with no independent candidate owner."
+    },
+    {
+      "id": "SC-000399",
+      "sourceHash": "e654a0e8ea9bd4a2a714d7bd4d72b378d0287c9a8105be5e5dc9a90a92dae076",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Source-level forbidden dependency strings and app-versus-crate placement freeze exact infrastructure topology without an independent owner."
+    },
+    {
+      "id": "SC-000414",
+      "sourceHash": "8e23fa3b97b2edee0cc3b44c9046f7f353936cc0bd9fcbdf26a6d21f66aa3e87",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Scheduler token-guard routing is future behavior through a cheap Node panel seam with one exact owner.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/settings/gemini-browser-provider-panel.behavior.test.ts#gemini browser provider panel copy contract > routes selected run detail through scheduler token guard"
+      ]
+    },
+    {
+      "id": "SC-000416",
+      "sourceHash": "8441f5383e8a89042a41ff9dea77939ee0bb9cd4672a4de88f39f94f9bcd8b9a",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "The authoritative policy class retains the exact future Node polling-controller owner for prompt-pack run discovery.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/gemini-browser-polling.test.ts#gemini browser polling controller > idle polling discovers prompt-pack runs through scheduler light refresh without live status"
+      ]
+    },
+    {
+      "id": "SC-000420",
+      "sourceHash": "984d323dbc8aa30c22fa100368bddeb27a033d1bd16eaebc4150346436c9556f",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "The authoritative policy class requires real Windows process-launch observation for hidden-console behavior and supplies the exact normative citation.",
+      "ownerEvidence": [
+        "test:cargo:extractum::child_process::tests::gemini_sidecar_launches_hide_console_window_on_windows"
+      ],
+      "criticalityRef": "AGENTS_WINDOWS_SANDBOX"
+    }
+  ],
+  "stopConditions": []
+}

@@ -1,15 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+import ts from "typescript";
 import packageJson from "../../package.json";
+import sourceContractLedger from "../../testing/source-contract-ledger.json";
 import * as vitestConfiguration from "../../vitest.config";
+import { discoverSourceReaders } from "./extract-source-contract-ledger.mjs";
+import { createRepositoryIndex } from "./repository-index.mjs";
+import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 import componentSetupSource from "./setup-component-tests.ts?raw";
 
 const { LEGACY_TEST_FILES, VITEST_PROJECT_DEFINITIONS } = vitestConfiguration;
 
-const sourceTests = import.meta.glob("/src/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const scriptTests = import.meta.glob("/scripts/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const sidecarTests = import.meta.glob("/sidecars/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const researchTests = import.meta.glob("/research/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const testSources = { ...sourceTests, ...scriptTests, ...sidecarTests, ...researchTests } as Record<string, string>;
+const sourceTests = import.meta.glob("/src/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const scriptTests = import.meta.glob("/scripts/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const sidecarTests = import.meta.glob("/sidecars/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const researchTests = import.meta.glob("/research/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const testSources = Object.fromEntries(Object.entries({
+  ...sourceTests,
+  ...scriptTests,
+  ...sidecarTests,
+  ...researchTests,
+}).filter(([testPath]) => !/^\/research\/gemini_browser_adapter\/tests\/.*\.spec\.ts$/.test(testPath))) as Record<string, string>;
 const environmentMarker = "@vitest-environment " + "jsdom";
 const chromiumLauncherImport = new RegExp(
   String.raw`^\s*import\s+(?=[^;]*\bchromium\b)[^;]*\s+from\s+["']@playwright/test["']\s*;?`,
@@ -17,10 +27,46 @@ const chromiumLauncherImport = new RegExp(
 );
 type ProjectConvention = {
   name: string;
+  include?: readonly string[];
   setupFiles?: readonly string[];
   svelteTestingOptions?: Readonly<{ autoCleanup: boolean }>;
 };
 const projectConventions = VITEST_PROJECT_DEFINITIONS as readonly ProjectConvention[];
+
+const approvedStructuredSourceAuthorities = [
+  "scripts/testing/repository-index.mjs",
+  "scripts/testing/repository-rules.mjs",
+] as const;
+
+function isInspectedVitestSource(testPath: string) {
+  return /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/i.test(testPath);
+}
+
+function directTextReaderViolations(sources: Record<string, string>) {
+  const approvedOwners = new Set([
+    ...sourceContractLedger.rows.map(({ path }) => path),
+    ...sourceContractLedger.sourceReaderExceptions.map(({ path }) => path),
+    ...(projectConventions.find(({ name }) => name === "architecture")?.include ?? []),
+    "scripts/testing/repository-index.test.ts",
+    "scripts/testing/repository-rules.test.ts",
+    "scripts/testing/test-conventions.test.ts",
+  ]);
+  const entries = Object.entries(sources)
+    .filter(([testPath]) => isInspectedVitestSource(testPath))
+    .map(([testPath, source]) => ({
+      path: testPath.replaceAll("\\", "/").replace(/^\//, ""),
+      source,
+    }));
+  const readers = discoverSourceReaders(entries, new Set(), ts);
+  const readerOwners = new Set(readers
+    .filter(({ classification, kind }) => kind === "manual" || !["fixture", "generated", "ignored", "output", "temp", "test"].includes(classification ?? ""))
+    .map(({ path }) => path));
+
+  return [...readerOwners]
+    .filter((testPath) => !approvedOwners.has(testPath))
+    .sort()
+    .map((testPath) => `${testPath}: direct text source reader is not an approved index or fixture owner`);
+}
 
 function componentTestEntries(sources: Record<string, string>) {
   return Object.entries(sources).filter(([testPath]) => testPath.endsWith(".component.test.ts"));
@@ -113,6 +159,37 @@ describe("test conventions", () => {
     for (const source of Object.values(testSources)) {
       expect(source).not.toMatch(chromiumLauncherImport);
     }
+  });
+
+  it("keeps production source inspection behind the structured rule runner", () => {
+    expect(approvedStructuredSourceAuthorities).toEqual([
+      "scripts/testing/repository-index.mjs",
+      "scripts/testing/repository-rules.mjs",
+    ]);
+    expect(typeof createRepositoryIndex).toBe("function");
+    expect(typeof evaluateRule).toBe("function");
+    expect(registeredRuleIds).toEqual([
+      "rule:analysis-evidence-highlight-token-styling",
+      "rule:analysis-source-browser-canonical-composition",
+      "rule:analysis-source-browser-explicit-subject-contract",
+      "rule:analysis-source-group-activity-boundary",
+      "rule:analysis-source-group-tab-leaf-boundary",
+      "rule:analysis-source-reader-surface-composition",
+      "rule:telegram-crate-dependency-ownership",
+      "rule:telegram-crate-manifest-boundary",
+      "rule:telegram-phase-8b-authority-integrity",
+    ]);
+
+    expect(directTextReaderViolations({
+      "/src/lib/unapproved.test.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
+    })).toEqual([
+      "src/lib/unapproved.test.ts: direct text source reader is not an approved index or fixture owner",
+    ]);
+    expect(directTextReaderViolations({
+      "/src/lib/unapproved.spec.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
+    })).toEqual([
+      "src/lib/unapproved.spec.ts: direct text source reader is not an approved index or fixture owner",
+    ]);
   });
 
   it("keeps the Vitest project commands and ledger-derived legacy inventory explicit", () => {

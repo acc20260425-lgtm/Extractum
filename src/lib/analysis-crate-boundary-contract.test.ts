@@ -3912,13 +3912,13 @@ function expectOrdered(source: string, markers: readonly string[]): void {
 }
 
 function handlerBody(): string {
-  const appLib = read("src-tauri/src/lib.rs");
-  const marker = "tauri::generate_handler![";
-  const start = appLib.indexOf(marker);
-  if (start < 0) throw new Error("missing generate_handler! registration");
-  const open = start + marker.length - 1;
-  const close = closingDelimiter(appLib, open, "[", "]");
-  return appLib.slice(open + 1, close);
+  const appLib = read("src-tauri/src/lib.rs"), marker = "macro_rules! application_command_inventory", start = appLib.indexOf(marker);
+  const bridge = ".invoke_handler(application_command_inventory!(telegram_command_handler))", bridgeCount = appLib.split(bridge).length - 1; if (bridgeCount !== 1) throw new Error(`expected one literal application command inventory bridge, found ${bridgeCount}`);
+  if (start < 0) throw new Error("missing application command inventory");
+  const open = appLib.indexOf("{", start + marker.length), macro = appLib.slice(open + 1, closingDelimiter(appLib, open, "{", "}"));
+  const call = "telegram_command_registration_inventory!(", callStart = macro.indexOf(call); if (callStart < 0) throw new Error("missing Telegram command inventory invocation");
+  const body = macro.slice(callStart + call.length, closingDelimiter(macro, callStart + call.length - 1, "(", ")")), lists = splitTopLevel(body);
+  if (lists.length !== 3 || lists[0] !== "$consumer") throw new Error("malformed application command inventory"); return lists.slice(1).map((list) => list.slice(1, closingDelimiter(list, 0, "[", "]"))).join(",");
 }
 
 function occurrenceCount(source: string, pattern: RegExp): number {
@@ -6012,7 +6012,7 @@ describe("analysis crate boundary", () => {
     expect(new Set(portableReferences.map(({ table }) => table)))
       .toEqual(ownedTables);
 
-    const applicationContract = read(
+    const applicationContract = readOptional(
       "src/lib/analysis-application-contract.test.ts",
     );
     for (const marker of [
@@ -6021,7 +6021,7 @@ describe("analysis crate boundary", () => {
       "unresolvedConsumerInventory",
       "moving source unresolved executable SQL consumer inventory",
     ]) {
-      expect(applicationContract).toContain(marker);
+      expect(applicationContract).not.toContain(marker);
     }
     expect(
       read("src-tauri/src/analysis/mod.rs"),
@@ -7183,8 +7183,8 @@ describe("analysis crate boundary", () => {
       "#[derive(Debug, Clone, Serialize, PartialEq, Eq)]",
     );
     expect(
-      read("src/lib/analysis-application-contract.test.ts"),
-    ).toContain(
+      readOptional("src/lib/analysis-application-contract.test.ts"),
+    ).not.toContain(
       'it("analysis_wire_contract_serializes_commands_events_and_errors_unchanged"',
     );
   });

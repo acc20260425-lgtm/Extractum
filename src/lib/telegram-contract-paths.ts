@@ -35,7 +35,6 @@ export function phase8BCheckpointNumber(
   return checkpoint === undefined ? undefined : Number(checkpoint);
 }
 
-const repositoryRoot = realpathSync(path.resolve(import.meta.dirname, "../.."));
 const stagedRoot = "src-tauri/src/telegram_impl/";
 const crateRoot = "src-tauri/crates/extractum-telegram/src/";
 
@@ -105,7 +104,11 @@ const lifecycleByStatus = new Map<string, TelegramLifecycle>([
   ["not retained", "baseline"],
 ]);
 
-function assertRepositoryRelative(relativePath: string): string {
+export function normalizeTelegramContractSourceText(source: string): string {
+  return source.replace(/\r\n?/g, "\n");
+}
+
+function assertRepositoryRelativeSyntax(relativePath: string): void {
   if (
     !relativePath
     || path.isAbsolute(relativePath)
@@ -122,50 +125,79 @@ function assertRepositoryRelative(relativePath: string): string {
       `Telegram contract path contains a dot path segment: ${relativePath}`,
     );
   }
+}
 
-  const selected = path.resolve(repositoryRoot, relativePath);
-  const relative = path.relative(repositoryRoot, selected);
-  if (
-    relative === ""
-    || relative === ".."
-    || relative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(relative)
-  ) {
-    throw new Error(
-      `Telegram contract path escapes repository root: ${relativePath}`,
+export function createTelegramContractPathResolver({
+  root,
+  existsSync: pathExists = existsSync,
+  realpathSync: canonicalPath = (selected: string) => realpathSync(selected),
+  readFileSync: readText = (selected: string) => readFileSync(selected, "utf8"),
+}: {
+  root: string;
+  existsSync?: (selected: string) => boolean;
+  realpathSync?: (selected: string) => string;
+  readFileSync?: (selected: string) => string | Buffer;
+}) {
+  const repositoryRoot = canonicalPath(path.resolve(root));
+
+  function assertRepositoryRelative(relativePath: string): string {
+    assertRepositoryRelativeSyntax(relativePath);
+
+    const selected = path.resolve(repositoryRoot, relativePath);
+    const relative = path.relative(repositoryRoot, selected);
+    if (
+      relative === ""
+      || relative === ".."
+      || relative.startsWith(`..${path.sep}`)
+      || path.isAbsolute(relative)
+    ) {
+      throw new Error(
+        `Telegram contract path escapes repository root: ${relativePath}`,
+      );
+    }
+    return selected;
+  }
+
+  function resolve(relativePath: string): string {
+    const selected = assertRepositoryRelative(relativePath);
+    if (!pathExists(selected)) {
+      throw new Error(`Telegram contract path is missing: ${relativePath}`);
+    }
+
+    const realSelected = canonicalPath(selected);
+    const realRelative = path.relative(repositoryRoot, realSelected);
+    if (
+      realRelative === ".."
+      || realRelative.startsWith(`..${path.sep}`)
+      || path.isAbsolute(realRelative)
+    ) {
+      throw new Error(
+        `Telegram contract path escapes repository root: ${relativePath}`,
+      );
+    }
+    return realSelected;
+  }
+
+  function read(relativePath: string): string {
+    const source = readText(resolve(relativePath));
+    return normalizeTelegramContractSourceText(
+      Buffer.isBuffer(source) ? source.toString("utf8") : source,
     );
   }
-  return selected;
+
+  return Object.freeze({ resolve, read });
 }
 
-export function normalizeTelegramContractSourceText(source: string): string {
-  return source.replace(/\r\n?/g, "\n");
-}
+const repositoryResolver = createTelegramContractPathResolver({
+  root: path.resolve(import.meta.dirname, "../.."),
+});
 
 export function resolveTelegramContractPath(relativePath: string): string {
-  const selected = assertRepositoryRelative(relativePath);
-  if (!existsSync(selected)) {
-    throw new Error(`Telegram contract path is missing: ${relativePath}`);
-  }
-
-  const realSelected = realpathSync(selected);
-  const realRelative = path.relative(repositoryRoot, realSelected);
-  if (
-    realRelative === ".."
-    || realRelative.startsWith(`..${path.sep}`)
-    || path.isAbsolute(realRelative)
-  ) {
-    throw new Error(
-      `Telegram contract path escapes repository root: ${relativePath}`,
-    );
-  }
-  return realSelected;
+  return repositoryResolver.resolve(relativePath);
 }
 
 export function readTelegramContractFile(relativePath: string): string {
-  return normalizeTelegramContractSourceText(
-    readFileSync(resolveTelegramContractPath(relativePath), "utf8"),
-  );
+  return repositoryResolver.read(relativePath);
 }
 
 export type TelegramContentAddressedSection = {
@@ -237,8 +269,8 @@ export function resolveTelegramLifecyclePath(
   source: TelegramLifecycleSource,
   lifecycle: TelegramLifecycle,
 ): string {
-  assertRepositoryRelative(source.baselinePath);
-  assertRepositoryRelative(source.stagedPath);
+  assertRepositoryRelativeSyntax(source.baselinePath);
+  assertRepositoryRelativeSyntax(source.stagedPath);
 
   if (source.finalOwner === "extractum") {
     return source.baselinePath;

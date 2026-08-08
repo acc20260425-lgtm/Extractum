@@ -58,12 +58,22 @@ Before writing each next detailed plan:
 - Completed: `docs/superpowers/plans/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`
   at `4352e0000dacb90495b92392fd17f55e2c4c152f`; its verification record is
   `docs/superpowers/verification/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`.
+- Completed: `docs/superpowers/plans/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
+  at final verified checkpoint `9640cb89`; its verification record is
+  `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`.
+- Completed: `docs/superpowers/plans/2026-08-05-testing-redesign-slice-3b-component-contracts.md`
+  at final implementation checkpoint `95ccec08`; its evidence record is
+  `docs/superpowers/verification/2026-08-05-testing-redesign-slice-3b-component-contracts.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
-Slice 2B is the current completed detailed-plan checkpoint: its five disjoint
-Vitest owners and one Playwright owner retain complete sequential verification.
-The next checkpoint is Slice 3 planning. Slices 3 and 4 proceed without Nx
-under the approved TestingManifest architecture. The separate disposable Slice
-2C Nx decision spike is deferred until Slice 4 has committed; no Nx package or
-configuration is adopted before then.
+Slice 3B's historical implementation checkpoint closed 46 rows across the
+Projects workspace and analysis report canvas cohorts. The follow-up integration
+checkpoint now observes 436 open ledger rows after SC-000355 closure and
+SC-000649 evidence correction. After two fail-closed source-contract repairs
+and mechanical rustfmt, its final fresh unsandboxed `npm.cmd run verify` exited
+0 in 383.4 seconds. The integration handoff is green; Slice 3C may plan from
+this ledger state but must not expand this completed evidence checkpoint.
+Slice 4 continues without Nx under the approved TestingManifest architecture.
+The separate disposable Slice 2C Nx decision spike remains deferred until after
+Slice 4 has committed; no Nx package or configuration is adopted before then.

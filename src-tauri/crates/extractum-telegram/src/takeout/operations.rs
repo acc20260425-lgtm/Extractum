@@ -760,6 +760,159 @@ mod tests {
                 fallbacks: Vec::new(),
             }
         }
+
+        fn drain_fallbacks(&mut self) -> Vec<TakeoutFallback> {
+            std::mem::take(&mut self.fallbacks)
+        }
+    }
+
+    #[tokio::test]
+    async fn checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order() {
+        let peer = TakeoutPeer::new("supergroup".to_string(), "channel", 12_345, Some(99));
+        let mut backend = FakeOperationsBackend::new([
+            Err(AppError::network("Rpc error 400: CHANNEL_PRIVATE")),
+            Ok(RawFixture::Migration(None)),
+            Ok(RawFixture::Ranges(vec![raw_range(10, 500)])),
+            Err(AppError::network("Rpc error 400: CHANNEL_PRIVATE")),
+            Ok(RawFixture::Messages(messages_response(vec![42]))),
+            Ok(RawFixture::Messages(messages_response(Vec::new()))),
+            Ok(RawFixture::Messages(messages_response(vec![42]))),
+            Ok(RawFixture::Unit),
+        ]);
+        let mut fallback_provenance = Vec::new();
+
+        validate_peer_with_backend(&mut backend, 77, &peer, "supergroup")
+            .await
+            .expect("private validation falls back");
+        for fallback in backend.drain_fallbacks() {
+            fallback_provenance.push(format!("fallback:{:?}", fallback.kind()));
+            fallback_provenance.push(format!(
+                "provenance:{}",
+                fallback.provenance_message().expect("fallback provenance")
+            ));
+        }
+
+        let migration = detect_migration_with_backend(&mut backend, 77, &peer, "supergroup")
+            .await
+            .expect("migration probe");
+        assert_eq!(migration, None);
+
+        let (split_count, ranges) = message_ranges_with_backend(&mut backend, 77, "supergroup")
+            .await
+            .expect("split selection");
+        assert_eq!(split_count, 1);
+        assert_eq!(ranges, vec![MessageRange::new(10, 500)]);
+        let range = &ranges[0];
+
+        let history_count =
+            history_count_with_backend(&mut backend, 77, &peer, range, "supergroup", false).await;
+        assert!(history_count.is_err());
+        for fallback in backend.drain_fallbacks() {
+            fallback_provenance.push(format!("fallback:{:?}", fallback.kind()));
+            fallback_provenance.push(format!(
+                "provenance:{}",
+                fallback.provenance_message().expect("fallback provenance")
+            ));
+        }
+        let count = history_count_with_backend(&mut backend, 77, &peer, range, "supergroup", true)
+            .await
+            .expect("private-channel search count");
+        assert_eq!(count, TakeoutCount::new(1, true));
+
+        let mut first_page =
+            history_page_with_backend(&mut backend, 77, &peer, range, &count, None, true)
+                .await
+                .expect("TDesktop page");
+        assert!(first_page.take_messages().is_empty());
+        let pagination_warning = first_page
+            .take_pagination_fallback_warning()
+            .expect("descending fallback warning");
+        fallback_provenance.push("fallback:Descending".to_string());
+        fallback_provenance.push(format!("provenance:{pagination_warning}"));
+
+        let mut descending_page = history_page_with_backend(
+            &mut backend,
+            77,
+            &peer,
+            range,
+            &count,
+            Some(&first_page),
+            true,
+        )
+        .await
+        .expect("descending page");
+        assert_eq!(message_ids(&descending_page.take_messages()), vec![42]);
+
+        finish_with_backend(&mut backend, 77, true)
+            .await
+            .expect("finish Takeout");
+
+        assert_eq!(
+            fallback_provenance,
+            vec![
+                "fallback:OnlyMyMessages",
+                "provenance:Channel history is private; importing only messages visible through from_id=self fallback.",
+                "fallback:OnlyMyMessages",
+                "provenance:Channel history is private; importing only messages visible through from_id=self fallback.",
+                "fallback:Descending",
+                "provenance:TDesktop Takeout pagination returned an empty first page for split 10..500; retrying this split with Extractum descending fallback.",
+            ]
+        );
+        assert_eq!(
+            backend.calls,
+            vec![
+                RawCall::Validate {
+                    takeout_id: 77,
+                    peer: peer.clone(),
+                    source_subtype: "supergroup".to_string(),
+                },
+                RawCall::DetectMigration {
+                    takeout_id: 77,
+                    peer: peer.clone(),
+                },
+                RawCall::MessageRanges { takeout_id: 77 },
+                RawCall::History {
+                    takeout_id: 77,
+                    peer: peer.clone(),
+                    range: range.clone(),
+                    offset_id: 0,
+                    add_offset: 0,
+                    limit: 1,
+                    search_my: false,
+                },
+                RawCall::History {
+                    takeout_id: 77,
+                    peer: peer.clone(),
+                    range: range.clone(),
+                    offset_id: 0,
+                    add_offset: 0,
+                    limit: 1,
+                    search_my: true,
+                },
+                RawCall::History {
+                    takeout_id: 77,
+                    peer: peer.clone(),
+                    range: range.clone(),
+                    offset_id: 1,
+                    add_offset: -100,
+                    limit: 100,
+                    search_my: true,
+                },
+                RawCall::History {
+                    takeout_id: 77,
+                    peer,
+                    range: range.clone(),
+                    offset_id: 500,
+                    add_offset: 0,
+                    limit: 100,
+                    search_my: true,
+                },
+                RawCall::Finish {
+                    takeout_id: 77,
+                    success: true,
+                },
+            ]
+        );
     }
 
     impl OperationsBackend for FakeOperationsBackend {

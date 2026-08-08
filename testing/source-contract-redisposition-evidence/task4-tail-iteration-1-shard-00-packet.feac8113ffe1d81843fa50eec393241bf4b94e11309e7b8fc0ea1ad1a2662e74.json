@@ -1,0 +1,580 @@
+{
+  "packetSchemaVersion": 3,
+  "reviewerRunId": "redisposition-task-4-tail-valid-iteration-1",
+  "shardIndex": 0,
+  "shardCount": 2,
+  "requiredPopulationDigest": "23a1b0fabef8c9085b17ac850a8a3e56f62f2b626b7b82d836106d0cf5c518a3",
+  "orderedClassCatalog": [
+    {
+      "id": "D1_COMPLETED_HISTORY_ONLY",
+      "rule": "Completed historical evidence only; forbidden whenever a future code, configuration, or test change could violate the invariant as a defect."
+    },
+    {
+      "id": "D2_IMPLEMENTATION_SHAPE",
+      "rule": "Exact names, source strings, statement order, formatting, or composition with no independent contract; apply before visual-only D3."
+    },
+    {
+      "id": "D3_NON_OBSERVABLE_VISUAL",
+      "rule": "Non-normative CSS, DOM order, or rendered visual detail with no truthful non-browser seam; implementation shape remains D2."
+    },
+    {
+      "id": "D4_DUPLICATE_EVIDENCE",
+      "rule": "A base-closed exact owner already proves the complete invariant, so the source-contract row is duplicate evidence; apply before retained-owner classes."
+    },
+    {
+      "id": "A1_EXISTING_STRUCTURED_OWNER",
+      "rule": "An existing structured repository rule, compiler, or Cargo-metadata owner is the durable architecture replacement."
+    },
+    {
+      "id": "T1_EXISTING_TOOL_OWNER",
+      "rule": "An existing maintained tool owns the generic executable invariant."
+    },
+    {
+      "id": "B1_EXISTING_BEHAVIOR_OWNER",
+      "rule": "An existing executable test proves behavior through a public seam and the row must retain a behavior resolution; use D4 first when a base-closed owner makes the row wholly duplicate."
+    },
+    {
+      "id": "B2_NEW_CHEAP_BEHAVIOR",
+      "rule": "A new focused Node/jsdom or Cargo test through a cheap public seam is required; P0 membership or a normative citation alone does not make the owner B3."
+    },
+    {
+      "id": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "rule": "A real browser or OS-process runtime test is required, no cheaper truthful seam exists, and an approved normative criticality source requires retention."
+    },
+    {
+      "id": "D5_ACCEPTED_LOSS",
+      "rule": "Real non-P0 behavior has only an expensive truthful mechanism and no normative source requires retention, so the enumerated loss is accepted."
+    }
+  ],
+  "normativeSourceCatalog": [
+    {
+      "id": "AGENTS_WINDOWS_SANDBOX",
+      "citation": "AGENTS.md §2",
+      "scope": "Windows commands, Tauri MCP development, actual Vite URL discovery, sandbox fallback, and expected missing-IPC browser-console behavior."
+    },
+    {
+      "id": "AGENTS_DATABASE_OWNERSHIP",
+      "citation": "AGENTS.md §6",
+      "scope": "Additive SQLite migrations, one backend-owned connection strategy, and no frontend sql:* permissions."
+    },
+    {
+      "id": "AGENTS_SECURITY",
+      "citation": "AGENTS.md §7",
+      "scope": "OS secure storage for saved LLM keys with profile and provider-plus-normalized-origin binding."
+    },
+    {
+      "id": "TESTING_SOURCE_CONTRACT_REPLACEMENT",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement",
+      "scope": "Replace valuable invariants with public behavior, structured architecture, or maintained tools; retire implementation text with specific reviewed decisions."
+    },
+    {
+      "id": "TESTING_BROWSER_COMPONENT_OWNERSHIP",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership",
+      "scope": "Chromium ownership belongs to Playwright, while component behavior belongs to jsdom; critical browser scenarios and navigation/error rendering remain explicit."
+    },
+    {
+      "id": "TESTING_COVERAGE_FLAKE_QUARANTINE",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy",
+      "scope": "Critical process-cleanup modules require deterministic cleanup and explicit Windows capability failures."
+    }
+  ],
+  "rows": [
+    {
+      "id": "SC-000004",
+      "sourceHash": "59a0cd7fd21384d39bc1466468ce70af66ca9cdd22c93748e64915481fccdb18",
+      "declaration": "it(\"materializes missing terminal projections across both publication windows\", async () => {\n    for (const point of [\"session_completed\", \"session-ledger.json\"]) {\n      const input = await paths();\n      const value = fake([attempt(\"valid\")]);\n      let crashed = false;\n      await expect(startSession(\n        { ...input, processAttested: true },\n        {\n          ...value.dependencies,\n          afterDurableWriteFn: async ({\n            target,\n            value: event,\n          }: { target: string; value: { type?: string } }) => {\n            if (!crashed && (event.type === point || target.endsWith(point))) {\n              crashed = true;\n              throw Object.assign(new Error(\"simulated crash\"), { simulatedCrash: true });\n            }\n          },\n        },\n      )).rejects.toThrow(\"simulated crash\");\n      const sessionDir = path.join(input.scratchParent, \"process-shell-session-session-fixed\");\n      const recovered = await resumeSession({ sessionDir, processAttested: true }, value.dependencies);\n      expect(recovered.status).toBe(\"completed\");\n      expect(JSON.parse(await readFile(path.join(sessionDir, \"session-ledger.json\"), \"utf8\"))).toMatchObject({\n        terminal: true,\n      });\n      expect(JSON.parse(await readFile(path.join(sessionDir, \"decision.json\"), \"utf8\"))).toMatchObject({\n        attemptId: \"attempt-001\",\n      });\n    }\n  })",
+      "invariant": "Materializes missing terminal projections across both publication windows.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > materializes missing terminal projections across both publication windows",
+          "mechanism": "jsdom",
+          "capability": "Materializes missing terminal projections across both publication windows.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000008",
+      "sourceHash": "29fa25a9a0329171974a7ba544b295c0c7ae2b234a8b8d272c4e36a26ed3b89d",
+      "declaration": "it(\"invalidates a valid Cargo result when the protocol root changes mid-flight\", async () => {\n    const input = await paths();\n    const value = fake([attempt(\"valid\")]);\n    const baseRun = value.dependencies.runAttemptFn;\n    const baseVerify = value.dependencies.verifyFrozenProtocolFn;\n    let cargoCompleted = false;\n    const result = await startSession(\n      { ...input, processAttested: true },\n      {\n        ...value.dependencies,\n        runAttemptFn: async (spec: Record<string, string>) => {\n          const completed = await baseRun(spec);\n          cargoCompleted = true;\n          return completed;\n        },\n        verifyFrozenProtocolFn: async ({ repoRoot }: { repoRoot: string }) => {\n          const verified = await baseVerify({ repoRoot });\n          return cargoCompleted && path.resolve(repoRoot) === path.resolve(input.protocolRoot)\n            ? { ...verified, lockSha256: \"d\".repeat(64) }\n            : verified;\n        },\n      },\n    );\n    expect(result.status).toBe(\"awaiting_correction\");\n    expect(JSON.parse(await readFile(result.attempts[0].resultPath, \"utf8\"))).toMatchObject({\n      kind: \"infrastructure_invalid\",\n      reasons: [\"coordinator_failure\"],\n      error: { kind: \"protocol_pin_mismatch\" },\n    });\n  })",
+      "invariant": "Invalidates a valid Cargo result when the protocol root changes mid-flight.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > invalidates a valid Cargo result when the protocol root changes mid-flight",
+          "mechanism": "jsdom",
+          "capability": "Invalidates a valid Cargo result when the protocol root changes mid-flight.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000011",
+      "sourceHash": "bc82f00090463acf91aa1b7ce96ee67340884dda9424d9bcdc78663c5573fc2f",
+      "declaration": "it(\"allows only its output and replays index-link and between-publication crashes\", async () => {\n    const outputRelative = \"docs/superpowers/verification/2026-07-18-process-shell-regression-diagnostic.md\";\n    assertProtocolWorktreeStatus(`?? ${outputRelative}`, [outputRelative]);\n    for (const status of [` M ${outputRelative}`, \"?? unrelated.txt\"]) {\n      let thrown: unknown = null;\n      try {\n        assertProtocolWorktreeStatus(status, [outputRelative]);\n      } catch (error) {\n        thrown = error;\n      }\n      expect(thrown).toMatchObject({ kind: \"protocol_worktree_dirty\" });\n    }\n\n    let verifyInput: Record<string, unknown> | null = null;\n    const verified = {\n      ...sessionManifest.protocol,\n      protocolLock: structuredClone(sessionManifest.protocolLock),\n    };\n    await verifyReportProtocol({\n      sessionManifest,\n      output: path.join(sessionManifest.protocolRoot, ...outputRelative.split(\"/\")),\n      runningProtocolRoot: sessionManifest.protocolRoot,\n      verifyFn: async (input: Record<string, unknown>) => {\n        verifyInput = input;\n        return verified;\n      },\n    });\n    expect(verifyInput).toEqual({\n      repoRoot: sessionManifest.protocolRoot,\n      allowedUntrackedPaths: [outputRelative],\n    });\n    let arbitraryOutputReachedGit = false;\n    await expect(verifyReportProtocol({\n      sessionManifest,\n      output: path.join(sessionManifest.protocolRoot, \"unrelated\", \"important.txt\"),\n      runningProtocolRoot: sessionManifest.protocolRoot,\n      verifyFn: async () => {\n        arbitraryOutputReachedGit = true;\n        return verified;\n      },\n    })).rejects.toThrow(\"report output must equal\");\n    expect(arbitraryOutputReachedGit).toBe(false);\n\n    const root = await mkdtemp(path.join(os.tmpdir(), \"extractum-report-replay-\"));\n    const artifactIndex = {\n      path: path.join(root, \"artifact-index.json\"),\n      content: Buffer.from(\"index\\n\"),\n    };\n    const output = path.join(root, \"verification.md\");\n    const reportBytes = Buffer.from(\"report\\n\");\n    const staleTemp = `${output}.4242.123e4567-e89b-12d3-a456-426614174000.tmp`;\n    const unrelated = `${output}.not-owned.tmp`;\n    await writeFile(staleTemp, \"partial\", \"utf8\");\n    await writeFile(unrelated, \"keep\", \"utf8\");\n    await cleanupOwnedAtomicTemps(output, { processAliveFn: () => false });\n    await expect(access(staleTemp)).rejects.toMatchObject({ code: \"ENOENT\" });\n    await expect(access(unrelated)).resolves.toBeUndefined();\n\n    // Simulate a hard kill after the atomic index temp was linked to its final\n    // target but before the writer unlinked the sibling temp.\n    const strandedIndexTemp = `${artifactIndex.path}.4242.123e4567-e89b-12d3-a456-426614174001.tmp`;\n    await writeFile(strandedIndexTemp, artifactIndex.content);\n    await link(strandedIndexTemp, artifactIndex.path);\n    await cleanupOwnedAtomicTemps(artifactIndex.path, { processAliveFn: () => false });\n    await expect(access(strandedIndexTemp)).rejects.toMatchObject({ code: \"ENOENT\" });\n    await publishReportPair({ artifactIndex, output, reportBytes });\n    expect(await readFile(artifactIndex.path)).toEqual(artifactIndex.content);\n    expect(await readFile(output)).toEqual(reportBytes);\n\n    const peerRoot = await mkdtemp(path.join(os.tmpdir(), \"extractum-report-peer-replay-\"));\n    const peerArtifactIndex = {\n      path: path.join(peerRoot, \"artifact-index.json\"),\n      content: artifactIndex.content,\n    };\n    const peerOutput = path.join(peerRoot, \"verification.md\");\n    let crashed = false;\n    await expect(publishReportPair({\n      artifactIndex: peerArtifactIndex,\n      output: peerOutput,\n      reportBytes,\n    }, async (target: string, bytes: Buffer) => {\n      await writeAtomicBytesExclusive(target, bytes);\n      if (!crashed) {\n        crashed = true;\n        throw new Error(\"simulated publication crash\");\n      }\n    })).rejects.toThrow(\"simulated publication crash\");\n    await publishReportPair({ artifactIndex: peerArtifactIndex, output: peerOutput, reportBytes });\n    expect(await readFile(peerArtifactIndex.path)).toEqual(peerArtifactIndex.content);\n    expect(await readFile(peerOutput)).toEqual(reportBytes);\n  })",
+      "invariant": "Allows only its output and replays index-link and between-publication crashes.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/process-shell-diagnostic/report.behavior.test.ts#process shell diagnostic report > allows only its output and replays index-link and between-publication crashes",
+          "mechanism": "jsdom",
+          "capability": "Allows only its output and replays index-link and between-publication crashes.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000015",
+      "sourceHash": "39cb9abfb1991d4b32a0644e8dd3deda30c41207ce2ae29258f19fc658dab883",
+      "declaration": "it.runIf(process.platform === \"win32\")(\"does not return until an owned grandchild tree is dead\", async () => {\n    const dir = await scratch();\n    const pidFile = path.join(dir, \"grandchild.pid\");\n    const result = await runWindowsProcess({\n      label: \"timeout\",\n      command: process.execPath,\n      args: [\"-e\", [\n        \"const { spawn } = require('node:child_process');\",\n        \"const { writeFileSync } = require('node:fs');\",\n        `const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });`,\n        `writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,\n        \"setInterval(() => {}, 1000);\",\n      ].join(\" \")],\n      cwd: dir,\n      env: process.env,\n      artifactDir: dir,\n      timeoutMs: 500,\n      taskkillExe: path.join(process.env.SystemRoot ?? \"C:\\\\Windows\", \"System32\", \"taskkill.exe\"),\n    });\n    expect(result.timedOut).toBe(true);\n    expect(result.taskkill).toMatchObject({ args: [\"/PID\", String(result.pid), \"/T\", \"/F\"] });\n    expect(result.classification).toBe(\"timeout\");\n    expect(result.taskkill.survivors).toEqual([]);\n    const grandchildPid = Number(await readFile(pidFile, \"utf8\"));\n    expect(() => process.kill(grandchildPid, 0)).toThrow();\n  }, 30_000)",
+      "invariant": "Does not return until an owned grandchild tree is dead.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > does not return until an owned grandchild tree is dead",
+          "mechanism": "jsdom",
+          "capability": "Does not return until an owned grandchild tree is dead.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000023",
+      "sourceHash": "a27aa984e2cbfda4f3fb8ee20c7a4a7e8079a5f71e64519e786a0eca669d397b",
+      "declaration": "it.runIf(process.platform === \"win32\")(\"does not resolve until a real child and grandchild are dead\", async () => {\n    const repoRoot = await mkdtemp(path.join(tmpdir(), \"extractum-observer-tree-\"));\n    temporaryRoots.push(repoRoot);\n    const pidFile = path.join(repoRoot, \"tree.pid\");\n    const controller = new AbortController();\n    let pids: number[] = [];\n    const observation = runObservedCommand({\n      command: process.execPath,\n      args: [\"-e\", [\n        \"const { spawn } = require('node:child_process');\",\n        \"const { writeFileSync } = require('node:fs');\",\n        \"const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });\",\n        `writeFileSync(${JSON.stringify(pidFile)}, process.pid + ',' + grandchild.pid);`,\n        \"setInterval(() => {}, 1000);\",\n      ].join(\" \")],\n      cwd: repoRoot,\n      repoRoot,\n      capture: true,\n      signal: controller.signal,\n      dependencies: dependencies({ spawn: undefined }),\n    });\n    try {\n      pids = await waitForPidFile(pidFile);\n      expect(pids).toHaveLength(2);\n      expect(pids.every(processIsAlive)).toBe(true);\n      controller.abort(\"SIGTERM\");\n\n      await expect(observation).resolves.toMatchObject({\n        exitCode: 130,\n        termination: \"signal\",\n        signal: \"SIGTERM\",\n        cancellationConfirmed: true,\n      });\n      expect(pids.every((pid) => !processIsAlive(pid))).toBe(true);\n    } finally {\n      for (const pid of pids.reverse()) {\n        if (processIsAlive(pid)) process.kill(pid, \"SIGKILL\");\n      }\n    }\n  }, 30_000)",
+      "invariant": "Does not resolve until a real child and grandchild are dead.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:scripts/testing/run-observation.behavior.test.ts#runObservedCommand > does not resolve until a real child and grandchild are dead",
+          "mechanism": "jsdom",
+          "capability": "Does not resolve until a real child and grandchild are dead.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000118",
+      "sourceHash": "61b6efb1bc2236d1b7d63eaa382a01565cae1676c8e64016c1d44e6899b25b8e",
+      "declaration": "it(\"does not resolve completed-run evidence through live source fallback\", () => {\n    expect(evidenceTabSource).toContain(\"evidenceSourceActionDecision\");\n    expect(evidenceTabSource).toContain(\"Show in source\");\n    expect(evidenceTabSource).toContain(\"Snapshot unavailable\");\n    expect(evidenceTabSource).not.toContain(\"listSourceItems\");\n    expect(corpusBackendSource).toContain(\"list_run_snapshot_messages_page\");\n    expect(corpusBackendSource).toContain(\"analysis_run_messages\");\n    expect(corpusBackendSource).toContain(\"load_trace_resolution_messages\");\n    expect(corpusBackendSource).toContain(\"ensure_captured_snapshot_rows\");\n    expect(corpusBackendSource).toContain(\"AnalysisSnapshotState::Captured\");\n    expect(corpusBackendSource).toContain(\"captured snapshot is unavailable\");\n    expect(corpusBackendSource).not.toContain(\"completed_run_live_source_fallback\");\n  })",
+      "invariant": "Does not resolve completed-run evidence through live source fallback.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > does not resolve completed-run evidence through live source fallback",
+          "mechanism": "jsdom",
+          "capability": "Does not resolve completed-run evidence through live source fallback.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000121",
+      "sourceHash": "0cb00961ac2c7e0dca37eed1d5e1b88490ebb5f0eb70e1b06c18dfe747435de6",
+      "declaration": "it(\"renders Telegram source material as metadata-first timeline without binary previews\", () => {\n    expect(telegramTimelineSource).toContain('class=\"telegram-timeline-reader\"');\n    expect(telegramTimelineSource).toContain(\"topicLabel\");\n    expect(telegramTimelineSource).toContain(\"replyLabel\");\n    expect(telegramTimelineSource).toContain(\"reactionLabel\");\n    expect(telegramTimelineSource).toContain(\"<TelegramMediaCard\");\n    expect(telegramTimelineSource).toContain(\"item.mediaCards as media, index\");\n    expect(telegramMediaCardSource).toContain(\"media.fileName\");\n    expect(telegramMediaCardSource).toContain(\"media.mimeType\");\n    expect(telegramMediaCardSource).not.toContain(\"<img\");\n    expect(telegramMediaCardSource).not.toContain(\"<video\");\n    expect(telegramMediaCardSource).not.toContain(\"<audio\");\n  })",
+      "invariant": "Renders Telegram source material as metadata-first timeline without binary previews.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > renders Telegram source material as metadata-first timeline without binary previews",
+          "mechanism": "jsdom",
+          "capability": "Renders Telegram source material as metadata-first timeline without binary previews.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000130",
+      "sourceHash": "38541383ae101e3a6c1b58b033acf10229740ac7d95817e7370099cddee092a8",
+      "declaration": "it(\"passes persisted canvas mode and source basis from workspace UI state\", () => {\n    expect(analysisPageSource).toContain(\"canvasMode={workspaceUiState.canvasMode}\");\n    expect(analysisPageSource).toContain(\"sourceViewBasis={workspaceUiState.sourceViewBasis}\");\n    expect(analysisPageSource).toContain(\"onChangeCanvasMode={(mode) =>\");\n    expect(analysisPageSource).toContain(\"canvasMode: mode\");\n    expect(analysisPageSource).toContain(\"onViewLiveSource={() =>\");\n    expect(analysisPageSource).toContain('type: \"view_live_source_for_opened_run\"');\n    expect(analysisPageSource).toContain(\"onBackToRunSnapshot={() =>\");\n    expect(analysisPageSource).toContain('type: \"switch_source_basis_to_run_snapshot\"');\n  })",
+      "invariant": "Passes persisted canvas mode and source basis from workspace UI state.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes persisted canvas mode and source basis from workspace UI state",
+          "mechanism": "jsdom",
+          "capability": "Passes persisted canvas mode and source basis from workspace UI state.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000136",
+      "sourceHash": "87f823f39a97d06c7bca7705273c60cd417bd34f15dd535a143096064b72c1b2",
+      "declaration": "it(\"passes source metrics into report launch preflight\", () => {\n    expect(analysisPageSource).toContain(\"currentSourceMetric: currentSourceMetric()\");\n    expect(analysisPageSource).toContain(\"reportLaunchDisabledReason={currentReportLaunchDisabledReason()}\");\n  })",
+      "invariant": "Passes source metrics into report launch preflight.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes source metrics into report launch preflight",
+          "mechanism": "jsdom",
+          "capability": "Passes source metrics into report launch preflight.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000165",
+      "sourceHash": "a8c6ec6f91227bd96d9b70933262cfaa7bec6e348e931881b145e3a0776b5716",
+      "declaration": "it(\"probes opened-run snapshot availability before the user switches to Source mode\", () => {\n    const effect = runSnapshotEffect();\n\n    expect(effect).toContain(\"currentRun\");\n    expect(effect).toContain(\"void loadRunSnapshotFirstPage(currentRun.id);\");\n    expect(effect).not.toContain('workspaceUiState.canvasMode === \"source\"');\n    expect(effect).not.toContain('workspaceUiState.sourceViewBasis === \"run_snapshot\"');\n  })",
+      "invariant": "Probes opened-run snapshot availability before the user switches to Source mode.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > probes opened-run snapshot availability before the user switches to Source mode",
+          "mechanism": "jsdom",
+          "capability": "Probes opened-run snapshot availability before the user switches to Source mode.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000171",
+      "sourceHash": "e07d278c936c576fb1f4736878d465f8b8d9f859e3f933bedbdcecc9cfd1c98c",
+      "declaration": "it(\"compares focused-load requests against current route scope and source basis\", () => {\n    const focusMatcher = currentFocusMatchesRequestFunction();\n\n    expect(focusMatcher).toContain(\"const currentSourceScope = currentEvidenceSourceScope(request.sourceScope.sourceId);\");\n    expect(focusMatcher).toContain(\"if (currentSourceScope === null) {\");\n    expect(focusMatcher).toContain(\"sourceScope: currentSourceScope\");\n    expect(focusMatcher).toContain(\"sourceViewBasis: workspaceUiState.sourceViewBasis\");\n    expect(focusMatcher).not.toContain(\"sourceScope: request.sourceScope\");\n    expect(focusMatcher).not.toContain(\"sourceViewBasis: request.sourceViewBasis\");\n  })",
+      "invariant": "Compares focused-load requests against current route scope and source basis.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > compares focused-load requests against current route scope and source basis",
+          "mechanism": "jsdom",
+          "capability": "Compares focused-load requests against current route scope and source basis.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000176",
+      "sourceHash": "9f1def0b061ef13d530155fe02f9ef2015d6cb32232ec0e51422017027e8af72",
+      "declaration": "it(\"imports workspace state and persistence helpers\", () => {\n    expect(analysisPageSource).toContain(\"defaultAnalysisWorkspaceUiState\");\n    expect(analysisPageSource).toContain(\"transitionAnalysisWorkspaceState\");\n    expect(analysisPageSource).toContain(\"loadPersistedAnalysisWorkspaceState\");\n    expect(analysisPageSource).toContain(\"savePersistedAnalysisWorkspaceState\");\n    expect(analysisPageSource).toContain(\"fallbackWorkspaceSelection\");\n  })",
+      "invariant": "Imported workspace-state helper names are implementation detail; the persistence and transition behavior remains independently covered.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": []
+    },
+    {
+      "id": "SC-000192",
+      "sourceHash": "2ce78fef53aed2cc67566fb4839cd49a03a048668c78c4ecde92383a843cf132",
+      "declaration": "it(\"keeps Runs filters durable and source ingest jobs out of Runs\", () => {\n    expect(analysisPageSource).toContain(\"runsFilter\");\n    expect(analysisPageSource).toContain(\"persistableAnalysisWorkspaceState(workspaceUiState\");\n    expect(analysisPageSource).toContain(\"runsFilter\");\n  })",
+      "invariant": "Keeps Runs filters durable and source ingest jobs out of Runs.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-run-companion-route.behavior.test.ts#analysis route run companion wiring > keeps Runs filters durable and source ingest jobs out of Runs",
+          "mechanism": "jsdom",
+          "capability": "Keeps Runs filters durable and source ingest jobs out of Runs.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000194",
+      "sourceHash": "241616928cceb2a3fa9c65fcf7b979344c128266adf205cdea5209e712af3266",
+      "declaration": "it(\"updates trace workflow patches from inspector mode to evidence companion\", () => {\n    expect(traceWorkflowSource).toContain('companionTab: \"evidence\"');\n    expect(traceWorkflowSource).not.toContain(\"inspectorMode\");\n  })",
+      "invariant": "Evidence companion navigation remains covered without preserving the obsolete inspector-mode patch shape.",
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": []
+    },
+    {
+      "id": "SC-000203",
+      "sourceHash": "2db29d1f74260998d771ef9bf0b30aed40dda153c7b260e9ba4ccda0371ab986",
+      "declaration": "it(\"removes temporary chat from ReportCanvas once companion Chat exists\", () => {\n    expect(reportCanvasSource).not.toContain(\"temporary-follow-up\");\n    expect(reportCanvasSource).not.toContain(\"<ChatPanel\");\n    expect(reportCanvasSource).not.toContain(\"onAskRunQuestion\");\n    expect(reportCanvasSource).not.toContain(\"onChangeChatQuestion\");\n  })",
+      "invariant": "Removes temporary chat from ReportCanvas once companion Chat exists.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-run-companion-tabs.behavior.test.ts#run companion tabs > removes temporary chat from ReportCanvas once companion Chat exists",
+          "mechanism": "jsdom",
+          "capability": "Removes temporary chat from ReportCanvas once companion Chat exists.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000210",
+      "sourceHash": "0b08eafc7bc27cf82fc8cc122a159b292a585094325e755b5e53fa976edb458a",
+      "declaration": "it(\"passes source reader props into ReportSourceSurface\", () => {\n    expect(analysisPageSource).toContain(\"{youtubeTranscriptSegments}\");\n    expect(analysisPageSource).toContain(\"{groupLiveItemsBySource}\");\n    expect(analysisPageSource).toContain(\"{groupLiveTranscriptSegmentsBySource}\");\n    expect(analysisPageSource).toContain(\"{selectedGroupSourceId}\");\n    expect(analysisPageSource).toContain(\"{sourceTopics}\");\n    expect(analysisPageSource).toContain(\"{loadingSourceTopics}\");\n    expect(analysisPageSource).toContain(\"{selectedTopicKey}\");\n    expect(analysisPageSource).toContain(\"showTopicSelector={shouldShowTopicSelector()}\");\n    expect(analysisPageSource).toContain(\"onLoadMoreYoutubeTranscriptSegments\");\n    expect(analysisPageSource).toContain(\"{sourceItemsHasMore}\");\n    expect(analysisPageSource).toContain(\"onLoadMoreSourceItems\");\n    expect(analysisPageSource).toContain(\"onLoadLiveGroupSourcePage\");\n    expect(analysisPageSource).toContain(\"onChangeSelectedGroupSourceId\");\n    expect(analysisPageSource).toContain(\"onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}\");\n  })",
+      "invariant": "Passes source reader props into ReportSourceSurface.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers-route.behavior.test.ts#analysis source reader route wiring > passes source reader props into ReportSourceSurface",
+          "mechanism": "jsdom",
+          "capability": "Passes source reader props into ReportSourceSurface.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000289",
+      "sourceHash": "59ffe63c0fbbccb1df99d777454502cb53fdbfd654e7797971310294a9c5d85b",
+      "declaration": "it(\"uses explicit button types for workspace actions\", () => {\n    expect(reportWorkspaceToolsSource.match(/type=\"button\"/g)?.length ?? 0).toBe(3);\n  })",
+      "invariant": "Uses explicit button types for workspace actions.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-workspace-tools.behavior.test.ts#analysis workspace tools component contract > uses explicit button types for workspace actions",
+          "mechanism": "jsdom",
+          "capability": "Uses explicit button types for workspace actions.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000298",
+      "sourceHash": "6133207b3cd0d7d194aa722a9138c72c21fcfe9798c71c9b6f1470fa17dfa719",
+      "declaration": "it(\"keeps Tauri invocation inside the Apalis jobs API wrapper\", () => {\n    expect(jobsPageSource).toContain(\"ApalisJobsPanel\");\n    expect(jobsPanelSource).toContain(\n      'import { loadApalisJobs, pruneOldTerminalApalisJobs } from \"$lib/api/apalis-jobs\";',\n    );\n    expect(jobsPageSource).not.toContain(\"invoke(\");\n    expect(jobsPanelSource).not.toContain(\"invoke(\");\n  })",
+      "invariant": "Only the Apalis jobs API wrapper invokes Tauri for jobs operations.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "rule:apalis-jobs-tauri-api-boundary",
+          "mechanism": "structured-rule",
+          "capability": "Only the Apalis jobs API wrapper invokes Tauri for jobs operations.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000304",
+      "sourceHash": "68c2d8a1cf6513652290d2def746c8ed37e0751a2d89cea2f603c575afec59ef",
+      "declaration": "it(\"keeps the wrapper narrow and free of logging or client-side mapping\", () => {\n    expect(apalisJobsApiSource).not.toContain(\"console.error\");\n    expect(apalisJobsApiSource).not.toContain(\"JSON.stringify\");\n    expect(apalisJobsApiSource).not.toContain(\".then(\");\n    expect(apalisJobsApiSource).not.toContain(\"filter(\");\n  })",
+      "invariant": "The Apalis jobs API wrapper is a direct Tauri-command boundary with no logging or client-side transformation.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "rule:tauri-api-wrapper-purity",
+          "mechanism": "structured-rule",
+          "capability": "The Apalis jobs API wrapper is a direct Tauri-command boundary with no logging or client-side transformation.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000305",
+      "sourceHash": "e349ec77c4eff9d28b3161273dfa3ea479197b963dd75e4b01d61794262643ba",
+      "declaration": "it(\"does not log or map raw unknown command errors in the wrapper\", () => {\n    expect(diagnosticsApiSource).not.toContain(\"console.error\");\n    expect(diagnosticsApiSource).not.toContain(\"JSON.stringify\");\n    expect(diagnosticsApiSource).not.toContain(\".then(\");\n  })",
+      "invariant": "The diagnostics API wrapper returns command results without logging or transforming unknown failures.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "rule:tauri-api-wrapper-purity",
+          "mechanism": "structured-rule",
+          "capability": "The diagnostics API wrapper returns command results without logging or transforming unknown failures.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000312",
+      "sourceHash": "58f368ffa463e9253fc309d831f63e2232db8316136bd59dd2aaa89dd9ee09b1",
+      "declaration": "it(\"keeps the mobile menu button hidden in desktop layout despite Button defaults\", () => {\n    expect(layoutSource).toContain(\":global(.mobile-menu-button.ui-button)\");\n    expect(layoutSource).toContain(\"display: none;\");\n    expect(layoutSource).toContain(\"display: inline-flex;\");\n  })",
+      "invariant": "The mobile navigation trigger is hidden on desktop and visible at mobile breakpoints.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility",
+          "mechanism": "playwright",
+          "capability": "The mobile navigation trigger is hidden on desktop and visible at mobile breakpoints.",
+          "status": "approved-future",
+          "normativeSource": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+        }
+      ]
+    },
+    {
+      "id": "SC-000316",
+      "sourceHash": "8a2542834a462d3dfcacfd6fa974cb47c9e242c1d11347b895626d0494bb387e",
+      "declaration": "it(\"renders source group tabs through route-owned props\", () => {\n    expect(shellSource).toContain(\"<SourceGroupSourcesView\");\n    expect(shellSource).toContain(\"<SourceGroupMetadataView\");\n    expect(shellSource).toContain(\"<SourceGroupActivityView\");\n    expect(shellSource).toContain('activeTab === \"sources\"');\n    expect(shellSource).toContain(\"groupBrowserData\");\n    expect(shellSource).toContain(\"liveReaderItems\");\n    expect(shellSource).toContain(\"sourceItems\");\n    expect(shellSource).toContain(\"helpDescription\");\n    expect(shellSource).toContain(\"sourceLabelForItem\");\n    expect(shellSource).toContain(\"Group items are limited to the source rows loaded in this browser session\");\n  })",
+      "invariant": "A source-group browser renders its sources, metadata, and activity tabs from route-owned data.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/analysis/source-browser-shell.behavior.test.ts#source browser shell > renders source-group tabs from route-owned data",
+          "mechanism": "jsdom",
+          "capability": "A source-group browser renders its sources, metadata, and activity tabs from route-owned data.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000325",
+      "sourceHash": "99335096791ba46344223f889baad47f656b1a17764cf3e11c9b0a3faa623e69",
+      "declaration": "it(\"renders the v11 status badge and source type dot\", () => {\n    render(Inspector, { props: base });\n\n    const badge = screen.getByText(\"sync\").closest(\".inspector__status\");\n    expect(badge?.querySelector(\".inspector__status-dot\")).toBeTruthy();\n    expect(source).toContain(\"color-mix(in srgb, var(--extractum-primary) 12%, transparent)\");\n    expect(source).toContain(\"style:background={selected.typeDot}\");\n  })",
+      "invariant": "The inspector presents each source's status and type.",
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/Inspector.behavior.test.ts#Inspector > presents source status and type",
+          "mechanism": "jsdom",
+          "capability": "The inspector presents each source's status and type.",
+          "status": "future"
+        }
+      ]
+    },
+    {
+      "id": "SC-000333",
+      "sourceHash": "c8de76024f284ed0eb55fe865eed998b865783e98b96c7ca7eb3645f868250e0",
+      "declaration": "it(\"highlights open triggers via the popover data-state attribute\", () => {\n    expect(source).toContain('[data-state=\"open\"]');\n  })",
+      "invariant": "An open toolbar popover exposes its active trigger state.",
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/ProjectToolbar.behavior.test.ts#ProjectToolbar > marks the open popover trigger",
+          "mechanism": "jsdom",
+          "capability": "An open toolbar popover exposes its active trigger state.",
+          "status": "future"
+        }
+      ]
+    }
+  ]
+}

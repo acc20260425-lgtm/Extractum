@@ -106,11 +106,11 @@ function parameterNames(source: string, name: string): string[] {
 }
 
 function handlerSource(source: string): string {
-  const token = "tauri::generate_handler![";
-  const tokenIndex = source.indexOf(token);
-  if (tokenIndex < 0) throw new Error("missing tauri::generate_handler! registration");
-  const openIndex = tokenIndex + token.length - 1;
-  return source.slice(openIndex + 1, matchingDelimiter(source, openIndex, "[", "]"));
+  const marker = "macro_rules! application_command_inventory", start = source.indexOf(marker), bridge = ".invoke_handler(application_command_inventory!(telegram_command_handler))", bridgeCount = source.split(bridge).length - 1;
+  if (bridgeCount !== 1) throw new Error(`expected one literal application command inventory bridge, found ${bridgeCount}`); if (start < 0) throw new Error("missing application command inventory"); const open = source.indexOf("{", start + marker.length), macro = source.slice(open + 1, matchingDelimiter(source, open, "{", "}"));
+  const call = "telegram_command_registration_inventory!(", callStart = macro.indexOf(call); if (callStart < 0) throw new Error("missing Telegram command inventory invocation");
+  const body = macro.slice(callStart + call.length, matchingDelimiter(macro, callStart + call.length - 1, "(", ")")), lists = splitTopLevelParameters(body);
+  if (lists.length !== 3 || lists[0] !== "$consumer") throw new Error("malformed application command inventory"); return lists.slice(1).map((list) => list.slice(1, matchingDelimiter(list, 0, "[", "]"))).join(",");
 }
 
 function orderedIndex(source: string, pattern: RegExp, after: number, label: string): number {

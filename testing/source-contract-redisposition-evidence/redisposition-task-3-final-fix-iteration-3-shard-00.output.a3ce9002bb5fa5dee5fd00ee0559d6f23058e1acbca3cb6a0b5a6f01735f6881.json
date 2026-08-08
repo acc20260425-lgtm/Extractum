@@ -1,0 +1,193 @@
+{
+  "reviewerRunId": "redisposition-task-3-final-fix-valid-iteration-3",
+  "packetSha256": "77b06dc9cce7f2387dfffd6fc9286c6858862e3d169cabc6fda42616f8b9e443",
+  "stopConditions": [],
+  "results": [
+    {
+      "id": "SC-000004",
+      "sourceHash": "59a0cd7fd21384d39bc1466468ce70af66ca9cdd22c93748e64915481fccdb18",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Crash recovery across both publication windows is durable behavior that the listed focused jsdom candidate can truthfully exercise through the session API.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > materializes missing terminal projections across both publication windows"
+      ]
+    },
+    {
+      "id": "SC-000008",
+      "sourceHash": "29fa25a9a0329171974a7ba544b295c0c7ae2b234a8b8d272c4e36a26ed3b89d",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Mid-flight protocol-pin invalidation is observable through the coordinator result and the listed focused jsdom candidate is a cheap truthful seam.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/coordinator.behavior.test.ts#process shell diagnostic coordinator > invalidates a valid Cargo result when the protocol root changes mid-flight"
+      ]
+    },
+    {
+      "id": "SC-000011",
+      "sourceHash": "bc82f00090463acf91aa1b7ce96ee67340884dda9424d9bcdc78663c5573fc2f",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Output confinement and replay-safe pair publication are executable filesystem behaviors covered truthfully by the listed focused jsdom candidate.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/report.behavior.test.ts#process shell diagnostic report > allows only its output and replays index-link and between-publication crashes"
+      ]
+    },
+    {
+      "id": "SC-000015",
+      "sourceHash": "39cb9abfb1991d4b32a0644e8dd3deda30c41207ce2ae29258f19fc658dab883",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "Actual Windows grandchild-tree death cannot be proved by a mocked seam; the listed test must run real OS processes and the process-cleanup policy requires deterministic cleanup evidence.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > does not return until an owned grandchild tree is dead"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000017",
+      "sourceHash": "75e837e67dcc880615d18db32d8e17cd05efd6fe463a7d5bab76bd8e6d173289",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Fail-closed termination evidence after a survivor-proof exception is observable through injected runtime dependencies and durable output, so the listed jsdom candidate is a cheap truthful seam.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > downgrades any survivor-proof exception to termination_unconfirmed evidence"
+      ]
+    },
+    {
+      "id": "SC-000018",
+      "sourceHash": "aad982e657454c81cfcbe9ca3144f279f035b725158cadec8c13045d0c4b86d8",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Halting and persisting recovery-pending evidence are observable with the injected Cargo runner, making the listed focused jsdom candidate a cheap truthful owner.",
+      "ownerEvidence": [
+        "test:vitest:scripts/process-shell-diagnostic/runtime.behavior.test.ts#process shell diagnostic runtime > halts with durable pending recovery after an unconfirmed Cargo-tree termination"
+      ]
+    },
+    {
+      "id": "SC-000020",
+      "sourceHash": "1fb31ce33261b8cd0f8b0f72142aa5472e07cf2d9480ab35d6920eb44d716c10",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Vitest discovery exclusion is observable through the maintained wrapper without launching a browser, and the listed focused jsdom candidate is the cheap truthful seam.",
+      "ownerEvidence": [
+        "test:vitest:scripts/run-vitest.behavior.test.ts#run vitest wrapper > excludes Playwright specs from Vitest discovery"
+      ],
+      "criticalityRef": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+    },
+    {
+      "id": "SC-000023",
+      "sourceHash": "a27aa984e2cbfda4f3fb8ee20c7a4a7e8079a5f71e64519e786a0eca669d397b",
+      "class": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "reason": "The invariant requires proof that a real Windows child and grandchild are dead before resolution; no cheaper seam proves OS liveness, and the process-cleanup policy requires deterministic cleanup evidence.",
+      "ownerEvidence": [
+        "test:vitest:scripts/testing/run-observation.behavior.test.ts#runObservedCommand > does not resolve until a real child and grandchild are dead"
+      ],
+      "criticalityRef": "TESTING_COVERAGE_FLAKE_QUARANTINE"
+    },
+    {
+      "id": "SC-000064",
+      "sourceHash": "bdec37cc91272ef5904c878ce51963ea9231395fd0bfa8fdeafaaa77b20ad8a1",
+      "class": "D4_DUPLICATE_EVIDENCE",
+      "reason": "The base-closed jsdom owner exactly proves that the selected source surface uses the shared takeout recovery notice, so this source-string row is duplicate evidence.",
+      "ownerEvidence": [
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > uses the shared takeout recovery notice in the selected source surface"
+      ]
+    },
+    {
+      "id": "SC-000077",
+      "sourceHash": "73a97d741dc3ad57fd587756b7422ef95732d92ac1e69726760831032aea616f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Manifest presence and the exact mechanical move topology are repository composition details; the listed closed behavior row does not prove this invariant."
+    },
+    {
+      "id": "SC-000078",
+      "sourceHash": "1d97bcedb0b38bccd7ac166e260b0d7177adf9ed9891386b7ce51bb52ceca8f4",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The row freezes exact dependency keys, paths, workspace membership, lockfile contents, and package composition without an independent contract owner."
+    },
+    {
+      "id": "SC-000079",
+      "sourceHash": "e9b5cebc3ca3c4ad76c05106b2a7f1ff7063a11b22e1ac3b01b3510ac2c8bec3",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact exports, private layouts, method signatures, aliases, and module inventories prescribe implementation shape and have no listed independent owner."
+    },
+    {
+      "id": "SC-000080",
+      "sourceHash": "37f49ada4a4621c885bd76590fc5b744e103202593ed195bb81e752792e5174f",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The frozen identities, exact 95/48 package split, reachability inventory, and approved owner mapping are migration topology rather than an independent behavior contract."
+    },
+    {
+      "id": "SC-000081",
+      "sourceHash": "b92f47f31433662a5a56f443a808d6dfa10865b91938cb46eb7e73912f1a6a25",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact legacy test names, registration form, uniqueness, and enablement are test-suite composition; the listed closed rows cover only individual behaviors and not this inventory invariant."
+    },
+    {
+      "id": "SC-000082",
+      "sourceHash": "c92b40c78f1fe5a9cea64a1b5d7311c1a8cc0417470cbc5051a070e379b34a36",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "The exact six-table source ownership, file breadth, SQL occurrence inventories, and parser-sensitive placement constrain implementation composition without a listed independent owner."
+    },
+    {
+      "id": "SC-000083",
+      "sourceHash": "a5f7a252ed08fcc1bf93a8924f0cc4bbe955fe441da029f6ea599da140daf48c",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact function signatures, participant names, API parameter forms, and the four-family inventory prescribe internal composition with no independent contract owner."
+    },
+    {
+      "id": "SC-000084",
+      "sourceHash": "8e0d3ad953a124adfdbe5bb83cbeb996cf0b7c54aef38a9e9ff65c822aad2ab6",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Sharing one app-owned transaction across coordinator work is executable database behavior that the listed focused Cargo candidate can prove through a cheap seam.",
+      "ownerEvidence": [
+        "test:cargo:extractum::analysis::tests_application::analysis_coordinators_share_one_app_owned_transaction"
+      ]
+    },
+    {
+      "id": "SC-000085",
+      "sourceHash": "42a6bb81046a71dcbe701688d51578e2850907da1d09fe82a9999503eb15138b",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Distinct preflight and capture corpus reads are observable through the corpus port, and the listed focused Cargo candidate is the cheap truthful owner for that handoff contract.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads"
+      ]
+    },
+    {
+      "id": "SC-000086",
+      "sourceHash": "5132d1cb01ba92e3c2a201ac464f077e5b3dc9c46096cf9dd08ce0b7681037d1",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact command inventories, handler registration, source locations, event strings, spawn statements, migration locations, and fixture paths are implementation composition with no independent owner."
+    },
+    {
+      "id": "SC-000087",
+      "sourceHash": "7628287415527ca9e7f1c1a7c53169e3faaa9c7b0e7a21cc5fb8235a865e31b2",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Bounded synchronous event publication has a focused Cargo candidate that can exercise the adapter contract cheaply; the unrelated base-closed UI owner does not close this row.",
+      "ownerEvidence": [
+        "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"
+      ]
+    },
+    {
+      "id": "SC-000088",
+      "sourceHash": "8cc82f5f0dba0a281d89855b4acc79faf4021df47e5a69256bcd2e0629c6b0a3",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact fixture test titles, owner path, include-string depth, SQL call strings, commit formatting, and module visibility are implementation shape; the listed UI owners do not prove this invariant."
+    },
+    {
+      "id": "SC-000089",
+      "sourceHash": "db6074fce23d53f5f8ad7d71291913b8a84fcafe9e442b61c0d534290ccc3363",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Exact zstd references, import strings, dependency-table placement, and crate ownership constrain source and manifest composition without a listed independent owner."
+    },
+    {
+      "id": "SC-000090",
+      "sourceHash": "414f093b4c95bbc9b5a0d206176dfbc22661e61f021e1fac4598b1ea8d3ec8a1",
+      "class": "B2_NEW_CHEAP_BEHAVIOR",
+      "reason": "Serialized event and AppError wire values are public behavior, and the listed focused Cargo candidate can cheaply prove the exact JSON contract.",
+      "ownerEvidence": [
+        "test:cargo:extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects"
+      ]
+    },
+    {
+      "id": "SC-000091",
+      "sourceHash": "562fa4d527d7086a626dd32d7f135571b295ae0640286582305e669285e1178e",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "Forbidden source prefixes, import spellings, moved-file contents, include paths, and frozen topology are implementation shape; the listed closed UI row does not prove portability."
+    }
+  ]
+}

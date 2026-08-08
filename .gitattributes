@@ -13,3 +13,4 @@ src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json tex
 src/lib/telegram-grammers-feature-baseline.json text eol=lf
 src/lib/telegram-8b-test-identities.json text eol=lf
 src/lib/telegram-8b-symbol-map.json text eol=lf
+testing/source-contract-redisposition-evidence/*.json -text

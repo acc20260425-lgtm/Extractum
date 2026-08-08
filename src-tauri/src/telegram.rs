@@ -184,6 +184,19 @@ async fn set_account_status(
     status: &str,
     message: Option<String>,
 ) {
+    set_account_status_with(state, account_id, status, message, |runtime_status| {
+        let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, runtime_status);
+    })
+    .await;
+}
+
+async fn set_account_status_with(
+    state: &TelegramState,
+    account_id: i64,
+    status: &str,
+    message: Option<String>,
+    emit: impl FnOnce(&AccountRuntimeStatus),
+) {
     let runtime_status = AccountRuntimeStatus {
         account_id,
         status: status.to_string(),
@@ -194,7 +207,7 @@ async fn set_account_status(
     statuses.insert(account_id, runtime_status.clone());
     drop(statuses);
 
-    let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, &runtime_status);
+    emit(&runtime_status);
 }
 
 pub async fn clear_account_runtime(
@@ -204,9 +217,27 @@ pub async fn clear_account_runtime(
     account_id: i64,
     sign_out: bool,
 ) -> AppResult<()> {
-    state.runtime.clear_account(account_id, sign_out).await;
-    telegram_session_store::delete_session(handle, secret_store, account_id).await?;
-    set_account_status(handle, state, account_id, STATUS_NOT_INITIALIZED, None).await;
+    clear_account_runtime_with(
+        state.runtime.clear_account(account_id, sign_out),
+        telegram_session_store::delete_session(handle, secret_store, account_id),
+        set_account_status(handle, state, account_id, STATUS_NOT_INITIALIZED, None),
+    )
+    .await
+}
+
+async fn clear_account_runtime_with<RuntimeFuture, SessionFuture, StatusFuture>(
+    clear_runtime: RuntimeFuture,
+    delete_session: SessionFuture,
+    set_final_status: StatusFuture,
+) -> AppResult<()>
+where
+    RuntimeFuture: std::future::Future<Output = ()>,
+    SessionFuture: std::future::Future<Output = AppResult<()>>,
+    StatusFuture: std::future::Future<Output = ()>,
+{
+    clear_runtime.await;
+    delete_session.await?;
+    set_final_status.await;
     Ok(())
 }
 
@@ -246,6 +277,107 @@ fn restore_failure_message(error: impl std::fmt::Display) -> String {
     }
 }
 
+enum AccountRestoreFailure {
+    Credentials(AppError),
+    Initialization(AppError),
+}
+
+impl AccountRestoreFailure {
+    fn into_message(self) -> String {
+        match self {
+            Self::Credentials(error) | Self::Initialization(error) => {
+                restore_failure_message(error)
+            }
+        }
+    }
+}
+
+async fn record_restore_failure_with(
+    state: &TelegramState,
+    account_id: i64,
+    failure: AccountRestoreFailure,
+    emit_status: impl FnOnce(&AccountRuntimeStatus),
+    emit_failure: impl FnOnce(&RestoreFailureEvent),
+) {
+    let message = failure.into_message();
+    set_account_status_with(
+        state,
+        account_id,
+        STATUS_RESTORE_FAILED,
+        Some(message.clone()),
+        emit_status,
+    )
+    .await;
+    emit_failure(&RestoreFailureEvent { message });
+}
+
+async fn record_restore_failure(
+    handle: &AppHandle,
+    state: &TelegramState,
+    account_id: i64,
+    failure: AccountRestoreFailure,
+) {
+    record_restore_failure_with(
+        state,
+        account_id,
+        failure,
+        |status| {
+            let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, status);
+        },
+        |event| {
+            let _ = handle.emit(TELEGRAM_RESTORE_FAILURE_EVENT, event);
+        },
+    )
+    .await;
+}
+
+async fn restore_account_with<
+    ResolveCredentials,
+    ResolveFuture,
+    Initialize,
+    InitializeFuture,
+    ClearRuntime,
+    ClearFuture,
+    RecordFailure,
+    FailureFuture,
+>(
+    credentials: AccountCredentialsRow,
+    resolve_credentials: ResolveCredentials,
+    initialize: Initialize,
+    clear_runtime: ClearRuntime,
+    record_failure: RecordFailure,
+) where
+    ResolveCredentials: FnOnce(AccountCredentialsRow) -> ResolveFuture,
+    ResolveFuture: std::future::Future<Output = AppResult<AccountCredentials>>,
+    Initialize: FnOnce(i64, i32, TelegramApiHash) -> InitializeFuture,
+    InitializeFuture: std::future::Future<Output = AppResult<bool>>,
+    ClearRuntime: FnOnce(i64) -> ClearFuture,
+    ClearFuture: std::future::Future<Output = ()>,
+    RecordFailure: FnOnce(i64, AccountRestoreFailure) -> FailureFuture,
+    FailureFuture: std::future::Future<Output = ()>,
+{
+    let account_id = credentials.id;
+    let account = match resolve_credentials(credentials).await {
+        Ok(account) => account,
+        Err(error) => {
+            record_failure(account_id, AccountRestoreFailure::Credentials(error)).await;
+            return;
+        }
+    };
+    let api_id = match telegram_api_id(account.api_id) {
+        Ok(api_id) => api_id,
+        Err(error) => {
+            record_failure(account.id, AccountRestoreFailure::Credentials(error)).await;
+            return;
+        }
+    };
+
+    if let Err(error) = initialize(account.id, api_id, account.api_hash).await {
+        clear_runtime(account.id).await;
+        record_failure(account.id, AccountRestoreFailure::Initialization(error)).await;
+    }
+}
+
 pub async fn restore_telegram_accounts(handle: AppHandle) {
     let state = handle.state::<TelegramState>();
     let secret_store = handle.state::<SecretStoreState>();
@@ -280,56 +412,16 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
             continue;
         }
 
-        let account_id = account.id;
-        let account = match resolve_account_credentials(&pool, &secret_store, account).await {
-            Ok(account) => account,
-            Err(error) => {
-                set_account_status(
-                    &handle,
-                    &state,
-                    account_id,
-                    STATUS_RESTORE_FAILED,
-                    Some(restore_failure_message(error)),
-                )
-                .await;
-                continue;
-            }
-        };
-
-        let init_result = init_account_client(
-            &handle,
-            &state,
-            &secret_store,
-            account.id,
-            match telegram_api_id(account.api_id) {
-                Ok(api_id) => api_id,
-                Err(error) => {
-                    set_account_status(
-                        &handle,
-                        &state,
-                        account.id,
-                        STATUS_RESTORE_FAILED,
-                        Some(restore_failure_message(error)),
-                    )
-                    .await;
-                    continue;
-                }
+        restore_account_with(
+            account,
+            |credentials| resolve_account_credentials(&pool, &secret_store, credentials),
+            |account_id, api_id, api_hash| {
+                init_account_client(&handle, &state, &secret_store, account_id, api_id, api_hash)
             },
-            account.api_hash,
+            |account_id| state.runtime.clear_account(account_id, false),
+            |account_id, failure| record_restore_failure(&handle, &state, account_id, failure),
         )
         .await;
-
-        if let Err(error) = init_result {
-            state.runtime.clear_account(account.id, false).await;
-            set_account_status(
-                &handle,
-                &state,
-                account.id,
-                STATUS_RESTORE_FAILED,
-                Some(restore_failure_message(error)),
-            )
-            .await;
-        }
     }
 }
 
@@ -406,7 +498,13 @@ pub async fn tg_send_code(
     account_id: i64,
     phone: String,
 ) -> AppResult<String> {
-    state.runtime.request_login_code(account_id, phone).await?;
+    send_code_with(state.runtime.request_login_code(account_id, phone)).await
+}
+
+async fn send_code_with(
+    request_login_code: impl std::future::Future<Output = AppResult<()>>,
+) -> AppResult<String> {
+    request_login_code.await?;
     Ok("Code sent".to_string())
 }
 
@@ -418,12 +516,37 @@ pub async fn tg_sign_in(
     account_id: i64,
     code: String,
 ) -> AppResult<bool> {
-    let session_to_save = state.runtime.sign_in(account_id, code).await?;
+    let session_handle = handle.clone();
+    let session_secret_store = secret_store.inner();
+    sign_in_with(
+        state.runtime.sign_in(account_id, code),
+        move |session_to_save| async move {
+            telegram_session_store::save_session(
+                &session_handle,
+                session_secret_store,
+                account_id,
+                &session_to_save,
+            )
+            .await
+        },
+        set_account_status(&handle, &state, account_id, STATUS_READY, None),
+    )
+    .await
+}
 
-    telegram_session_store::save_session(&handle, &secret_store, account_id, &session_to_save)
-        .await?;
-    set_account_status(&handle, &state, account_id, STATUS_READY, None).await;
-
+async fn sign_in_with<SaveSession, SaveFuture, ReadyFuture>(
+    runtime_sign_in: impl std::future::Future<Output = AppResult<crate::telegram_impl::TelegramSession>>,
+    save_session: SaveSession,
+    set_ready: ReadyFuture,
+) -> AppResult<bool>
+where
+    SaveSession: FnOnce(crate::telegram_impl::TelegramSession) -> SaveFuture,
+    SaveFuture: std::future::Future<Output = AppResult<()>>,
+    ReadyFuture: std::future::Future<Output = ()>,
+{
+    let session_to_save = runtime_sign_in.await?;
+    save_session(session_to_save).await?;
+    set_ready.await;
     Ok(true)
 }
 
@@ -434,24 +557,39 @@ pub async fn tg_logout(
     secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
 ) -> AppResult<bool> {
-    clear_account_runtime(&handle, &state, &secret_store, account_id, true).await?;
+    logout_with(clear_account_runtime(
+        &handle,
+        &state,
+        &secret_store,
+        account_id,
+        true,
+    ))
+    .await
+}
+
+async fn logout_with(
+    clear_account: impl std::future::Future<Output = AppResult<()>>,
+) -> AppResult<bool> {
+    clear_account.await?;
     Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        get_account_credentials_from_pool, restore_failure_message, runtime_status_to_wire,
-        telegram_api_id, AccountRuntimeStatus, RestoreFailureEvent, TelegramRuntimeStatus,
-        TelegramState, STATUS_NOT_INITIALIZED, STATUS_READY, STATUS_REAUTH_REQUIRED,
-        STATUS_RESTORE_FAILED, STATUS_RESTORING, TELEGRAM_ACCOUNT_STATUS_EVENT,
-        TELEGRAM_RESTORE_FAILURE_EVENT,
+        clear_account_runtime_with, get_account_credentials_from_pool, logout_with,
+        record_restore_failure_with, restore_account_with, restore_failure_message,
+        runtime_status_to_wire, send_code_with, set_account_status_with, sign_in_with,
+        telegram_api_id, AccountCredentials, AccountCredentialsRow, AccountRestoreFailure,
+        AccountRuntimeStatus, RestoreFailureEvent, TelegramRuntimeStatus, TelegramState,
+        STATUS_NOT_INITIALIZED, STATUS_READY, STATUS_REAUTH_REQUIRED, STATUS_RESTORE_FAILED,
+        STATUS_RESTORING, TELEGRAM_ACCOUNT_STATUS_EVENT, TELEGRAM_RESTORE_FAILURE_EVENT,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
-    use secrecy::ExposeSecret;
-    use std::sync::Arc;
+    use secrecy::{ExposeSecret, SecretString};
+    use std::sync::{Arc, Mutex as StdMutex};
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -497,6 +635,277 @@ mod tests {
             .fetch_one(pool)
             .await
             .expect("read api_hash")
+    }
+
+    #[tokio::test]
+    async fn restore_emits_failure_event_for_each_failed_account() {
+        let state = Arc::new(TelegramState::new());
+        let order = Arc::new(StdMutex::new(Vec::new()));
+
+        let resolve_order = Arc::clone(&order);
+        let credential_status_order = Arc::clone(&order);
+        let credential_failure_order = Arc::clone(&order);
+        let credential_state = Arc::clone(&state);
+        restore_account_with(
+            AccountCredentialsRow {
+                id: 7,
+                api_id: 12345,
+                api_hash: String::new(),
+            },
+            move |account| async move {
+                resolve_order
+                    .lock()
+                    .expect("record credential resolution")
+                    .push(format!("resolve:{}", account.id));
+                Err(AppError::auth("missing credentials"))
+            },
+            |_, _, _| async { panic!("initialization must not run after credential failure") },
+            |_| async { panic!("runtime cleanup must not run after credential failure") },
+            |account_id, failure| async move {
+                assert!(matches!(&failure, AccountRestoreFailure::Credentials(_)));
+                record_restore_failure_with(
+                    &credential_state,
+                    account_id,
+                    failure,
+                    move |status| {
+                        credential_status_order
+                            .lock()
+                            .expect("record credential status event")
+                            .push(format!("status:{}:{}", status.account_id, status.status));
+                    },
+                    |event| {
+                        let stored = credential_state
+                            .statuses
+                            .try_lock()
+                            .expect("status lock released before credential failure event")
+                            .get(&account_id)
+                            .cloned()
+                            .expect("credential failed status stored before failure event");
+                        assert_eq!(stored.status, STATUS_RESTORE_FAILED);
+                        assert_eq!(stored.message.as_deref(), Some(event.message.as_str()));
+                        credential_failure_order
+                            .lock()
+                            .expect("record credential failure event")
+                            .push(format!("failure:{account_id}"));
+                    },
+                )
+                .await;
+            },
+        )
+        .await;
+
+        let resolve_order = Arc::clone(&order);
+        let init_order = Arc::clone(&order);
+        let clear_order = Arc::clone(&order);
+        let init_status_order = Arc::clone(&order);
+        let init_failure_order = Arc::clone(&order);
+        let init_state = Arc::clone(&state);
+        restore_account_with(
+            AccountCredentialsRow {
+                id: 8,
+                api_id: 12345,
+                api_hash: "api-hash".to_string(),
+            },
+            move |account| async move {
+                resolve_order
+                    .lock()
+                    .expect("record credential resolution")
+                    .push(format!("resolve:{}", account.id));
+                Ok(AccountCredentials {
+                    id: account.id,
+                    api_id: account.api_id,
+                    api_hash: crate::telegram_impl::TelegramApiHash::new(SecretString::new(
+                        account.api_hash,
+                    )),
+                })
+            },
+            move |account_id, _, _| async move {
+                init_order
+                    .lock()
+                    .expect("record initialization")
+                    .push(format!("initialize:{account_id}"));
+                Err(AppError::telegram_network("runtime unavailable"))
+            },
+            move |account_id| async move {
+                clear_order
+                    .lock()
+                    .expect("record runtime cleanup")
+                    .push(format!("clear:{account_id}"));
+            },
+            |account_id, failure| async move {
+                assert!(matches!(&failure, AccountRestoreFailure::Initialization(_)));
+                record_restore_failure_with(
+                    &init_state,
+                    account_id,
+                    failure,
+                    move |status| {
+                        init_status_order
+                            .lock()
+                            .expect("record initialization status event")
+                            .push(format!("status:{}:{}", status.account_id, status.status));
+                    },
+                    |event| {
+                        let stored = init_state
+                            .statuses
+                            .try_lock()
+                            .expect("status lock released before initialization failure event")
+                            .get(&account_id)
+                            .cloned()
+                            .expect("initialization failed status stored before failure event");
+                        assert_eq!(stored.status, STATUS_RESTORE_FAILED);
+                        assert_eq!(stored.message.as_deref(), Some(event.message.as_str()));
+                        init_failure_order
+                            .lock()
+                            .expect("record initialization failure event")
+                            .push(format!("failure:{account_id}"));
+                    },
+                )
+                .await;
+            },
+        )
+        .await;
+
+        let statuses = state.statuses.lock().await;
+        for (account_id, message) in [
+            (7, "missing credentials"),
+            (8, "Telegram request failed: runtime unavailable"),
+        ] {
+            let status = statuses
+                .get(&account_id)
+                .unwrap_or_else(|| panic!("missing failed status for account {account_id}"));
+            assert_eq!(status.status, STATUS_RESTORE_FAILED);
+            assert_eq!(status.message.as_deref(), Some(message));
+        }
+        drop(statuses);
+
+        assert_eq!(
+            *order.lock().expect("read restore order"),
+            [
+                "resolve:7",
+                "status:7:restore_failed",
+                "failure:7",
+                "resolve:8",
+                "initialize:8",
+                "clear:8",
+                "status:8:restore_failed",
+                "failure:8",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn send_code_success_is_not_auth_error() {
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let runtime_calls = Arc::clone(&calls);
+
+        let result = send_code_with(async move {
+            runtime_calls
+                .lock()
+                .expect("record scripted runtime")
+                .push("runtime");
+            Ok(())
+        })
+        .await;
+
+        assert_eq!(result.expect("successful command result"), "Code sent");
+        assert_eq!(*calls.lock().expect("read scripted runtime"), ["runtime"]);
+    }
+
+    #[tokio::test]
+    async fn sign_in_persists_session_before_ready_event() {
+        let state = TelegramState::new();
+        let order = Arc::new(StdMutex::new(Vec::new()));
+        let runtime_order = Arc::clone(&order);
+        let session_order = Arc::clone(&order);
+        let ready_order = Arc::clone(&order);
+
+        let result = sign_in_with(
+            async move {
+                runtime_order
+                    .lock()
+                    .expect("record runtime sign-in")
+                    .push("runtime");
+                Ok(crate::telegram_impl::TelegramSession::empty())
+            },
+            move |_session| async move {
+                session_order
+                    .lock()
+                    .expect("record session persistence")
+                    .push("session");
+                Ok(())
+            },
+            set_account_status_with(&state, 7, STATUS_READY, None, |status| {
+                let stored = state
+                    .statuses
+                    .try_lock()
+                    .expect("status lock released before ready event")
+                    .get(&7)
+                    .cloned()
+                    .expect("ready state stored before event");
+                assert_eq!(stored.status, STATUS_READY);
+                assert_eq!(stored.status, status.status);
+                ready_order
+                    .lock()
+                    .expect("record ready event")
+                    .push("ready");
+            }),
+        )
+        .await;
+        order.lock().expect("record command result").push("result");
+
+        assert!(result.expect("successful sign-in command result"));
+        assert_eq!(
+            *order.lock().expect("read sign-in order"),
+            ["runtime", "session", "ready", "result"]
+        );
+    }
+
+    #[tokio::test]
+    async fn logout_returns_true_after_runtime_and_session_cleanup() {
+        let state = TelegramState::new();
+        let order = Arc::new(StdMutex::new(Vec::new()));
+        let runtime_order = Arc::clone(&order);
+        let session_order = Arc::clone(&order);
+        let status_order = Arc::clone(&order);
+
+        let cleanup = clear_account_runtime_with(
+            async move {
+                runtime_order
+                    .lock()
+                    .expect("record runtime logout")
+                    .push("runtime");
+            },
+            async move {
+                session_order
+                    .lock()
+                    .expect("record session deletion")
+                    .push("session");
+                Ok(())
+            },
+            set_account_status_with(&state, 7, STATUS_NOT_INITIALIZED, None, |status| {
+                let stored = state
+                    .statuses
+                    .try_lock()
+                    .expect("status lock released before final event")
+                    .get(&7)
+                    .cloned()
+                    .expect("final status stored before event");
+                assert_eq!(stored.status, STATUS_NOT_INITIALIZED);
+                assert_eq!(stored.status, status.status);
+                status_order
+                    .lock()
+                    .expect("record final event")
+                    .push("status");
+            }),
+        );
+        let result = logout_with(cleanup).await;
+        order.lock().expect("record logout result").push("result");
+
+        assert!(result.expect("successful logout command result"));
+        assert_eq!(
+            *order.lock().expect("read logout order"),
+            ["runtime", "session", "status", "result"]
+        );
     }
 
     #[test]

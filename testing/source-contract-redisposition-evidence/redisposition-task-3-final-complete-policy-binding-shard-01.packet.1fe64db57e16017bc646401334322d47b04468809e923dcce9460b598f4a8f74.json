@@ -1,0 +1,908 @@
+{
+  "packetSchemaVersion": 3,
+  "reviewerRunId": "redisposition-task-3-final-complete-policy-binding",
+  "shardIndex": 1,
+  "shardCount": 4,
+  "requiredPopulationDigest": "7a1cea1097037d7a55d686fb14a25694dea8b6f7f4eed64b0bf9b580ea17d844",
+  "orderedClassCatalog": [
+    {
+      "id": "D1_COMPLETED_HISTORY_ONLY",
+      "rule": "Completed historical evidence only; forbidden whenever a future code, configuration, or test change could violate the invariant as a defect."
+    },
+    {
+      "id": "D2_IMPLEMENTATION_SHAPE",
+      "rule": "Exact names, source strings, statement order, formatting, or composition with no independent contract; apply before visual-only D3."
+    },
+    {
+      "id": "D3_NON_OBSERVABLE_VISUAL",
+      "rule": "Non-normative CSS, DOM order, or rendered visual detail with no truthful non-browser seam; implementation shape remains D2."
+    },
+    {
+      "id": "D4_DUPLICATE_EVIDENCE",
+      "rule": "A base-closed exact owner already proves the complete invariant, so the source-contract row is duplicate evidence; apply before retained-owner classes."
+    },
+    {
+      "id": "A1_EXISTING_STRUCTURED_OWNER",
+      "rule": "An existing structured repository rule, compiler, or Cargo-metadata owner is the durable architecture replacement."
+    },
+    {
+      "id": "T1_EXISTING_TOOL_OWNER",
+      "rule": "An existing maintained tool owns the generic executable invariant."
+    },
+    {
+      "id": "B1_EXISTING_BEHAVIOR_OWNER",
+      "rule": "An existing executable test proves behavior through a public seam and the row must retain a behavior resolution; use D4 first when a base-closed owner makes the row wholly duplicate."
+    },
+    {
+      "id": "B2_NEW_CHEAP_BEHAVIOR",
+      "rule": "A new focused Node/jsdom or Cargo test through a cheap public seam is required; P0 membership or a normative citation alone does not make the owner B3."
+    },
+    {
+      "id": "B3_PROTECTED_EXPENSIVE_BEHAVIOR",
+      "rule": "A real browser or OS-process runtime test is required, no cheaper truthful seam exists, and an approved normative criticality source requires retention."
+    },
+    {
+      "id": "D5_ACCEPTED_LOSS",
+      "rule": "Real non-P0 behavior has only an expensive truthful mechanism and no normative source requires retention, so the enumerated loss is accepted."
+    }
+  ],
+  "normativeSourceCatalog": [
+    {
+      "id": "AGENTS_WINDOWS_SANDBOX",
+      "citation": "AGENTS.md §2",
+      "scope": "Windows commands, Tauri MCP development, actual Vite URL discovery, sandbox fallback, and expected missing-IPC browser-console behavior."
+    },
+    {
+      "id": "AGENTS_DATABASE_OWNERSHIP",
+      "citation": "AGENTS.md §6",
+      "scope": "Additive SQLite migrations, one backend-owned connection strategy, and no frontend sql:* permissions."
+    },
+    {
+      "id": "AGENTS_SECURITY",
+      "citation": "AGENTS.md §7",
+      "scope": "OS secure storage for saved LLM keys with profile and provider-plus-normalized-origin binding."
+    },
+    {
+      "id": "TESTING_SOURCE_CONTRACT_REPLACEMENT",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#source-contract-replacement",
+      "scope": "Replace valuable invariants with public behavior, structured architecture, or maintained tools; retire implementation text with specific reviewed decisions."
+    },
+    {
+      "id": "TESTING_BROWSER_COMPONENT_OWNERSHIP",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#browser-and-component-ownership",
+      "scope": "Chromium ownership belongs to Playwright, while component behavior belongs to jsdom; critical browser scenarios and navigation/error rendering remain explicit."
+    },
+    {
+      "id": "TESTING_COVERAGE_FLAKE_QUARANTINE",
+      "citation": "docs/superpowers/specs/2026-08-01-testing-infrastructure-redesign-design.md#coverage-flake-and-quarantine-policy",
+      "scope": "Critical process-cleanup modules require deterministic cleanup and explicit Windows capability failures."
+    }
+  ],
+  "rows": [
+    {
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"removes Phase 7 extraction-only dead code and unused facade surface\", () => {\n    const forbiddenByFile = new Map<string, readonly string[]>([\n      [\n        \"src-tauri/crates/extractum-analysis/src/models.rs\",\n        [\"AnalysisSourceGroupRow\"],\n      ],\n      [\n        \"src-tauri/crates/extractum-analysis/src/store/read_model.rs\",\n        [\"load_analysis_run_trace_data\"],\n      ],\n      [\"src-tauri/src/lib.rs\", [\"internal_error\"]],\n      [\n        \"src-tauri/src/sources/mod.rs\",\n        [\n          \"ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT\",\n          \"ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED\",\n          \"TELEGRAM_SOURCE_TYPE\",\n        ],\n      ],\n      [\n        \"src-tauri/src/sources/types.rs\",\n        [\n          \"ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT\",\n          \"ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED\",\n        ],\n      ],\n      [\n        \"src-tauri/src/llm/mod.rs\",\n        [\n          \"resolve_model_input_token_limit_for_backend\",\n          \"resolve_model_output_token_limit_for_backend\",\n          \"run_llm_collect_with_profile\",\n          \"LlmCompletion\",\n          \"LlmRequestSnapshotState\",\n        ],\n      ],\n    ]);\n\n    for (const [relativePath, identifiers] of forbiddenByFile) {\n      const source = read(relativePath);\n      for (const identifier of identifiers) {\n        expect(\n          source,\n          `${relativePath} retains extraction-only ${identifier}`,\n        ).not.toMatch(new RegExp(`\\\\b${identifier}\\\\b`));\n      }\n    }\n  })",
+      "id": "SC-000092",
+      "invariant": "Removes Phase 7 extraction-only dead code and unused facade surface.",
+      "policyFacts": {
+        "classificationRule": "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
+        "finalClass": "D2_IMPLEMENTATION_SHAPE"
+      },
+      "sourceHash": "6a6898de7f435ba780208dbeb493c238d1b92f6b859c2c21a1aee0460b04588c"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000059"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000059"
+          ]
+        }
+      ],
+      "declaration": "it(\"does not resolve completed-run evidence through live source fallback\", () => {\r\n    expect(evidenceTabSource).toContain(\"evidenceSourceActionDecision\");\r\n    expect(evidenceTabSource).toContain(\"Show in source\");\r\n    expect(evidenceTabSource).toContain(\"Snapshot unavailable\");\r\n    expect(evidenceTabSource).not.toContain(\"listSourceItems\");\r\n    expect(corpusBackendSource).toContain(\"list_run_snapshot_messages_page\");\r\n    expect(corpusBackendSource).toContain(\"analysis_run_messages\");\r\n    expect(corpusBackendSource).toContain(\"load_trace_resolution_messages\");\r\n    expect(corpusBackendSource).toContain(\"ensure_captured_snapshot_rows\");\r\n    expect(corpusBackendSource).toContain(\"AnalysisSnapshotState::Captured\");\r\n    expect(corpusBackendSource).toContain(\"captured snapshot is unavailable\");\r\n    expect(corpusBackendSource).not.toContain(\"completed_run_live_source_fallback\");\r\n  })",
+      "id": "SC-000118",
+      "invariant": "Does not resolve completed-run evidence through live source fallback.",
+      "policyFacts": {},
+      "sourceHash": "61b6efb1bc2236d1b7d63eaa382a01565cae1676c8e64016c1d44e6899b25b8e"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders Telegram as a metadata-rich timeline without binary previews",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > renders Telegram as a metadata-rich timeline without binary previews",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000232"
+          ]
+        }
+      ],
+      "declaration": "it(\"renders Telegram source material as metadata-first timeline without binary previews\", () => {\r\n    expect(telegramTimelineSource).toContain('class=\"telegram-timeline-reader\"');\r\n    expect(telegramTimelineSource).toContain(\"topicLabel\");\r\n    expect(telegramTimelineSource).toContain(\"replyLabel\");\r\n    expect(telegramTimelineSource).toContain(\"reactionLabel\");\r\n    expect(telegramTimelineSource).toContain(\"<TelegramMediaCard\");\r\n    expect(telegramTimelineSource).toContain(\"item.mediaCards as media, index\");\r\n    expect(telegramMediaCardSource).toContain(\"media.fileName\");\r\n    expect(telegramMediaCardSource).toContain(\"media.mimeType\");\r\n    expect(telegramMediaCardSource).not.toContain(\"<img\");\r\n    expect(telegramMediaCardSource).not.toContain(\"<video\");\r\n    expect(telegramMediaCardSource).not.toContain(\"<audio\");\r\n  })",
+      "id": "SC-000121",
+      "invariant": "Renders Telegram source material as metadata-first timeline without binary previews.",
+      "policyFacts": {},
+      "sourceHash": "0cb00961ac2c7e0dca37eed1d5e1b88490ebb5f0eb70e1b06c18dfe747435de6"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes focused group transcript segments from route to source surfaces",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000154"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes transient evidence highlight tokens from route to source surfaces",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000153"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes bounded source browser mode only for live source canvas review",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes bounded source browser mode only for live source canvas review",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000157"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes Telegram topic state into the source surface",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes Telegram topic state into the source surface",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000144"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#passes project add-source workflow callbacks from both current project routes",
+          "mechanism": "jsdom",
+          "capability": "passes project add-source workflow callbacks from both current project routes",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000527"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes persisted canvas mode and source basis from workspace UI state",
+          "mechanism": "node",
+          "capability": "analysis route report canvas wiring > passes persisted canvas mode and source basis from workspace UI state",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"passes persisted canvas mode and source basis from workspace UI state\", () => {\r\n    expect(analysisPageSource).toContain(\"canvasMode={workspaceUiState.canvasMode}\");\r\n    expect(analysisPageSource).toContain(\"sourceViewBasis={workspaceUiState.sourceViewBasis}\");\r\n    expect(analysisPageSource).toContain(\"onChangeCanvasMode={(mode) =>\");\r\n    expect(analysisPageSource).toContain(\"canvasMode: mode\");\r\n    expect(analysisPageSource).toContain(\"onViewLiveSource={() =>\");\r\n    expect(analysisPageSource).toContain('type: \"view_live_source_for_opened_run\"');\r\n    expect(analysisPageSource).toContain(\"onBackToRunSnapshot={() =>\");\r\n    expect(analysisPageSource).toContain('type: \"switch_source_basis_to_run_snapshot\"');\r\n  })",
+      "id": "SC-000130",
+      "invariant": "Passes persisted canvas mode and source basis from workspace UI state.",
+      "policyFacts": {
+        "classificationRule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+        "finalClass": "B2_NEW_CHEAP_BEHAVIOR"
+      },
+      "sourceHash": "38541383ae101e3a6c1b58b033acf10229740ac7d95817e7370099cddee092a8"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes Telegram topic state into the source surface",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes Telegram topic state into the source surface",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000144"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::corpus::tests::preflight::estimated_message_chars_match_report_chunk_accounting",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::corpus::tests::preflight::estimated_message_chars_match_report_chunk_accounting",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000048"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000044",
+            "SC-000047"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000044",
+            "SC-000047"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000044",
+            "SC-000047"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes focused group transcript segments from route to source surfaces",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes focused group transcript segments from route to source surfaces",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000154"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route-receiver.behavior.component.test.ts#report canvas component contract > passes transient evidence highlight tokens from route to source surfaces",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes transient evidence highlight tokens from route to source surfaces",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000153"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes bounded source browser mode only for live source canvas review",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes bounded source browser mode only for live source canvas review",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000157"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes evidence return context and callback through the report canvas",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes evidence return context and callback through the report canvas",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000156"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes YouTube comments and source activity callbacks through the report canvas",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes YouTube comments and source activity callbacks through the report canvas",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000143"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes live YouTube video comments and jobs only into live transcript readers",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > passes live YouTube video comments and jobs only into live transcript readers",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000257"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000256"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas-route.behavior.test.ts#analysis route report canvas wiring > passes source metrics into report launch preflight",
+          "mechanism": "node",
+          "capability": "analysis route report canvas wiring > passes source metrics into report launch preflight",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"passes source metrics into report launch preflight\", () => {\r\n    expect(analysisPageSource).toContain(\"currentSourceMetric: currentSourceMetric()\");\r\n    expect(analysisPageSource).toContain(\"reportLaunchDisabledReason={currentReportLaunchDisabledReason()}\");\r\n  })",
+      "id": "SC-000136",
+      "invariant": "Passes source metrics into report launch preflight.",
+      "policyFacts": {
+        "classificationRule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+        "finalClass": "B2_NEW_CHEAP_BEHAVIOR"
+      },
+      "sourceHash": "87f823f39a97d06c7bca7705273c60cd417bd34f15dd535a143096064b72c1b2"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > probes opened-run snapshot availability before the user switches to Source mode",
+          "mechanism": "node",
+          "capability": "analysis route effects > probes opened-run snapshot availability before the user switches to Source mode",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"probes opened-run snapshot availability before the user switches to Source mode\", () => {\r\n    const effect = runSnapshotEffect();\r\n\r\n    expect(effect).toContain(\"currentRun\");\r\n    expect(effect).toContain(\"void loadRunSnapshotFirstPage(currentRun.id);\");\r\n    expect(effect).not.toContain('workspaceUiState.canvasMode === \"source\"');\r\n    expect(effect).not.toContain('workspaceUiState.sourceViewBasis === \"run_snapshot\"');\r\n  })",
+      "id": "SC-000165",
+      "invariant": "Probes opened-run snapshot availability before the user switches to Source mode.",
+      "policyFacts": {},
+      "sourceHash": "a8c6ec6f91227bd96d9b70933262cfaa7bec6e348e931881b145e3a0776b5716"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-route-effects.behavior.test.ts#analysis route effects > compares focused-load requests against current route scope and source basis",
+          "mechanism": "node",
+          "capability": "analysis route effects > compares focused-load requests against current route scope and source basis",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"compares focused-load requests against current route scope and source basis\", () => {\r\n    const focusMatcher = currentFocusMatchesRequestFunction();\r\n\r\n    expect(focusMatcher).toContain(\"const currentSourceScope = currentEvidenceSourceScope(request.sourceScope.sourceId);\");\r\n    expect(focusMatcher).toContain(\"if (currentSourceScope === null) {\");\r\n    expect(focusMatcher).toContain(\"sourceScope: currentSourceScope\");\r\n    expect(focusMatcher).toContain(\"sourceViewBasis: workspaceUiState.sourceViewBasis\");\r\n    expect(focusMatcher).not.toContain(\"sourceScope: request.sourceScope\");\r\n    expect(focusMatcher).not.toContain(\"sourceViewBasis: request.sourceViewBasis\");\r\n  })",
+      "id": "SC-000171",
+      "invariant": "Compares focused-load requests against current route scope and source basis.",
+      "policyFacts": {},
+      "sourceHash": "e07d278c936c576fb1f4736878d465f8b8d9f859e3f933bedbdcecc9cfd1c98c"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"imports workspace state and persistence helpers\", () => {\r\n    expect(analysisPageSource).toContain(\"defaultAnalysisWorkspaceUiState\");\r\n    expect(analysisPageSource).toContain(\"transitionAnalysisWorkspaceState\");\r\n    expect(analysisPageSource).toContain(\"loadPersistedAnalysisWorkspaceState\");\r\n    expect(analysisPageSource).toContain(\"savePersistedAnalysisWorkspaceState\");\r\n    expect(analysisPageSource).toContain(\"fallbackWorkspaceSelection\");\r\n  })",
+      "id": "SC-000176",
+      "invariant": "Imported workspace-state helper names are implementation detail; the persistence and transition behavior remains independently covered.",
+      "policyFacts": {},
+      "sourceHash": "9f1def0b061ef13d530155fe02f9ef2015d6cb32232ec0e51422017027e8af72"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:cargo:extractum-analysis::store::tests::runs::duplicate_lookup_keeps_project_and_source_group_scopes_separate",
+          "mechanism": "cargo",
+          "capability": "extractum-analysis::store::tests::runs::duplicate_lookup_keeps_project_and_source_group_scopes_separate",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000045"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum::analysis::store::tests::read_model::list_analysis_run_summaries_filters_project_runs",
+          "mechanism": "cargo",
+          "capability": "extractum::analysis::store::tests::read_model::list_analysis_run_summaries_filters_project_runs",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000042"
+          ]
+        },
+        {
+          "id": "test:cargo:extractum::projects::tests::delete_project_removes_membership_and_project_runs_but_keeps_sources",
+          "mechanism": "cargo",
+          "capability": "extractum::projects::tests::delete_project_removes_membership_and_project_runs_but_keeps_sources",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000050",
+            "SC-000055"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps report setup copy aware of existing saved runs",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > keeps report setup copy aware of existing saved runs",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000141"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps project action hierarchy consistent across Workspace, Projects, and Runs",
+          "mechanism": "jsdom",
+          "capability": "keeps project action hierarchy consistent across Workspace, Projects, and Runs",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000536"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector",
+          "mechanism": "jsdom",
+          "capability": "keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000522"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-run-companion-route.behavior.test.ts#analysis route run companion wiring > keeps Runs filters durable and source ingest jobs out of Runs",
+          "mechanism": "node",
+          "capability": "analysis route run companion wiring > keeps Runs filters durable and source ingest jobs out of Runs",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"keeps Runs filters durable and source ingest jobs out of Runs\", () => {\r\n    expect(analysisPageSource).toContain(\"runsFilter\");\r\n    expect(analysisPageSource).toContain(\"persistableAnalysisWorkspaceState(workspaceUiState\");\r\n    expect(analysisPageSource).toContain(\"runsFilter\");\r\n  })",
+      "id": "SC-000192",
+      "invariant": "Keeps Runs filters durable and source ingest jobs out of Runs.",
+      "policyFacts": {
+        "classificationRule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+        "finalClass": "B2_NEW_CHEAP_BEHAVIOR"
+      },
+      "sourceHash": "2ce78fef53aed2cc67566fb4839cd49a03a048668c78c4ecde92383a843cf132"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"updates trace workflow patches from inspector mode to evidence companion\", () => {\r\n    expect(traceWorkflowSource).toContain('companionTab: \"evidence\"');\r\n    expect(traceWorkflowSource).not.toContain(\"inspectorMode\");\r\n  })",
+      "id": "SC-000194",
+      "invariant": "Evidence companion navigation remains covered without preserving the obsolete inspector-mode patch shape.",
+      "policyFacts": {
+        "classificationRule": "Current topology or completed history remains D2 when no complete exact independent owner proves the frozen invariant.",
+        "finalClass": "D2_IMPLEMENTATION_SHAPE"
+      },
+      "sourceHash": "241616928cceb2a3fa9c65fcf7b979344c128266adf205cdea5209e712af3266"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"removes temporary chat from ReportCanvas once companion Chat exists\", () => {\r\n    expect(reportCanvasSource).not.toContain(\"temporary-follow-up\");\r\n    expect(reportCanvasSource).not.toContain(\"<ChatPanel\");\r\n    expect(reportCanvasSource).not.toContain(\"onAskRunQuestion\");\r\n    expect(reportCanvasSource).not.toContain(\"onChangeChatQuestion\");\r\n  })",
+      "id": "SC-000203",
+      "invariant": "Removes temporary chat from ReportCanvas once companion Chat exists.",
+      "policyFacts": {
+        "classificationRule": "D1 applies only when the invariant is exhausted by a completed event and no future repository change can violate it as a defect. Exact current source, symbol, file, or test topology without an independent contract is D2.",
+        "finalClass": "D2_IMPLEMENTATION_SHAPE"
+      },
+      "sourceHash": "2db29d1f74260998d771ef9bf0b30aed40dda153c7b260e9ba4ccda0371ab986"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > passes Telegram topic state into the source surface",
+          "mechanism": "jsdom",
+          "capability": "report canvas component contract > passes Telegram topic state into the source surface",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000144"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > merges focused group YouTube transcript DTOs into source-group reader items",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > merges focused group YouTube transcript DTOs into source-group reader items",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000274"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes live YouTube video comments and jobs only into live transcript readers",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > passes live YouTube video comments and jobs only into live transcript readers",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000257"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000256"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers-route.behavior.test.ts#analysis source reader route wiring > passes source reader props into ReportSourceSurface",
+          "mechanism": "node",
+          "capability": "analysis source reader route wiring > passes source reader props into ReportSourceSurface",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"passes source reader props into ReportSourceSurface\", () => {\r\n    expect(analysisPageSource).toContain(\"{youtubeTranscriptSegments}\");\r\n    expect(analysisPageSource).toContain(\"{groupLiveItemsBySource}\");\r\n    expect(analysisPageSource).toContain(\"{groupLiveTranscriptSegmentsBySource}\");\r\n    expect(analysisPageSource).toContain(\"{selectedGroupSourceId}\");\r\n    expect(analysisPageSource).toContain(\"{sourceTopics}\");\r\n    expect(analysisPageSource).toContain(\"{loadingSourceTopics}\");\r\n    expect(analysisPageSource).toContain(\"{selectedTopicKey}\");\r\n    expect(analysisPageSource).toContain(\"showTopicSelector={shouldShowTopicSelector()}\");\r\n    expect(analysisPageSource).toContain(\"onLoadMoreYoutubeTranscriptSegments\");\r\n    expect(analysisPageSource).toContain(\"{sourceItemsHasMore}\");\r\n    expect(analysisPageSource).toContain(\"onLoadMoreSourceItems\");\r\n    expect(analysisPageSource).toContain(\"onLoadLiveGroupSourcePage\");\r\n    expect(analysisPageSource).toContain(\"onChangeSelectedGroupSourceId\");\r\n    expect(analysisPageSource).toContain(\"onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}\");\r\n  })",
+      "id": "SC-000210",
+      "invariant": "Passes source reader props into ReportSourceSurface.",
+      "policyFacts": {
+        "classificationRule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+        "finalClass": "B2_NEW_CHEAP_BEHAVIOR"
+      },
+      "sourceHash": "0b08eafc7bc27cf82fc8cc122a159b292a585094325e755b5e53fa976edb458a"
+    },
+    {
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps top command actions honest while project export is out of scope",
+          "mechanism": "jsdom",
+          "capability": "keeps top command actions honest while project export is out of scope",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000535"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#uses real project APIs instead of analysis source group APIs",
+          "mechanism": "jsdom",
+          "capability": "uses real project APIs instead of analysis source group APIs",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000517"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-workspace-tools.behavior.test.ts#analysis workspace tools component contract > uses explicit button types for workspace actions",
+          "mechanism": "node",
+          "capability": "analysis workspace tools component contract > uses explicit button types for workspace actions",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"uses explicit button types for workspace actions\", () => {\r\n    expect(reportWorkspaceToolsSource.match(/type=\"button\"/g)?.length ?? 0).toBe(3);\r\n  })",
+      "id": "SC-000289",
+      "invariant": "Uses explicit button types for workspace actions.",
+      "policyFacts": {
+        "classificationRule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
+        "finalClass": "B2_NEW_CHEAP_BEHAVIOR"
+      },
+      "sourceHash": "59ffe63c0fbbccb1df99d777454502cb53fdbfd654e7797971310294a9c5d85b"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/apalis-jobs-route-contract.behavior.test.ts#apalis jobs inspector frontend source contracts > adds Jobs as a separate top-level navigation item in both modes",
+          "mechanism": "node",
+          "capability": "apalis jobs inspector frontend source contracts > adds Jobs as a separate top-level navigation item in both modes",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"adds Jobs as a separate top-level navigation item in both modes\", () => {\r\n    expect(layoutSource).toContain(\"ListChecks\");\r\n    expect(layoutSource.match(/label: \"Jobs\"/g)?.length).toBe(2);\r\n    expect(layoutSource.match(/caption: \"Apalis queue\"/g)?.length).toBe(2);\r\n    expect(layoutSource.match(/pathname.startsWith\\(\"\\/jobs\"\\)/g)?.length).toBe(3);\r\n    expect(layoutSource).toContain(\"Jobs\");\r\n  })",
+      "id": "SC-000297",
+      "invariant": "Adds Jobs as a separate top-level navigation item in both modes.",
+      "policyFacts": {},
+      "sourceHash": "9479b66bf53d907bf016be038b67ea692000adeb006c4db1300ab82c0e79ae61"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"keeps Tauri invocation inside the Apalis jobs API wrapper\", () => {\r\n    expect(jobsPageSource).toContain(\"ApalisJobsPanel\");\r\n    expect(jobsPanelSource).toContain(\r\n      'import { loadApalisJobs, pruneOldTerminalApalisJobs } from \"$lib/api/apalis-jobs\";',\r\n    );\r\n    expect(jobsPageSource).not.toContain(\"invoke(\");\r\n    expect(jobsPanelSource).not.toContain(\"invoke(\");\r\n  })",
+      "id": "SC-000298",
+      "invariant": "Only the Apalis jobs API wrapper invokes Tauri for jobs operations.",
+      "policyFacts": {},
+      "sourceHash": "6133207b3cd0d7d194aa722a9138c72c21fcfe9798c71c9b6f1470fa17dfa719"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"keeps the wrapper narrow and free of logging or client-side mapping\", () => {\r\n    expect(apalisJobsApiSource).not.toContain(\"console.error\");\r\n    expect(apalisJobsApiSource).not.toContain(\"JSON.stringify\");\r\n    expect(apalisJobsApiSource).not.toContain(\".then(\");\r\n    expect(apalisJobsApiSource).not.toContain(\"filter(\");\r\n  })",
+      "id": "SC-000304",
+      "invariant": "The Apalis jobs API wrapper is a direct Tauri-command boundary with no logging or client-side transformation.",
+      "policyFacts": {},
+      "sourceHash": "68c2d8a1cf6513652290d2def746c8ed37e0751a2d89cea2f603c575afec59ef"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"does not log or map raw unknown command errors in the wrapper\", () => {\r\n    expect(diagnosticsApiSource).not.toContain(\"console.error\");\r\n    expect(diagnosticsApiSource).not.toContain(\"JSON.stringify\");\r\n    expect(diagnosticsApiSource).not.toContain(\".then(\");\r\n  })",
+      "id": "SC-000305",
+      "invariant": "The diagnostics API wrapper returns command results without logging or transforming unknown failures.",
+      "policyFacts": {},
+      "sourceHash": "e349ec77c4eff9d28b3161273dfa3ea479197b963dd75e4b01d61794262643ba"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility",
+          "mechanism": "playwright",
+          "capability": "mobile-menu-trigger-responsive-visibility",
+          "status": "approved-future",
+          "normativeSource": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+        }
+      ],
+      "declaration": "it(\"keeps the mobile menu button hidden in desktop layout despite Button defaults\", () => {\r\n    expect(layoutSource).toContain(\":global(.mobile-menu-button.ui-button)\");\r\n    expect(layoutSource).toContain(\"display: none;\");\r\n    expect(layoutSource).toContain(\"display: inline-flex;\");\r\n  })",
+      "id": "SC-000312",
+      "invariant": "The mobile navigation trigger is hidden on desktop and visible at mobile breakpoints.",
+      "policyFacts": {},
+      "sourceHash": "58f368ffa463e9253fc309d831f63e2232db8316136bd59dd2aaa89dd9ee09b1"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group metadata from route-owned group fields",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > renders source group metadata from route-owned group fields",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000269"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > renders source group activity without source job cards",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000270",
+            "SC-000271"
+          ]
+        },
+        {
+          "id": "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group sources as a route-free tab leaf",
+          "mechanism": "jsdom",
+          "capability": "analysis source readers > renders source group sources as a route-free tab leaf",
+          "status": "resolved",
+          "resolvedByBaseClosedRow": true,
+          "closedRowIds": [
+            "SC-000267"
+          ]
+        }
+      ],
+      "declaration": "it(\"renders source group tabs through route-owned props\", () => {\r\n    expect(shellSource).toContain(\"<SourceGroupSourcesView\");\r\n    expect(shellSource).toContain(\"<SourceGroupMetadataView\");\r\n    expect(shellSource).toContain(\"<SourceGroupActivityView\");\r\n    expect(shellSource).toContain('activeTab === \"sources\"');\r\n    expect(shellSource).toContain(\"groupBrowserData\");\r\n    expect(shellSource).toContain(\"liveReaderItems\");\r\n    expect(shellSource).toContain(\"sourceItems\");\r\n    expect(shellSource).toContain(\"helpDescription\");\r\n    expect(shellSource).toContain(\"sourceLabelForItem\");\r\n    expect(shellSource).toContain(\"Group items are limited to the source rows loaded in this browser session\");\r\n  })",
+      "id": "SC-000316",
+      "invariant": "A source-group browser renders its sources, metadata, and activity tabs from route-owned data.",
+      "policyFacts": {
+        "classificationRule": "D4 requires the complete exact base-closed owner set; candidate capability must be derived from the owner identity rather than inflated to the reviewed row invariant.",
+        "finalClass": "D4_DUPLICATE_EVIDENCE"
+      },
+      "sourceHash": "8a2542834a462d3dfcacfd6fa974cb47c9e242c1d11347b895626d0494bb387e"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"uses the v11 active-row focus ring\", () => {\r\n    expect(source).toContain(\"inset 2px 0 0 var(--extractum-primary)\");\r\n    expect(source).toContain(\"inset 0 0 0 1px\");\r\n  })",
+      "id": "SC-000323",
+      "invariant": "The active data-grid row exposes a visible focus and selection affordance.",
+      "policyFacts": {
+        "classificationRule": "Exact focus/selection styling is a non-normative rendered visual affordance with no truthful non-browser seam.",
+        "finalClass": "D3_NON_OBSERVABLE_VISUAL"
+      },
+      "sourceHash": "3a365dd43a846f82eb9e36df96ba2877fbc653c1e733434bea8311e2820a3a8f"
+    },
+    {
+      "assertionOrdinals": [
+        1
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"highlights open triggers via the popover data-state attribute\", () => {\r\n    expect(source).toContain('[data-state=\"open\"]');\r\n  })",
+      "id": "SC-000333",
+      "invariant": "An open toolbar popover exposes its active trigger state.",
+      "policyFacts": {
+        "classificationRule": "The declaration pins the exact open-state selector string rather than independently observing the trigger's active state.",
+        "finalClass": "D2_IMPLEMENTATION_SHAPE"
+      },
+      "sourceHash": "c8de76024f284ed0eb55fe865eed998b865783e98b96c7ca7eb3645f868250e0"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:vitest:src/lib/components/research-projects/ResearchProjectsShell.behavior.test.ts#ResearchProjectsShell > forwards source row activation to the grid",
+          "mechanism": "node",
+          "capability": "ResearchProjectsShell > forwards source row activation to the grid",
+          "status": "future"
+        }
+      ],
+      "declaration": "it(\"passes row activation through to the sources grid\", () => {\r\n    expect(shellSource).toContain(\"{activeSourceId}\");\r\n    expect(shellSource).toContain(\"{onActivateSource}\");\r\n  })",
+      "id": "SC-000335",
+      "invariant": "Activating a source row is forwarded from the project shell to the sources grid.",
+      "policyFacts": {},
+      "sourceHash": "9f5ea67a1d856c87137c0b00c038f67ea958017f652b744b64a6c337283bba9f"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "candidateOwners": [
+        {
+          "id": "test:playwright:e2e/research-projects-sources-filter-row.spec.ts#filters-available-across-responsive-layouts",
+          "mechanism": "playwright",
+          "capability": "filters-available-across-responsive-layouts",
+          "status": "approved-future",
+          "normativeSource": "TESTING_BROWSER_COMPONENT_OWNERSHIP"
+        }
+      ],
+      "declaration": "it(\"keeps filter controls aligned with responsive source-table breakpoints\", () => {\r\n    expect(source).toContain(\"@container sources (max-width: 760px)\");\r\n    expect(source).toContain(\"var(--sources-filter-template-760)\");\r\n    expect(source).toContain(\"@container sources (max-width: 600px)\");\r\n    expect(source).toContain(\"var(--sources-filter-template-600)\");\r\n    expect(source).toContain(\"@container sources (max-width: 460px)\");\r\n    expect(source).toContain(\"var(--sources-filter-template-460)\");\r\n  })",
+      "id": "SC-000344",
+      "invariant": "Source filters stay available at each supported responsive table layout.",
+      "policyFacts": {},
+      "sourceHash": "6e33f0cdc0cd45ad19034a693eb7a80010f35a00fc2b55140471bd5d6b878b09"
+    },
+    {
+      "assertionOrdinals": [
+        1,
+        2,
+        3
+      ],
+      "candidateOwners": [],
+      "declaration": "it(\"right-aligns the materials column via columnStyle (svar has no column align)\", () => {\r\n    expect(source).toContain(\"{columnStyle}\");\r\n    expect(source).toContain('\"materialsLabel\"');\r\n    expect(source).toContain(\"extractum-grid-cell-right\");\r\n  })",
+      "id": "SC-000349",
+      "invariant": "The exact materials-column alignment mechanism is a styling implementation detail with no independent contract.",
+      "policyFacts": {},
+      "sourceHash": "14af1dda1db6f9d06231d7945b7ca15a0d04f8f87bd72f0372eaa28898b35068"
+    }
+  ]
+}

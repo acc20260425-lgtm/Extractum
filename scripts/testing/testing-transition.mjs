@@ -292,6 +292,8 @@ export async function validateLiveRunnerCensus(repoRoot, census) {
   return {
     issues: validateRunnerCensus({ census, filesystemFiles: discovered.files, vitestFiles, playwrightFiles, runnerIssues }),
     summary: `Runner census: ${discovered.files.length} filesystem candidates, ${vitestCount} Vitest files, ${playwrightCount} Playwright files`,
+    vitestFiles,
+    playwrightFiles,
   };
 }
 

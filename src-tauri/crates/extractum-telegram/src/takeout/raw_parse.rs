@@ -240,11 +240,7 @@ fn extract_raw_telegram_context(message: &tl::types::Message) -> TelegramItemCon
 }
 
 fn raw_message_identity(message: &tl::types::Message) -> TelegramMessageIdentity {
-    let (history_peer_kind, history_peer_id) = match &message.peer_id {
-        tl::enums::Peer::User(peer) => ("user", peer.user_id),
-        tl::enums::Peer::Chat(peer) => ("chat", peer.chat_id),
-        tl::enums::Peer::Channel(peer) => ("channel", peer.channel_id),
-    };
+    let (history_peer_kind, history_peer_id) = takeout_peer_identity(&message.peer_id);
 
     TelegramMessageIdentity {
         history_peer_kind: history_peer_kind.to_string(),
@@ -252,6 +248,14 @@ fn raw_message_identity(message: &tl::types::Message) -> TelegramMessageIdentity
         telegram_message_id: i64::from(message.id),
         migration_domain: None,
         is_migrated_history: false,
+    }
+}
+
+fn takeout_peer_identity(peer: &tl::enums::Peer) -> (&'static str, i64) {
+    match peer {
+        tl::enums::Peer::User(peer) => ("user", peer.user_id),
+        tl::enums::Peer::Chat(peer) => ("chat", peer.chat_id),
+        tl::enums::Peer::Channel(peer) => ("channel", peer.channel_id),
     }
 }
 
@@ -367,7 +371,7 @@ pub(super) fn messages_response_count(response: tl::enums::messages::Messages) -
 
 #[cfg(test)]
 mod tests {
-    use super::parse_raw_message;
+    use super::{parse_raw_message, takeout_peer_identity};
     use grammers_client::tl;
 
     fn peer_channel(channel_id: i64) -> tl::enums::Peer {
@@ -440,6 +444,35 @@ mod tests {
         message.peer_id = peer_id;
         message.message = text.to_string();
         message
+    }
+
+    #[test]
+    fn takeout_peer_identity_maps_user_chat_and_channel() {
+        let message_id = i32::MAX;
+        let cases = [
+            (peer_user(101), "user", 101_i64),
+            (tl::types::PeerChat { chat_id: 202 }.into(), "chat", 202_i64),
+            (peer_channel(303), "channel", 303_i64),
+        ];
+
+        for (peer, expected_kind, expected_peer_id) in cases {
+            assert_eq!(
+                takeout_peer_identity(&peer),
+                (expected_kind, expected_peer_id)
+            );
+            let item = parse_raw_message(
+                &None,
+                takeout_raw_message_for_identity_test(message_id, peer, expected_kind),
+            )
+            .expect("parse raw Takeout message")
+            .expect("message draft");
+            let identity = item.telegram_identity.expect("native Telegram identity");
+            let retained_message_id: i64 = identity.telegram_message_id;
+
+            assert_eq!(identity.history_peer_kind, expected_kind);
+            assert_eq!(identity.history_peer_id, expected_peer_id);
+            assert_eq!(retained_message_id, i64::from(message_id));
+        }
     }
 
     #[test]
