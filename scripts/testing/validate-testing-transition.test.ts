@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import ts from "typescript";
+import { listen, once } from "@tauri-apps/api/event";
 
 import { VITEST_PROJECT_DEFINITIONS } from "../../vitest.config";
 import runnerCensus from "../../testing/runner-census.json";
+import { installTauriScenario } from "../../e2e/fixtures/tauri";
 
 import {
   buildLedgerDraft,
@@ -51,6 +53,89 @@ function check(overrides: Record<string, unknown> = {}) {
 }
 
 describe("runner census validation", () => {
+  it("app and adapter census fixtures are clean and diagnose an app collision exactly", () => {
+    const appAndAdapterCensus = {
+      schemaVersion: 1,
+      vitestOwners: [{ id: "vitest:unit-node", args: ["--project", "unit-node"], ownerScript: "test:unit" }],
+      playwrightOwners: [
+        { id: "playwright:gemini-browser-adapter", config: "research/gemini_browser_adapter/playwright.config.ts", ownerScript: "test:gemini-browser-adapter:e2e" },
+        { id: "playwright:app-e2e", config: "e2e/playwright.config.ts", ownerScript: "test:app:e2e" },
+      ],
+      nonstandardTests: [],
+      fixtureExceptions: [],
+    };
+    const cleanFixture = {
+      census: appAndAdapterCensus,
+      filesystemFiles: ["src/unit.test.ts", "research/gemini_browser_adapter/tests/adapter.spec.ts", "e2e/smoke.spec.ts"],
+      vitestFiles: { "vitest:unit-node": ["src/unit.test.ts"] },
+      playwrightFiles: {
+        "playwright:gemini-browser-adapter": ["research/gemini_browser_adapter/tests/adapter.spec.ts"],
+        "playwright:app-e2e": ["e2e/smoke.spec.ts"],
+      },
+    };
+
+    expect(validateRunnerCensus(cleanFixture)).toEqual([]);
+    expect(validateRunnerCensus({
+      ...cleanFixture,
+      vitestFiles: { "vitest:unit-node": ["src/unit.test.ts", "e2e/smoke.spec.ts"] },
+    })).toContain("duplicate ownership: e2e/smoke.spec.ts -> playwright:app-e2e, vitest:unit-node");
+  });
+
+  it("tauri fixture protocol delivers configured events and removes callback registrations", async () => {
+    const addInitScript = vi.fn(async (installer: (scenario: unknown) => void, scenario: unknown) => installer(scenario));
+    vi.stubGlobal("window", {});
+
+    try {
+      await installTauriScenario({ addInitScript } as never, {
+        invokes: { configured_command: { configured: true } },
+        events: {
+          progress: ["first", "second"],
+          complete: ["once", "ignored"],
+          manual_once: ["first", "ignored"],
+        },
+      });
+
+      const internals = (window as typeof window & { __TAURI_INTERNALS__: {
+        invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+        transformCallback(callback: (event: unknown) => void, once?: boolean): number;
+      } }).__TAURI_INTERNALS__;
+      const transformCallback = internals.transformCallback.bind(internals);
+      const callbackIds: number[] = [];
+      internals.transformCallback = (callback, once = false) => {
+        const callbackId = transformCallback(callback, once);
+        callbackIds.push(callbackId);
+        return callbackId;
+      };
+      const callbackId = internals.transformCallback(() => {});
+
+      expect(await internals.invoke("plugin:event|listen", { event: "manual", handler: callbackId })).toBe(callbackId);
+      expect(await internals.invoke("configured_command")).toEqual({ configured: true });
+      await expect(internals.invoke("unknown_command")).rejects.toThrow("Unexpected Tauri command: unknown_command");
+
+      const manualOnce = vi.fn();
+      const manualOnceId = internals.transformCallback(manualOnce, true);
+      await internals.invoke("plugin:event|listen", { event: "manual_once", handler: manualOnceId });
+
+      const progress: unknown[] = [];
+      const unlistenProgress = await listen("progress", (event) => progress.push(event.payload));
+      const progressCallbackId = callbackIds.at(-1);
+      const complete: unknown[] = [];
+      await once("complete", (event) => complete.push(event.payload));
+      await Promise.resolve();
+
+      expect(progress).toEqual(["first", "second"]);
+      expect(complete).toEqual(["once"]);
+      expect(manualOnce).toHaveBeenCalledTimes(1);
+
+      await unlistenProgress();
+      await internals.invoke("plugin:event|listen", { event: "progress", handler: progressCallbackId });
+      await Promise.resolve();
+      expect(progress).toEqual(["first", "second"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("application Playwright owner is the sole owner for app e2e candidates", () => {
     const playwrightOwners = runnerCensus.playwrightOwners as Array<{ id: string; config: string; ownerScript: string }>;
     const unitNode = VITEST_PROJECT_DEFINITIONS.find((definition) => definition.name === "unit-node");

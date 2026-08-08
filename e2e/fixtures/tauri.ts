@@ -9,32 +9,47 @@ export async function installTauriScenario(page: Page, scenario: TauriScenario =
   await page.addInitScript(({ invokes = {}, events = {} }) => {
     type TauriEvent = { event: string; id: number; payload: unknown };
 
-    const callbacks = new Map<number, (event: TauriEvent) => void>();
+    const callbacks = new Map<number, { callback: (event: TauriEvent) => void; once: boolean }>();
     const listeners = new Map<number, { event: string; callbackId: number }>();
     let nextCallbackId = 1;
-    let nextListenerId = 1;
+
+    function removeListener(listenerId: number) {
+      const listener = listeners.get(listenerId);
+      listeners.delete(listenerId);
+      if (listener) callbacks.delete(listener.callbackId);
+    }
+
+    function runCallback(callbackId: number, event: TauriEvent) {
+      const entry = callbacks.get(callbackId);
+      if (!entry) return;
+      entry.callback(event);
+      if (entry.once) callbacks.delete(callbackId);
+    }
 
     const internals = {
       async invoke(command: string, args: Record<string, unknown> = {}) {
         if (command === "plugin:event|listen") {
-          const listenerId = nextListenerId++;
           const event = String(args.event);
           const callbackId = Number(args.handler);
+          const listenerId = callbackId;
           listeners.set(listenerId, { event, callbackId });
           queueMicrotask(() => {
             for (const payload of events[event] ?? []) {
-              callbacks.get(callbackId)?.({ event, id: listenerId, payload });
+              runCallback(callbackId, { event, id: listenerId, payload });
             }
           });
-          return listenerId;
+          return callbackId;
         }
-        if (command === "plugin:event|unlisten") return undefined;
+        if (command === "plugin:event|unlisten") {
+          removeListener(Number(args.eventId));
+          return undefined;
+        }
         if (!Object.hasOwn(invokes, command)) throw new Error(`Unexpected Tauri command: ${command}`);
         return invokes[command];
       },
-      transformCallback(callback: (event: TauriEvent) => void) {
+      transformCallback(callback: (event: TauriEvent) => void, once = false) {
         const callbackId = nextCallbackId++;
-        callbacks.set(callbackId, callback);
+        callbacks.set(callbackId, { callback, once });
         return callbackId;
       },
       unregisterCallback(callbackId: number) {
@@ -46,7 +61,7 @@ export async function installTauriScenario(page: Page, scenario: TauriScenario =
     Object.defineProperty(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
       value: {
         unregisterListener(_event: string, listenerId: number) {
-          listeners.delete(listenerId);
+          removeListener(listenerId);
         },
       },
       configurable: true,
