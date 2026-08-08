@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { matchesGlob } from "node:path";
 import ts from "typescript";
 import packageJson from "../../package.json";
 import sourceContractLedger from "../../testing/source-contract-ledger.json";
@@ -71,6 +72,17 @@ function directTextReaderViolations(sources: Record<string, string>) {
 
 function componentTestEntries(sources: Record<string, string>) {
   return Object.entries(sources).filter(([testPath]) => testPath.endsWith(".component.test.ts"));
+}
+
+function projectOwnerNames(projects: readonly ProjectConvention[], testPath: string) {
+  return projects
+    .filter((project) => (project.include ?? []).some((pattern) => matchesGlob(testPath, pattern)))
+    .filter((project) => !(project.exclude ?? []).some((pattern) => matchesGlob(testPath, pattern)))
+    .map(({ name }) => name);
+}
+
+function expectProjectOwners(projects: readonly ProjectConvention[], testPath: string, expectedOwners: readonly string[]) {
+  expect(projectOwnerNames(projects, testPath)).toEqual(expectedOwners);
 }
 
 const expectedComponentSetupSource = [
@@ -163,9 +175,18 @@ describe("test conventions", () => {
 
     expect(componentProject?.include).toContain(componentBehaviorPattern);
     expect(unitNodeProject?.exclude).toContain(componentBehaviorPattern);
-    expect(componentBehaviorPattern).toMatch(/^src\/lib\/components\/.*\.behavior\.test\.ts$/);
-    expect("src/lib/telegram-checkpoint-2.behavior.test.ts").not.toMatch(/^src\/lib\/components\//);
-    expect("src/lib/telegram-contract-paths.behavior.test.ts").not.toMatch(/^src\/lib\/components\//);
+    expectProjectOwners(projectConventions, "src/lib/components/example.behavior.test.ts", ["component"]);
+    expectProjectOwners(projectConventions, "src/lib/telegram-checkpoint-2.behavior.test.ts", ["unit-node"]);
+    expectProjectOwners(projectConventions, "src/lib/telegram-contract-paths.behavior.test.ts", ["unit-node"]);
+  });
+
+  it("rejects component behavior ownership when another project overlaps it", () => {
+    const componentBehaviorPath = "src/lib/components/example.behavior.test.ts";
+    const overlappingProjects: readonly ProjectConvention[] = [
+      ...projectConventions,
+      { name: "overlap", include: ["src/lib/components/**/*.behavior.test.ts"] },
+    ];
+    expect(() => expectProjectOwners(overlappingProjects, componentBehaviorPath, ["component"])).toThrow();
   });
 
   it("keeps Chromium launch ownership out of Vitest test sources", () => {
