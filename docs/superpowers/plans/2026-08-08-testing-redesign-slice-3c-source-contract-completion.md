@@ -230,7 +230,7 @@ src/lib/rust-workspace-core-contract.test.ts
 src/lib/youtube-summary-smoke-fixture-contract.test.ts
 ```
 
-**Interfaces:** Closes exactly 23 components, 23 files, and 70 delete rows. Creates no replacement and changes no ledger metadata.
+**Interfaces:** Closes exactly 23 components, 23 files, and 70 delete rows. Creates no replacement. This batch has one narrowly authorized ledger-envelope cleanup: remove only the top-level `sourceReaderExceptions` tuple for `src/lib/analysis-migration-fixture-contract.test.ts` at `14:13-14:74`, after its legacy reader file is deleted. The redisposition carrier must fail closed: this sole base exception may be absent only when its exact reader path is absent from the live current-present tracked-path set; it rejects a present path, any other exception addition/removal/mutation/reordering, and any `rows[]` change.
 
 - [ ] **Step 1: Verify the deletion-only precondition**
 
@@ -238,7 +238,7 @@ Run a read-only Node assertion that every decision belonging to the 23 paths abo
 
 - [ ] **Step 2: Delete the files**
 
-Delete only the 23 exact paths above using the executor's normal file-edit mechanism. Do not edit the ledger.
+Delete only the 23 exact paths above using the executor's normal file-edit mechanism. Then remove only the authorized top-level source-reader-exception tuple described above; preserve every `rows[]` byte and every other ledger-envelope field.
 
 - [ ] **Step 3: Validate the free closure**
 

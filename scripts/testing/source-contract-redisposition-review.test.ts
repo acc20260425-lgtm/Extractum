@@ -9,6 +9,7 @@ import {
   deriveTailFamilyManifests,
   loadBaseLedger,
   loadBaseTrackedPaths,
+  loadCurrentPresentTrackedPaths,
   loadReviewEvidence,
   resolutionForDecision,
   sha256Text,
@@ -1093,6 +1094,59 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: badDigest }))).toContain("scope: closedRowsDigest mismatch");
     const badEnvelope = clone(baseLedger); badEnvelope.sourceReaderExceptions.push({ path: "src/x", sourceRange: "1:1-1:2", reason: "x", owner: "x" });
     expect(validateReview(review({ currentLedger: badEnvelope }))).toContain("ledger: sourceReaderExceptions changed");
+  });
+
+  it("allows only the deletion-coupled removal of the exact sole source-reader exception after its reader path is absent", () => {
+    const exactException = {
+      path: "src/lib/analysis-migration-fixture-contract.test.ts",
+      sourceRange: "14:13-14:74",
+      reason: "test-only migration schema candidates are intentional fixture authorities",
+      owner: "analysis migration fixture contract",
+    };
+    const lifecycleBase = clone(baseLedger);
+    lifecycleBase.sourceReaderExceptions = [exactException];
+    const absentPaths = new Set(baseTrackedPaths);
+    absentPaths.delete(exactException.path);
+    const presentPaths = new Set([...baseTrackedPaths, exactException.path]);
+    const removed = clone(lifecycleBase);
+    removed.sourceReaderExceptions = [];
+    expect(validateReview(review({ baseLedger: lifecycleBase, currentLedger: removed, currentPresentPaths: absentPaths }))).toEqual([]);
+
+    expect(validateReview(review({ baseLedger: lifecycleBase, currentLedger: removed, currentPresentPaths: presentPaths }))).toContain("ledger: sourceReaderExceptions changed");
+
+    const added = clone(lifecycleBase);
+    added.sourceReaderExceptions.push({ ...exactException, path: "src/other-reader.test.ts" });
+    expect(validateReview(review({ baseLedger: lifecycleBase, currentLedger: added, currentPresentPaths: absentPaths }))).toContain("ledger: sourceReaderExceptions changed");
+
+    const mutated = clone(lifecycleBase);
+    mutated.sourceReaderExceptions[0].owner = "mutated owner";
+    expect(validateReview(review({ baseLedger: lifecycleBase, currentLedger: mutated, currentPresentPaths: absentPaths }))).toContain("ledger: sourceReaderExceptions changed");
+
+    const reorderedBase = clone(baseLedger);
+    reorderedBase.sourceReaderExceptions = [exactException, { ...exactException, path: "src/other-reader.test.ts" }];
+    const reordered = clone(reorderedBase);
+    reordered.sourceReaderExceptions.reverse();
+    expect(validateReview(review({ baseLedger: reorderedBase, currentLedger: reordered, currentPresentPaths: absentPaths }))).toContain("ledger: sourceReaderExceptions changed");
+
+    const rowMutation = clone(removed);
+    rowMutation.rows[0].replacementIds = ["test:vitest:src/mutated.test.ts#owner"];
+    expect(validateReview(review({ baseLedger: lifecycleBase, currentLedger: rowMutation, currentPresentPaths: absentPaths }))).toContain("ledger: rows changed outside approved review apply");
+  });
+
+  it("treats only ENOENT as a missing tracked path and reports every other access failure", async () => {
+    const denied = Object.assign(new Error("access denied"), { code: "EACCES" });
+    await expect(loadCurrentPresentTrackedPaths({
+      repoRoot: process.cwd(),
+      trackedPaths: ["src/protected-reader.test.ts"],
+      accessFile: async () => { throw denied; },
+    })).rejects.toThrow("src/protected-reader.test.ts");
+
+    const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
+    await expect(loadCurrentPresentTrackedPaths({
+      repoRoot: process.cwd(),
+      trackedPaths: ["src/missing-reader.test.ts"],
+      accessFile: async () => { throw missing; },
+    })).resolves.toEqual(new Set());
   });
 
   it("requires current open resolutions to remain all-or-nothing before or after apply", () => {

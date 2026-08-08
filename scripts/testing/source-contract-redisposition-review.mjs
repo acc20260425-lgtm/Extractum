@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REVIEW_BASE_COMMIT = "a54507d63420bb870c3870c91d7e22b050abae3e";
 const PATH_PRESENT_CLOSED_ROW_IDS = ["SC-000355", "SC-000366"];
+const DELETION_COUPLED_SOURCE_READER_EXCEPTION = {
+  path: "src/lib/analysis-migration-fixture-contract.test.ts",
+  sourceRange: "14:13-14:74",
+  reason: "test-only migration schema candidates are intentional fixture authorities",
+  owner: "analysis migration fixture contract",
+};
 const MANDATORY_P0_SEED_IDS = ["SC-000420", "SC-000511", "SC-000512", "SC-000513", "SC-000514", "SC-000515", "SC-000555", "SC-000556", "SC-000557", "SC-000558", "SC-000559", "SC-000560"];
 const APPROVED_PLAYWRIGHT_OWNERS = new Map([
   ["SC-000312", "test:playwright:e2e/app-shell-responsive.spec.ts#mobile-menu-trigger-responsive-visibility"],
@@ -349,8 +355,29 @@ function resolutionOnly(row) {
 }
 
 function envelopeWithoutRows(ledger) {
-  const { rows, ...envelope } = ledger ?? {};
+  const { rows, sourceReaderExceptions, ...envelope } = ledger ?? {};
   return envelope;
+}
+
+function validateSourceReaderExceptionLifecycle({ baseLedger, currentLedger, currentPresentPaths }) {
+  const baseExceptions = baseLedger?.sourceReaderExceptions;
+  const currentExceptions = currentLedger?.sourceReaderExceptions;
+  if (!Array.isArray(baseExceptions) || !Array.isArray(currentExceptions)) return ["ledger: sourceReaderExceptions changed"];
+
+  const exactBaseException = [DELETION_COUPLED_SOURCE_READER_EXCEPTION];
+  if (canonicalJson(baseExceptions) !== canonicalJson(exactBaseException)) {
+    return canonicalJson(baseExceptions) === canonicalJson(currentExceptions) ? [] : ["ledger: sourceReaderExceptions changed"];
+  }
+
+  if (canonicalJson(currentExceptions) === canonicalJson(exactBaseException)) return [];
+  if (!(currentPresentPaths instanceof Set)) return ["ledger: sourceReaderExceptions changed"];
+  const present = new Set([...currentPresentPaths].map(normalizedPath));
+  const expectedExceptions = present.has(DELETION_COUPLED_SOURCE_READER_EXCEPTION.path)
+    ? exactBaseException
+    : [];
+  return canonicalJson(currentExceptions) === canonicalJson(expectedExceptions)
+    ? []
+    : ["ledger: sourceReaderExceptions changed"];
 }
 
 function baseOpenIdsFor(baseLedger, baseTrackedPaths) {
@@ -1416,13 +1443,13 @@ function validateCommittedReviewEvidence({ artifact, baseLedger, resolvedOwners,
  * Validate a proposed artifact against its immutable review-base ledger.
  * The base-open set is derived from the review-base tracked paths, never from decisions.
  */
-export function validateReview({ artifact, baseLedger, currentLedger, baseTrackedPaths, evidenceBytes } = {}) {
+export function validateReview({ artifact, baseLedger, currentLedger, baseTrackedPaths, currentPresentPaths, evidenceBytes } = {}) {
   const issues = [];
   if (!artifact || !baseLedger || !currentLedger || !Array.isArray(baseLedger.rows) || !Array.isArray(currentLedger.rows)) return ["invalid review input"];
   if (artifact.schemaVersion !== 1) issues.push("artifact: schemaVersion must be 1");
   if (artifact.reviewBaseCommit !== REVIEW_BASE_COMMIT) issues.push(`artifact: reviewBaseCommit must be ${REVIEW_BASE_COMMIT}`);
   if (artifact.ledgerFrozenAtCommit !== baseLedger.frozenAtCommit) issues.push("artifact: ledgerFrozenAtCommit must equal base ledger frozenAtCommit");
-  if (canonicalJson(baseLedger.sourceReaderExceptions) !== canonicalJson(currentLedger.sourceReaderExceptions)) issues.push("ledger: sourceReaderExceptions changed");
+  issues.push(...validateSourceReaderExceptionLifecycle({ baseLedger, currentLedger, currentPresentPaths }));
   if (canonicalJson(envelopeWithoutRows(baseLedger)) !== canonicalJson(envelopeWithoutRows(currentLedger))) issues.push("ledger: immutable envelope field changed");
 
   const declaredExceptions = artifact.scope?.pathPresentClosedRowIds;
@@ -1483,6 +1510,10 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const currentOpenResolutions = baseLedger.rows.filter((row) => baseOpenIds.has(row.id)).map((row) => resolutionOnly(currentById.get(row.id)));
   const fullyAppliedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger, baseTrackedPaths: tracked }).ledger;
   const fullyAppliedOpenResolutions = fullyAppliedLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
+  if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
+    && canonicalJson(currentLedger.rows) !== canonicalJson(fullyAppliedLedger.rows)) {
+    issues.push("ledger: rows changed outside approved review apply");
+  }
   if (canonicalJson(currentOpenResolutions) !== canonicalJson(baseOpenResolutions)
     && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)) {
     issues.push("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
@@ -1733,6 +1764,24 @@ export async function loadBaseTrackedPaths({ repoRoot, commit }) {
   return new Set(output.split(/\r?\n/).filter(Boolean).map(normalizedPath));
 }
 
+export async function loadCurrentPresentTrackedPaths({ repoRoot, trackedPaths, accessFile = access } = {}) {
+  const currentTrackedPaths = Array.isArray(trackedPaths)
+    ? trackedPaths.map(normalizedPath)
+    : execFileSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf8", shell: false, windowsHide: true })
+      .split("\0").filter(Boolean).map(normalizedPath);
+  const presentPaths = await Promise.all(currentTrackedPaths.map(async (trackedPath) => {
+    try {
+      await accessFile(path.join(repoRoot, trackedPath));
+      return trackedPath;
+    } catch (error) {
+      if (error?.code === "ENOENT") return undefined;
+      const cause = error instanceof Error ? error.message : String(error);
+      throw new Error(`tracked path access failed for ${trackedPath}: ${cause}`, { cause: error });
+    }
+  }));
+  return new Set(presentPaths.filter(Boolean));
+}
+
 function report(artifact, baseLedger, changedPaths) {
   const decisions = [...(artifact.decisions ?? [])].sort((left, right) => compareId(left.id, right.id));
   const pathById = new Map((baseLedger.rows ?? []).map((row) => [row.id, row.path]));
@@ -1763,10 +1812,11 @@ async function runCli() {
     process.exitCode = 1;
     return;
   }
-  const [baseLedger, baseTrackedPaths, currentLedger, evidence] = await Promise.all([
+  const [baseLedger, baseTrackedPaths, currentLedger, currentPresentPaths, evidence] = await Promise.all([
     loadBaseLedger({ repoRoot, commit: artifact.reviewBaseCommit }),
     loadBaseTrackedPaths({ repoRoot, commit: artifact.reviewBaseCommit }),
     readFile(ledgerPath, "utf8").then(JSON.parse),
+    loadCurrentPresentTrackedPaths({ repoRoot }),
     loadReviewEvidence({ repoRoot, artifact }),
   ]);
   if (evidence.issues.length) {
@@ -1774,7 +1824,7 @@ async function runCli() {
     process.exitCode = 1;
     return;
   }
-  const input = { artifact, baseLedger, currentLedger, baseTrackedPaths, evidenceBytes: evidence.evidenceBytes };
+  const input = { artifact, baseLedger, currentLedger, baseTrackedPaths, currentPresentPaths, evidenceBytes: evidence.evidenceBytes };
   const issues = validateReview(input);
   if (issues.length) {
     for (const issue of issues) process.stderr.write(`${issue}\n`);

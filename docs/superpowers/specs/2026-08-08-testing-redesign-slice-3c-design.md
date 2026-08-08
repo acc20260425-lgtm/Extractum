@@ -118,7 +118,15 @@ second Cargo-evidence path. The final complete `verify` still runs only once.
 ## Replacement and Cutover Contract
 
 The pre-Slice 3C cutover already applied every final resolution to the ledger.
-Slice 3C therefore does not ordinarily edit ledger resolution metadata. Its
+Slice 3C therefore does not ordinarily edit ledger resolution metadata. Wave 0
+has one approved deletion-coupled envelope cleanup: once
+`src/lib/analysis-migration-fixture-contract.test.ts` is absent, remove only
+its top-level `sourceReaderExceptions` tuple at `14:13-14:74`. The carrier
+derives a live current-present set from tracked paths whose files exist in the
+worktree and fails closed unless that exact sole base tuple is absent only when
+that exact reader path is absent; it rejects a present reader path, any other
+exception addition/removal/mutation/reordering, and any `rows[]` change. This
+does not alter a row resolution, class, invariant, or deletion reason. Its
 data flow is:
 
 ```text
