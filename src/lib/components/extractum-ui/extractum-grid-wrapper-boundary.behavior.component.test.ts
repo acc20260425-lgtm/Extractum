@@ -15,11 +15,11 @@ import DataGrid from "./DataGrid.svelte";
 import GridSelectCell from "./GridSelectCell.svelte";
 import TreeDataGrid from "./TreeDataGrid.svelte";
 
-afterEach(() => cleanup());
+afterEach(cleanup);
 
 it("SVAR grid APIs stay inside Extractum wrappers", async () => {
   const selected: string[][] = [];
-  render(DataGrid, {
+  const dataView = render(DataGrid, {
     rows: [{ id: "row-1", connectable: false, alreadyConnected: true, status: "ready", createdAt: "2026-08-08T12:34:00Z" }],
     columns: [{ id: "createdAt", header: "Created", dateTimeFormat: "datetime" }],
     selectedRowIds: ["1"],
@@ -41,13 +41,13 @@ it("SVAR grid APIs stay inside Extractum wrappers", async () => {
   await fireEvent.click(screen.getByRole("button", { name: "Select first grid row" }));
   expect(selected).toEqual([["row-1"]]);
 
-  cleanup();
-  render(DataGrid, { rows: [], columns: [], overlay: "Empty grid" });
+  dataView.unmount();
+  const emptyView = render(DataGrid, { rows: [], columns: [], overlay: "Empty grid" });
   expect(screen.getByTestId("svar-grid").dataset.overlay).toBe("Empty grid");
 
-  cleanup();
+  emptyView.unmount();
   const treeSelected: Array<string | null> = [];
-  render(TreeDataGrid, {
+  const treeView = render(TreeDataGrid, {
     rows: [{ id: "tree-1", label: "Tree" }],
     selectedRowId: "tree-1",
     onSelectedRowIdChange: (id) => treeSelected.push(id),
@@ -64,7 +64,7 @@ it("SVAR grid APIs stay inside Extractum wrappers", async () => {
   await fireEvent.click(screen.getByRole("button", { name: "Select first grid row" }));
   expect(treeSelected).toEqual(["tree-1"]);
 
-  cleanup();
+  treeView.unmount();
   const api = {
     exec: vi.fn(),
     getReactiveState: () => ({ selectedRows: { subscribe: (fn: (ids: string[]) => void) => {

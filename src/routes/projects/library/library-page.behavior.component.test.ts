@@ -9,10 +9,8 @@ vi.mock("$lib/components/research-projects/LibraryScreen.svelte", async () => ({
 
 import LibraryPage from "./+page.svelte";
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
+afterEach(cleanup);
+afterEach(() => vi.clearAllMocks());
 
 describe("library prototype contract", () => {
   it("renders Library as a separate route backed by the current workflow", async () => {

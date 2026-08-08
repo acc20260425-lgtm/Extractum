@@ -209,6 +209,7 @@ describe("test conventions", () => {
       "rule:analysis-source-group-activity-boundary",
       "rule:analysis-source-group-tab-leaf-boundary",
       "rule:analysis-source-reader-surface-composition",
+      "rule:extractum-grid-wrapper-boundary",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
       "rule:telegram-phase-8b-authority-integrity",
@@ -251,6 +252,8 @@ describe("test conventions", () => {
     expect(VITEST_PROJECT_DEFINITIONS.every(({ exclude }) => exclude.includes("**/node_modules/**"))).toBe(true);
 
     expect(LEGACY_TEST_FILES).toEqual([
+      "scripts/process-shell-diagnostic/git-state.test.ts",
+      "scripts/process-shell-diagnostic/report.test.ts",
       "scripts/run-vitest.test.ts",
       "scripts/testing/run-observation.test.ts",
       "scripts/testing/slice-1-baseline.test.ts",

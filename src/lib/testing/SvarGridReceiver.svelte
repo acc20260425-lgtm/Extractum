@@ -72,12 +72,15 @@
   const api = { getState, getReactiveState, exec, intercept, getRow };
   onMount(() => init?.(api));
 
-  function selectFirstRow() {
-    const id = String(data[0]?.id ?? "");
+  function selectRow(id: string) {
     if (!id || interceptors.get("select-row")?.({ id }) === false) return;
     selectedRows = [id];
     subscribers.forEach((subscriber) => subscriber(selectedRows));
     onselectrow?.();
+  }
+
+  function selectFirstRow() {
+    selectRow(String(data[0]?.id ?? ""));
   }
 
   let columnShape = $derived(columns.map((column: Column) => ({
@@ -105,4 +108,9 @@
   <output aria-label="Formatted grid date">{formattedDate}</output>
   <output aria-label="Executed grid action">{executed}</output>
   <button type="button" onclick={selectFirstRow}>Select first grid row</button>
+  {#each data as row (String(row.id))}
+    <button type="button" onclick={() => selectRow(String(row.id))}>
+      Select grid row {String(row.id)}
+    </button>
+  {/each}
 </div>

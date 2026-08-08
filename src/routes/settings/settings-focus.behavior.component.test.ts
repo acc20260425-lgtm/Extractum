@@ -21,8 +21,8 @@ beforeEach(() => {
   api.listLlmProviderModels.mockResolvedValue([]);
   api.listenToLlmResponses.mockResolvedValue(() => {});
 });
+afterEach(cleanup);
 afterEach(() => {
-  cleanup();
   localStorage.clear();
   vi.clearAllMocks();
 });

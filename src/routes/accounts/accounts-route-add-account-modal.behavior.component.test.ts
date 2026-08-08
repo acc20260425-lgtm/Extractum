@@ -27,10 +27,8 @@ beforeEach(() => {
   api.getAccountRuntimeStatuses.mockResolvedValue([]);
   api.listenToAccountRuntimeStatus.mockResolvedValue(() => {});
 });
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
+afterEach(cleanup);
+afterEach(() => vi.clearAllMocks());
 
 describe("accounts route add-account modal", () => {
   it("keeps the account creation form behind a configured-accounts header action", async () => {

@@ -40,7 +40,7 @@ async function waitForPidFile(file: string) {
 }
 
 describe("runObservedCommand", () => {
-  it.runIf(process.platform === "win32")("does not resolve until a real child and grandchild are dead", async () => {
+  it("does not resolve until a real child and grandchild are dead", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "extractum-observer-tree-"));
     roots.push(repoRoot);
     const pidFile = path.join(repoRoot, "tree.pid");

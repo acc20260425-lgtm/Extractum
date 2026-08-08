@@ -52,8 +52,20 @@
   let modelLabel = $derived(selectedModel?.label ?? "Модель");
 
   let paramsOpen = $state(false);
+  let narrow = $state(false);
   let narrowSection = $state<"period" | "prompt" | "model" | null>(null);
   let wideOpen = $state<"period" | "prompt" | "model" | null>(null);
+
+  function observeToolbarWidth(node: HTMLElement) {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      narrow = (entry?.contentRect.width ?? node.getBoundingClientRect().width) <= 600;
+    });
+    observer.observe(node);
+    return {
+      destroy: () => observer.disconnect(),
+    };
+  }
 
   function setWideOpen(selector: "period" | "prompt" | "model", open: boolean) {
     if (open) {
@@ -83,12 +95,13 @@
   }
 </script>
 
-<div class="project-toolbar">
+<div class="project-toolbar" use:observeToolbarWidth>
   <div class="project-toolbar__heading">
     <span class="project-toolbar__eyebrow">Research project</span>
     <strong class="project-toolbar__title">{title}</strong>
   </div>
 
+  {#if !narrow}
   <div class="project-toolbar__wide">
     <PeriodPopover
       presets={periodPresets}
@@ -130,10 +143,13 @@
       {runLabel}
     </button>
   </div>
-
+  {:else}
   <div class="project-toolbar__narrow">
     <ExtractumPopover bind:open={paramsOpen}>
-      <ExtractumPopoverTrigger class="tb-trigger project-toolbar__params-trigger">
+      <ExtractumPopoverTrigger
+        class="tb-trigger project-toolbar__params-trigger"
+        aria-label="Параметры"
+      >
         <svg
           width="14"
           height="14"
@@ -256,6 +272,7 @@
       </svg>
     </button>
   </div>
+  {/if}
 </div>
 
 <style>
