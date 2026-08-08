@@ -28,6 +28,7 @@
     ariaDescribedby,
     smokeId,
     tabIndex,
+    element = $bindable(),
     className = "",
     onclick,
     children,
@@ -49,6 +50,7 @@
     ariaDescribedby?: string;
     smokeId?: string;
     tabIndex?: number;
+    element?: HTMLButtonElement;
     className?: string;
     onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
     children?: Snippet;
@@ -56,6 +58,7 @@
 </script>
 
 <button
+  bind:this={element}
   {id}
   {type}
   {role}

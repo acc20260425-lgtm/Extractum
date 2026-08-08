@@ -1,6 +1,7 @@
 <script lang="ts">
   import "$lib/styles/base.css";
   import { goto } from "$app/navigation";
+  import { tick } from "svelte";
   import { Activity, FolderKanban, LayoutDashboard, Library, ListChecks, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
@@ -15,6 +16,7 @@
   let theme = $state<"light" | "dark">("light");
   let sidebarCollapsed = $state(false);
   let mobileSidebarOpen = $state(false);
+  let mobileMenuTrigger = $state<HTMLButtonElement>();
   let uiMode = $state<"legacy" | "projects">("legacy");
 
   if (browser) {
@@ -63,12 +65,14 @@
   }
 
   function closeMobileSidebar() {
+    if (!mobileSidebarOpen) return;
     mobileSidebarOpen = false;
+    void tick().then(() => mobileMenuTrigger?.focus());
   }
 
   function handleShellKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
-      mobileSidebarOpen = false;
+      closeMobileSidebar();
     }
   }
 
@@ -206,6 +210,7 @@
       <div class="workspace-topbar">
         <div class="workspace-topbar-main">
           <Button
+            bind:element={mobileMenuTrigger}
             className="mobile-menu-button"
             variant="ghost"
             iconOnly

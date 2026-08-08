@@ -28,6 +28,7 @@ import {
 } from "./testing-transition.mjs";
 import {
   createLedgerLiveCensus,
+  collectPlaywrightReplacementEvidence,
   collectTrackedTestSources,
   collectTelegramCargoReplacementEvidence,
   evaluateTelegramCargoTestIdentityOwnership,
@@ -488,6 +489,55 @@ describe("live source-contract test discovery", () => {
       playwrightOwners: census.playwrightOwners,
       playwrightFiles: { "playwright:adapter": ["research/adapter/tests/e2e.spec.ts"] },
     });
+  });
+
+  it.each([
+    { name: "one exact declaration and owner", expected: true },
+    { name: "missing declaration", declarations: [], expected: false },
+    { name: "wrong declaration path", declarations: [{ path: "e2e/other.spec.ts", title: "responsive behavior", eligibility: "eligible" }], expected: false },
+    { name: "wrong declaration title", declarations: [{ path: "e2e/responsive.spec.ts", title: "other behavior", eligibility: "eligible" }], expected: false },
+    { name: "ineligible declaration", declarations: [{ path: "e2e/responsive.spec.ts", title: "responsive behavior", eligibility: "ineligible" }], expected: false },
+    { name: "duplicate declaration", declarations: [
+      { path: "e2e/responsive.spec.ts", title: "responsive behavior", eligibility: "eligible" },
+      { path: "e2e/responsive.spec.ts", title: "responsive behavior", eligibility: "eligible" },
+    ], expected: false },
+    { name: "missing owner", owners: [], files: {}, expected: false },
+    { name: "duplicate owner", owners: [
+      { id: "playwright:app-e2e", ownerScript: "test:app:e2e" },
+      { id: "playwright:duplicate", ownerScript: "test:duplicate:e2e" },
+    ], files: {
+      "playwright:app-e2e": ["e2e/responsive.spec.ts"],
+      "playwright:duplicate": ["e2e/responsive.spec.ts"],
+    }, verifySteps: [{ npmScript: "test:app:e2e" }, { npmScript: "test:duplicate:e2e" }], expected: false },
+    { name: "ungated owner", verifySteps: [], expected: false },
+  ])("resolves Playwright replacement evidence with exact cardinality: $name", ({
+    declarations,
+    owners,
+    files,
+    verifySteps,
+    expected,
+  }) => {
+    const replacementId = "test:playwright:e2e/responsive.spec.ts#responsive behavior";
+    const ledger = { rows: [{ replacementIds: [replacementId] }] };
+    const declarationInventory = declarations ?? [{
+      path: "e2e/responsive.spec.ts",
+      title: "responsive behavior",
+      eligibility: "eligible",
+    }];
+    const liveCensus = {
+      playwrightOwners: owners ?? [{
+        id: "playwright:app-e2e",
+        ownerScript: "test:app:e2e",
+      }],
+      playwrightFiles: files ?? { "playwright:app-e2e": ["e2e/responsive.spec.ts"] },
+    };
+
+    expect(collectPlaywrightReplacementEvidence({
+      ledger,
+      declarationInventory,
+      liveCensus,
+      verifySteps: verifySteps ?? [{ npmScript: "test:app:e2e" }],
+    })).toEqual(expected ? new Set([replacementId]) : new Set());
   });
 });
 

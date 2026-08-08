@@ -93,6 +93,37 @@ function ledgerReplacementIds(ledger) {
   ]);
 }
 
+export function collectPlaywrightReplacementEvidence({
+  ledger,
+  declarationInventory = [],
+  liveCensus = {},
+  verifySteps = [],
+}) {
+  const resolvedReplacementIds = new Set();
+  for (const id of ledgerReplacementIds(ledger)) {
+    if (!id.startsWith("test:playwright:")) continue;
+    const target = id.slice("test:playwright:".length);
+    const split = target.indexOf("#");
+    if (split < 1) continue;
+    const filePath = target.slice(0, split);
+    const title = target.slice(split + 1);
+    const declarations = declarationInventory.filter((candidate) =>
+      candidate.path === filePath
+      && candidate.title === title);
+    if (declarations.length !== 1 || declarations[0].eligibility !== "eligible") continue;
+    const owners = (liveCensus.playwrightOwners ?? []).filter((candidate) => {
+      const owned = candidate?.files ?? liveCensus.playwrightFiles?.[candidate?.id];
+      return Array.isArray(owned) && owned.includes(filePath);
+    });
+    if (owners.length !== 1) continue;
+    const [owner] = owners;
+    if (verifySteps.some((step) => step?.npmScript === owner.ownerScript)) {
+      resolvedReplacementIds.add(id);
+    }
+  }
+  return resolvedReplacementIds;
+}
+
 export function collectTrackedTestSources({
   root,
   tracked,
@@ -215,6 +246,12 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
   const index = createRepositoryIndex({ root });
   const resolvedReplacementIds = new Set();
   const evidenceIssues = [];
+  for (const id of collectPlaywrightReplacementEvidence({
+    ledger,
+    declarationInventory,
+    liveCensus,
+    verifySteps,
+  })) resolvedReplacementIds.add(id);
   for (const id of registeredRuleIds) {
     if (!referencedIds.has(id)) continue;
     const result = evaluateRule({ id, index });
