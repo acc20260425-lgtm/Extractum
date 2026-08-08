@@ -89,6 +89,18 @@ export function parseTomlSections(text) {
   return sections;
 }
 
+export async function validateGeneratedPatchFiles(files) {
+  for (const file of files) {
+    const patch = await readFile(file, "utf8");
+    if (
+      !patch.includes("diff --git a/src-tauri/Cargo.lock b/src-tauri/Cargo.lock")
+      || !/--- a\/src-tauri\/Cargo\.lock\r?\n\+\+\+ b\/src-tauri\/Cargo\.lock\r?\n@@ /.test(patch)
+    ) {
+      throw new Error(`${file} must carry a Cargo.lock text hunk`);
+    }
+  }
+}
+
 function table(sections, name) {
   return sections.get(name) ?? new Map();
 }
@@ -425,6 +437,7 @@ export async function installState({ state, worktree, mainRoot, protocolLock, ar
       args: ["cat-file", "blob", `HEAD:${patchRelative}`],
       rawOutput: true,
     });
+    await validateGeneratedPatchFiles([patchPath]);
     const actualPatchSha256 = await sha256File(patchPath);
     if (actualPatchSha256 !== protocolLock.states[kind].patchSha256) {
       throw new ProtocolError("state_patch_hash_mismatch", `${kind}: ${actualPatchSha256}`);

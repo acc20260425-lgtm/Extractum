@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync as defaultSpawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -34,15 +34,21 @@ export function normalizeVitestListOutput(output) {
   return String(output).replace(/^\[[^\]]+\]\s+/gm, "");
 }
 
-function runVitest() {
-  const realCwd = realpathSync.native(process.cwd());
-  process.chdir(realCwd);
-
+export function runVitest(options) {
+  const {
+    argv = process.argv.slice(2),
+    cwd = process.cwd(),
+    spawnSync = defaultSpawnSync,
+  } = options ?? {};
+  const cli = options === undefined;
+  const realCwd = realpathSync.native(cwd);
+  if (cli) process.chdir(realCwd);
   const defaultExcludeArgs = DEFAULT_EXCLUDES.flatMap((glob) => ["--exclude", glob]);
   const vitestCli = path.join(realCwd, "node_modules", "vitest", "vitest.mjs");
-  const args = normalizeRelatedFileArgs(process.argv.slice(2), realCwd);
+  const args = normalizeRelatedFileArgs(argv, realCwd);
   const filesOnlyList = args[0] === "list" && args.includes("--filesOnly");
-  const result = spawnSync(process.execPath, [vitestCli, "--config", "vitest.config.ts", ...args, ...defaultExcludeArgs], {
+  const childArgs = [vitestCli, "--config", "vitest.config.ts", ...args, ...defaultExcludeArgs];
+  const result = spawnSync(process.execPath, childArgs, {
     cwd: realCwd,
     env: process.env,
     stdio: filesOnlyList ? "pipe" : "inherit",
@@ -51,13 +57,21 @@ function runVitest() {
   if (result.error) {
     throw result.error;
   }
-
-  if (filesOnlyList) {
-    process.stdout.write(normalizeVitestListOutput(result.stdout));
-    process.stderr.write(result.stderr);
+  const observation = {
+    status: result.status ?? 1,
+    args: childArgs,
+    filesOnlyList,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+  if (cli) {
+    if (observation.filesOnlyList) {
+      process.stdout.write(normalizeVitestListOutput(observation.stdout));
+      process.stderr.write(observation.stderr);
+    }
+    process.exit(observation.status);
   }
-
-  process.exit(result.status ?? 1);
+  return observation;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

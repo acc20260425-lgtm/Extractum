@@ -272,6 +272,7 @@
     YoutubeVideoDetail,
   } from "$lib/types/youtube";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
+  import { reportCanvasGroupEditorProps } from "$lib/analysis-group-editor-props";
 
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
@@ -360,7 +361,7 @@
 
   let selectedTopicKey = $state(ALL_TOPICS_KEY);
   let selectedTemplateId = $state("");
-  let selectedGroupEditorId = $state("");
+  let selectedGroupEditorId = $state(reportCanvasGroupEditorProps("").selectedGroupEditorId);
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");

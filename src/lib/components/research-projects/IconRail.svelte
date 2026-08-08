@@ -5,6 +5,7 @@
   import Library from "@lucide/svelte/icons/library";
   import Settings from "@lucide/svelte/icons/settings";
   import ShieldCheck from "@lucide/svelte/icons/shield-check";
+  import { PROJECT_RUNS_PAGE } from "../../../routes/projects/runs/project-runs-page";
 
   const items = [
     { href: "/projects", label: "Projects", icon: FolderKanban },
@@ -17,7 +18,7 @@
   function isActive(href: string) {
     if (href === "/projects") return page.url.pathname === "/projects";
     if (href === "/projects/library") return page.url.pathname === "/projects/library";
-    if (href === "/projects/runs") return page.url.pathname === "/projects/runs";
+    if (href === PROJECT_RUNS_PAGE.href) return page.url.pathname === PROJECT_RUNS_PAGE.href;
     return page.url.pathname === href;
   }
 </script>

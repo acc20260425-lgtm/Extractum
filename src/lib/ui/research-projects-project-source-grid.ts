@@ -57,3 +57,18 @@ export function projectSourceGridColumns(
     },
   ];
 }
+
+export function connectFromLibraryGridColumns(
+  selectedCell?: ExtractumDataGridColumn["cell"],
+  titleCell?: ExtractumDataGridColumn["cell"],
+): ExtractumDataGridColumn[] {
+  return [
+    { id: "selected", header: "", width: 44, cell: selectedCell },
+    { id: "title", header: "Источник", width: 260, cell: titleCell },
+    { id: "typeLabel", header: "Тип", width: 150 },
+    { id: "projectCount", header: "Проекты", width: 80 },
+    { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" },
+    { id: "localCopyLabel", header: "Локальная копия", width: 120 },
+    { id: "status", header: "Статус", width: 100 },
+  ];
+}

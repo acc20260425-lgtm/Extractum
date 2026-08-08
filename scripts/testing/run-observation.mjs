@@ -22,6 +22,12 @@ function timingWarning(warn, error) {
 const DEFAULT_TERMINATION_TIMEOUT_MS = 15_000;
 const FALLBACK_CLOSE_TIMEOUT_MS = 2_000;
 
+function environmentValue(environment, name) {
+  if (Object.prototype.hasOwnProperty.call(environment, name)) return environment[name];
+  const matchingKey = Object.keys(environment).find((key) => key.toLowerCase() === name.toLowerCase());
+  return matchingKey === undefined ? undefined : environment[matchingKey];
+}
+
 async function bounded(promise, timeoutMs, timeoutValue) {
   let timer;
   try {
@@ -274,7 +280,7 @@ export async function runObservedCommand({
             env: commandEnv,
             signal: cancellationSignal,
             platform,
-            systemRoot: dependencies.systemRoot ?? commandEnv.SystemRoot,
+            systemRoot: dependencies.systemRoot ?? environmentValue(commandEnv, "SystemRoot"),
             spawnTerminationHelper,
             processKill,
             timeoutMs: terminationTimeoutMs,

@@ -16,6 +16,35 @@ export type ExtractumDataGridResponsive = Record<
 
 const UNIX_MILLISECONDS_THRESHOLD = 100_000_000_000;
 
+export const EXTRACTUM_GRID_WRAPPER_CONTRACT = Object.freeze({
+  package: "@svar-ui/svelte-grid",
+  publicWrappers: Object.freeze(["ExtractumDataGrid", "ExtractumTreeDataGrid"]),
+  dataGrid: Object.freeze({
+    selection: "selectedRows",
+    rowStyle: true,
+    locale: true,
+    theme: "Willow",
+    fonts: false,
+    emptyOverlay: "visibleOverlay",
+    dateTimeColumns: true,
+    responsiveDateTimeColumns: true,
+  }),
+  treeDataGrid: Object.freeze({
+    tree: true,
+    toggleEvent: "treetoggle",
+    selection: "selectedRows",
+    selectionEvent: "onselectrow",
+    locale: true,
+    theme: "Willow",
+    fonts: false,
+  }),
+  selectCell: Object.freeze({
+    ignoredClickAttribute: "data-action",
+    ignoredClickValue: "ignore-click",
+    selectionCommand: "select-row",
+  }),
+});
+
 export function parseDataGridDateTimeValue(value: unknown): Date | null {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
