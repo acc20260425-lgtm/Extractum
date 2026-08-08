@@ -19,40 +19,74 @@ The scope is exactly 436 validator-open rows in 86 legacy files:
 
 - 290 behavior rows with exact future owner identities;
 - 146 accepted deletion rows;
-- 269 Node/Vitest owners covering 1,707 assertion ordinals;
+- 179 Node/Vitest rows covering 1,109 assertion ordinals;
+- 90 jsdom/Vitest rows covering 598 assertion ordinals;
 - 18 Cargo owners covering 156 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 0 jsdom owners.
+- 72 Vitest target files, 18 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
 those files rather than copying 290 identities into a second hand-maintained
-map.
+map. The Node/jsdom split above is the one forecast correction approved by
+this design: paths and declaration titles remain unchanged, while the 27
+`src/lib/components/**/*.behavior.test.ts` targets move from the artifact's
+filename-only Node forecast to the truthful component project.
 
-## Closure Waves
+## Connected Closure Components
 
-Slice 3C is one implementation slice with five integration checkpoints. The
-checkpoints are not independent program sub-slices and therefore do not each
-pay for a complete `verify` run.
+The bipartite graph between legacy files and replacement targets is almost a
+forest. Its 84 connected components are the unit of closure and rollback:
 
-| Checkpoint | Scope | Legacy files | Rows | Behavior | Delete |
-| --- | --- | ---: | ---: | ---: | ---: |
-| A | Every delete-only legacy file | 23 | 70 | 0 | 70 |
-| B | Testing and process infrastructure | 7 | 24 | 22 | 2 |
-| C | Analysis | 21 | 149 | 124 | 25 |
-| D | Projects/library, Gemini browser, and other product UI | 24 | 128 | 114 | 14 |
-| E | Prompt packs/YouTube, Rust/security, and the analysis-crate remainder | 11 | 65 | 30 | 35 |
-| **Total** |  | **86** | **436** | **290** | **146** |
+| Graph shape `(legacy files, replacement targets)` | Components |
+| --- | ---: |
+| `(1, 0)` | 23 |
+| `(1, 1)` | 44 |
+| `(1, 2)` | 7 |
+| `(1, 3)` | 5 |
+| `(1, 5)` | 2 |
+| `(1, 6)` | 1 |
+| `(2, 2)` | 2 |
+| **Total** | **84** |
 
-Checkpoint B contains the two Node process-runtime B3 rows. Checkpoint D
-contains the three approved Playwright rows. Checkpoint E contains all 18
-Cargo owners.
+No thematic wave creates a correctness dependency between disconnected
+components. Components may be implemented in parallel after checking that
+their production seam edits do not overlap. The two `(2, 2)` components remain
+indivisible because each connects two legacy files.
 
-Each checkpoint closes complete legacy files. Replacement evidence, deletion
-of the corresponding legacy files, and the resulting transition state form
-one integration commit. A checkpoint does not leave a partially cut-over
-legacy file across commits. Reverting that commit restores the previous green
-checkpoint.
+Replacement-only commits are allowed before cutover because the still-present
+legacy declaration keeps the row open. A cutover commit deletes every legacy
+file in its connected component only after all of that component's targets are
+green. No commit deletes only part of a connected component. Reverting either
+an additive replacement commit or a component cutover returns a green state.
+
+## Execution Waves
+
+Waves batch independent components for implementation and review; they do not
+redefine the graph:
+
+1. **Wave 0 -- deletion only.** Delete the 23 `(1, 0)` legacy files, closing
+   70 rows through their existing deletion reasons. This is one deletion
+   commit plus transition validation, with no RED/GREEN cycle. The remaining
+   76 accepted delete rows close incidentally when their 25 mixed legacy files
+   later leave the graph.
+2. **Wave 1 -- one-row Vitest targets.** Implement the 30 Vitest target files
+   that each own one behavior row, batched in groups of roughly 8--10 by
+   directory and shared fixture surface.
+3. **Wave 2 -- multi-row Vitest targets.** Implement the remaining 42 Vitest
+   target files. Large targets are independent batches rather than one
+   analysis- or product-wide checkpoint.
+4. **Wave 3 -- Cargo.** Implement the 18 exact Cargo identities, grouped by
+   package and connected component.
+5. **Browser track.** Start the three Playwright targets after Wave 0 and run
+   them independently of Waves 1--3. A browser-harness problem blocks only its
+   connected components; it does not stop unrelated Vitest or Cargo work.
+
+Each numbered wave has at most one integration cutover batch; the browser track
+has one of its own. A complete transition-validator run occurs once before
+that batch, not once per target file or per component under development. The
+plan does not add a subset-validation mode or a second Cargo-evidence path.
+The final complete `verify` still runs only once.
 
 ## Replacement and Cutover Contract
 
@@ -83,9 +117,11 @@ The following rules are fail-closed:
   refactoring is outside scope.
 - D1 through D4 rows close by deleting legacy evidence. D4 does not cause an
   already existing owner to be reimplemented.
-- A required path, title, mechanism, disposition, invariant, or criticality
-  change stops the checkpoint for a reviewed design amendment. It is never
-  corrected opportunistically during implementation.
+- Except for the component-project correction explicitly approved here, a
+  required path, title, mechanism, disposition, invariant, or criticality
+  change stops the affected connected component for a reviewed design
+  amendment. It does not stop unrelated components and is never corrected
+  opportunistically during implementation.
 
 No new migration carrier, ledger, scanner, or general-purpose test framework
 is introduced. The redisposition carrier may be used to prove that the
@@ -94,17 +130,29 @@ execution scheduler.
 
 ## Vitest and Process Ownership
 
-Ordinary `*.behavior.test.ts` replacements belong to `unit-node`. Replacement
-files that spawn, interrupt, or audit real child-process trees belong to
-`os-integration` and retain its fork pool and process-safety policy. Pure
-wrapper and serialization tests remain in `unit-node` even when they share a
-directory with process tests.
+Ordinary `*.behavior.test.ts` replacements outside `src/lib/components/`
+belong to `unit-node`. The component project adds the narrow include pattern
+`src/lib/components/**/*.behavior.test.ts`, and `unit-node` excludes the same
+pattern. This places all 27 component behavior targets -- 90 rows and 598
+assertion ordinals -- under jsdom without changing any frozen replacement
+path or title. No existing tracked file currently matches that new pattern.
 
-Checkpoint B updates the explicit `os-integration` file inventory at the same
-time that it deletes the replaced process legacy files. No process-owning test
-may silently fall back to the threaded unit project. Process preflight runs
-before retained OS, Cargo, or Playwright verification, and postflight checks
-look for repository-owned descendants rather than unrelated user processes.
+The implementation's first runner-ownership change updates the redisposition
+forecast and its forecast validator from 269 Node rows and 0 jsdom rows to the
+corrected 179 Node rows and 90 jsdom rows. Historical packet transport remains
+content-addressed evidence of the earlier review convention and is not
+rewritten or re-reviewed; the carrier uses a separate execution-owner
+classifier for this approved forecast correction.
+
+Replacement files that spawn, interrupt, or audit real child-process trees
+belong to `os-integration` and retain its fork pool and process-safety policy.
+Pure wrapper and serialization tests remain in `unit-node` even when they
+share a directory with process tests. The explicit `os-integration` inventory
+changes in the same cutover batch that deletes the corresponding process
+legacy files. No process-owning test may silently fall back to the threaded
+unit project. Process preflight runs before retained OS, Cargo, or Playwright
+verification, and postflight checks look for repository-owned descendants
+rather than unrelated user processes.
 
 ## Application Playwright Owner
 
@@ -115,8 +163,9 @@ The three approved browser rows use a new, separate
 - `e2e/dialog-layering.spec.ts`;
 - `e2e/research-projects-sources-filter-row.spec.ts`.
 
-Checkpoint D adds `e2e/playwright.config.ts`, the `test:app:e2e` npm script,
-the new census owner, and a separate `verify` gate. The existing Gemini
+The independent browser track adds `e2e/playwright.config.ts`, the
+`test:app:e2e` npm script, the new census owner, and a separate `verify` gate.
+The existing Gemini
 browser adapter config, owner, and command remain unchanged.
 
 The app config launches a real Vite route on an explicit strict test port; it
@@ -125,16 +174,17 @@ Tauri IPC responses required by each scenario. The tests exercise the real
 application components and styles rather than reproducing their markup in a
 fixture.
 
-Checkpoint D begins with one minimal route smoke that proves this harness and
-its cleanup. Failure to mount the real route without a production-only browser
-harness stops the checkpoint before the three frozen scenarios are written.
-After the browser command, a process audit rejects leaked Vite or Playwright
-Chromium descendants by PID and command-line marker.
+The browser track begins with one minimal route smoke that proves this harness
+and its cleanup. Failure to mount the real route without a production-only
+browser harness blocks only the three browser-connected components while
+Vitest and Cargo waves continue. After the browser command, a process audit
+rejects leaked Vite or Playwright Chromium descendants by PID and command-line
+marker.
 
 ## Cargo Ownership
 
-Checkpoint E implements the 18 exact Cargo identities in their frozen packages
-and modules. A Rust implementation task names its affected packages and uses
+Wave 3 implements the 18 exact Cargo identities in their frozen packages and
+modules. A Rust implementation task names its affected packages and uses
 the repository's focused Rust verification loop:
 
 - an exact non-empty RED/GREEN test;
@@ -148,8 +198,9 @@ of the frozen invariant.
 
 ## Legacy Runner Removal
 
-The `legacy-contract` project remains present and non-empty until checkpoint E
-has closed the last legacy file. The final checkpoint then removes:
+The `legacy-contract` project remains present and non-empty until the final
+connected component is ready to close. The commit that deletes the last legacy
+file atomically removes:
 
 - the `legacy-contract` Vitest project;
 - `LEGACY_TEST_FILES` and the ledger-derived unit exclusions;
@@ -161,21 +212,30 @@ The resulting runner census must be non-empty, total, and disjoint. Newly
 created replacement files must remain owned after the ledger-derived legacy
 exclusions disappear.
 
-## Checkpoint Verification
+## Batch Verification
 
-Every checkpoint follows the same bounded cycle:
+Wave 0 is intentionally smaller than the behavior waves: delete its 23 files,
+run the complete transition validator once, inspect the deletion-only diff,
+and commit. It has no RED/GREEN cycle, production check, Cargo checkpoint, or
+replacement review.
 
-1. exact focused RED for each new owner;
+Each behavior target or target batch follows the bounded development cycle:
+
+1. one focused RED containing the target file's complete frozen declaration
+   set, rather than one process cycle per ledger row;
 2. minimal implementation and focused GREEN;
-3. all owner files for the checkpoint, with at most two frontend commands in
+3. all owner files for the batch, with at most two frontend commands in
    parallel;
 4. `npm.cmd run check` only when Svelte or TypeScript production files changed;
 5. affected Cargo checks and package checkpoints, not concurrent with the
    transition validator;
-6. `node scripts/validate-testing-transition.mjs`;
-7. `git diff --check` and one read-only review followed by at most one combined
-   fix wave;
-8. one integration commit for the complete-file checkpoint.
+6. `git diff --check` and focused review.
+
+The complete `node scripts/validate-testing-transition.mjs` runs once before a
+batch cutover deletes its ready connected-component legacy files. Independent
+targets may be added in earlier green commits while those legacy declarations
+remain present. A cutover batch receives one read-only integration review and
+at most one combined fix wave before commit.
 
 An empty or unexpectedly small selection is a failure. A correctness failure
 is preserved and fixed rather than replaced by an unexplained green rerun.
