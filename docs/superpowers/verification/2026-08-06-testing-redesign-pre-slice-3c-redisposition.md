@@ -1,8 +1,10 @@
 # Testing Redesign Pre-Slice 3C Redisposition Verification
 
-Date: 2026-08-07
+Date: 2026-08-08
 
 This is a human-readable acceptance record for the committed redisposition artifact and ledger cutover. The decision source of truth remains `testing/source-contract-redisposition-review.json`; this document copies or mechanically renders its values and records the required gate observations.
+
+Correction note (2026-08-08): the final-fix wave corrected Vitest mechanism ownership, fail-closed Task 3 candidate/policy binding, the approved SC-000085/090/316/333/416/441 dispositions or owners, and the accepted content-addressed blind evidence. It did not rerun or replace the prior single 300.700-second final verify observation.
 
 ## Review pins and scope reconciliation
 
@@ -196,5 +198,7 @@ The checkpoint commit chain, including review hardening and the Task 5 amendment
 | `69c32b6d` | `fix: accept exact applied redisposition ledger` | User-authorized carrier amendment: accept only the complete base or complete applied resolution state. |
 | `84bf665a` | `test: reuse redisposition evidence loader` | User-authorized source-reader amendment without a ledger row/exception. |
 | `1e7a57eb` | `test: apply pre-slice 3c ledger redisposition` | Atomic resolution-only ledger cutover. |
+| `f152ed8a` | `test: bind redisposition candidate evidence` | Final-fix carrier and TDD binding hardening. |
+| `e79e7e52` | `test: accept corrected redisposition evidence` | Accepted corrective blind evidence, artifact, ledger, and verification update. |
 
 The program index `docs/superpowers/plans/2026-08-02-testing-redesign-program-index.md` was intentionally not changed. This checkpoint does not write a Slice 3C implementation plan; that remains a separate post-approval action.

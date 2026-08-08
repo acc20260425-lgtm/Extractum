@@ -1591,6 +1591,16 @@ describe("source-contract redisposition review", () => {
         "independentReview: candidateBindingAdjudications must equal the approved exact registry",
       );
     }
+
+    const incompleteAuthorOwners = clone(reviewArtifact.decisions) as any[];
+    incompleteAuthorOwners.find((decision) => decision.id === "SC-000316").ownerEvidence =
+      incompleteAuthorOwners.find((decision) => decision.id === "SC-000316").ownerEvidence.slice(0, 1);
+    expect(validateCandidateBindingAdjudications({
+      candidateBindingAdjudications: approvedCandidateBindingAdjudications,
+      decisions: incompleteAuthorOwners,
+      blindResults: reviewArtifact.independentReview.blindResults,
+      candidateOwnerInventory: reviewArtifact.independentReview.candidateOwnerInventory,
+    })).toContain("SC-000316: approved candidate-binding adjudication requires D4 with the exact author owner set");
   });
 
   it("pins fail-closed packet policy facts independently of author decisions", () => {

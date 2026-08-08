@@ -416,7 +416,9 @@ export function validateCandidateBindingAdjudications({ candidateBindingAdjudica
   const inventoryById = new Map((candidateOwnerInventory ?? []).map((row) => [row.id, row.candidateOwnerIds]));
   for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rows) {
     if (candidateOwnerInventory && canonicalJson(inventoryById.get(row.id)) !== canonicalJson(row.ownerEvidence)) issues.push(`${row.id}: candidate inventory must equal the approved complete D4 owner set`);
-    if (decisions && (decisionsById.get(row.id)?.class !== "D4_DUPLICATE_EVIDENCE" || canonicalJson(decisionsById.get(row.id)?.resolution?.replacementIds ?? row.ownerEvidence) !== canonicalJson(row.ownerEvidence))) issues.push(`${row.id}: approved candidate-binding adjudication requires D4 with the exact owner set`);
+    const decision = decisionsById.get(row.id);
+    const authorOwners = Array.isArray(decision?.ownerEvidence) ? [...decision.ownerEvidence].sort(compareText) : [];
+    if (decisions && (decision?.class !== "D4_DUPLICATE_EVIDENCE" || canonicalJson(authorOwners) !== canonicalJson([...row.ownerEvidence].sort(compareText)))) issues.push(`${row.id}: approved candidate-binding adjudication requires D4 with the exact author owner set`);
     if (blindResults && (blindsById.get(row.id)?.class !== "D4_DUPLICATE_EVIDENCE" || canonicalJson(blindsById.get(row.id)?.ownerEvidence) !== canonicalJson(row.ownerEvidence))) issues.push(`${row.id}: blind fingerprint must retain the approved D4 owner set`);
   }
   for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactFutureOwners.rows) {
