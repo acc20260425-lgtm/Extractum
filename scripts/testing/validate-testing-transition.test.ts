@@ -3,6 +3,9 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import ts from "typescript";
 
+import { VITEST_PROJECT_DEFINITIONS } from "../../vitest.config";
+import runnerCensus from "../../testing/runner-census.json";
+
 import {
   buildLedgerDraft,
   createCliGitMetadata,
@@ -48,6 +51,38 @@ function check(overrides: Record<string, unknown> = {}) {
 }
 
 describe("runner census validation", () => {
+  it("application Playwright owner is the sole owner for app e2e candidates", () => {
+    const playwrightOwners = runnerCensus.playwrightOwners as Array<{ id: string; config: string; ownerScript: string }>;
+    const unitNode = VITEST_PROJECT_DEFINITIONS.find((definition) => definition.name === "unit-node");
+
+    expect(playwrightOwners).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "playwright:gemini-browser-adapter",
+        config: "research/gemini_browser_adapter/playwright.config.ts",
+        ownerScript: "test:gemini-browser-adapter:e2e",
+      }),
+      expect.objectContaining({
+        id: "playwright:app-e2e",
+        config: "e2e/playwright.config.ts",
+        ownerScript: "test:app:e2e",
+      }),
+    ]));
+    expect(unitNode?.exclude).toContain("e2e/**/*.spec.ts");
+
+    expect(validateRunnerCensus({
+      census: runnerCensus,
+      filesystemFiles: ["e2e/smoke.spec.ts"],
+      vitestFiles: Object.fromEntries(runnerCensus.vitestOwners.map((owner: { id: string }) => [owner.id, []])),
+      playwrightFiles: {
+        "playwright:gemini-browser-adapter": [],
+        "playwright:app-e2e": ["e2e/smoke.spec.ts"],
+      },
+    })).not.toEqual(expect.arrayContaining([
+      "duplicate ownership: e2e/smoke.spec.ts -> playwright:app-e2e, vitest:unit-node",
+      "unowned filesystem candidate: e2e/smoke.spec.ts",
+    ]));
+  });
+
   it("accepts exact bidirectional ownership", () => {
     expect(validateRunnerCensus(check())).toEqual([]);
   });

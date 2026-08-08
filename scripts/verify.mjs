@@ -20,6 +20,7 @@ export function createVerifySteps({ npmExecPath = process.env.npm_execpath, plat
     npmStep("npm run test:legacy-contract", "test:legacy-contract", { npmExecPath, platform }),
     npmStep("npm run test:integration:os", "test:integration:os", { npmExecPath, platform }),
     npmStep("npm run test:e2e", "test:e2e", { npmExecPath, platform }),
+    npmStep("npm run test:app:e2e", "test:app:e2e", { npmExecPath, platform }),
     npmStep("npm run check", "check", { npmExecPath, platform }),
     npmStep("npm run check:rustfmt", "check:rustfmt", { npmExecPath, platform }),
     { title: "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets", command: "cargo", args: ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets'] },

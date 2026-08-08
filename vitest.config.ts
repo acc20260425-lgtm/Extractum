@@ -20,6 +20,7 @@ const ARCHITECTURE_FILES = Object.freeze([
 ]);
 const PLAYWRIGHT_TESTS = Object.freeze([
   "research/gemini_browser_adapter/tests/**/*.spec.ts",
+  "e2e/**/*.spec.ts",
 ]);
 const DEFAULT_PROJECT_EXCLUDES = Object.freeze([...configDefaults.exclude]);
 

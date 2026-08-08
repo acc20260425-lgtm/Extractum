@@ -12,6 +12,11 @@
       "id": "playwright:gemini-browser-adapter",
       "config": "research/gemini_browser_adapter/playwright.config.ts",
       "ownerScript": "test:gemini-browser-adapter:e2e"
+    },
+    {
+      "id": "playwright:app-e2e",
+      "config": "e2e/playwright.config.ts",
+      "ownerScript": "test:app:e2e"
     }
   ],
   "nonstandardTests": [],

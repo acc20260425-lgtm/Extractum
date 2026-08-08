@@ -14,6 +14,7 @@
     "test:legacy-contract": "node scripts/run-vitest.mjs run --project legacy-contract",
     "test:integration:os": "node scripts/run-vitest.mjs run --project os-integration",
     "test:e2e": "npm.cmd run test:gemini-browser-adapter:e2e",
+    "test:app:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:changed": "node scripts/run-vitest.mjs run --changed",
     "test:changed:last": "node scripts/run-vitest.mjs run --changed=HEAD~1",
     "test:related": "node scripts/run-vitest.mjs related --run",
