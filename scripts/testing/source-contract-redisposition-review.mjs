@@ -583,6 +583,16 @@ function mechanismForOwner(id) {
   return "unknown";
 }
 
+function executionMechanismForOwner(id) {
+  const mechanism = mechanismForOwner(id);
+  if (mechanism !== "node" || !id?.startsWith("test:vitest:")) return mechanism;
+  const ownerPath = normalizedPath(id.slice("test:vitest:".length).split("#", 1)[0]);
+  return ownerPath.endsWith(".component.test.ts")
+    || (ownerPath.startsWith("src/lib/components/") && ownerPath.endsWith(".behavior.test.ts"))
+    ? "jsdom"
+    : mechanism;
+}
+
 function retainedMedian(mechanism, name, command, issues) {
   if (!mechanism || typeof mechanism !== "object") {
     issues.push(`mechanisms.${name}: missing`);
@@ -610,7 +620,7 @@ function futureOwnerSummary(decisions, baseLedger) {
     const groups = decision.resolution?.subgroups ?? [decision.resolution];
     for (const group of groups) {
       const mechanisms = new Set((group?.replacementIds ?? []).flatMap((id) => {
-        if (id?.startsWith("test:vitest:")) return [mechanismForOwner(id)];
+        if (id?.startsWith("test:vitest:")) return [executionMechanismForOwner(id)];
         if (id?.startsWith("test:cargo:")) return ["cargo"];
         if (id?.startsWith("test:playwright:")) return ["playwright"];
         return [];

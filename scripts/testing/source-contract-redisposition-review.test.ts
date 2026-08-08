@@ -292,7 +292,10 @@ function artifactFor(decisions = defaultDecisions()) {
       const mechanisms = new Set<string>((group?.replacementIds ?? []).flatMap((id: string) => {
         if (id.startsWith("test:vitest:")) {
           const ownerPath = id.slice("test:vitest:".length).split("#", 1)[0].replaceAll("\\", "/");
-          return [ownerPath.endsWith(".component.test.ts") ? "jsdom" : "node"];
+          return [ownerPath.endsWith(".component.test.ts")
+            || (ownerPath.startsWith("src/lib/components/") && ownerPath.endsWith(".behavior.test.ts"))
+            ? "jsdom"
+            : "node"];
         }
         if (id.startsWith("test:cargo:")) return ["cargo"];
         return [];
@@ -962,10 +965,13 @@ describe("source-contract redisposition review", () => {
     expect(validateReview(review({ artifact: playwrightProposal }))).toContain("SC-000001: browser owner requires program amendment");
   });
 
-  it("derives future Vitest mechanisms from the frozen component path convention", () => {
+  it("derives the execution owner forecast from the frozen component path convention", async () => {
     const decisions = defaultDecisions();
+    decisions.find((decision) => decision.id === "SC-000001").resolution.replacementIds = [
+      "test:vitest:src/lib/example.behavior.test.ts#unit node behavior owner",
+    ];
     decisions.find((decision) => decision.id === "SC-000002").resolution.replacementIds = [
-      "test:vitest:src/future.component.test.ts#component owner",
+      "test:vitest:src/lib/components/example.behavior.test.ts#component behavior owner",
     ];
     const artifact = artifactFor(decisions);
 
@@ -976,6 +982,25 @@ describe("source-contract redisposition review", () => {
     expect(artifact.forecast.proposedNewJsdomRows).toBe(1);
     expect(artifact.forecast.proposedNewJsdomOrdinals).toBe(2);
     expect(validateReview(review({ artifact }))).toEqual([]);
+
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [baseLedger, baseTrackedPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const executionForecast = (reviewArtifact as any).forecast.futureOwnersByMechanism;
+
+    expect(executionForecast).toEqual({
+      node: { rows: 179, assertionOrdinals: 1109 },
+      cargo: { rows: 18, assertionOrdinals: 156 },
+      jsdom: { rows: 90, assertionOrdinals: 598 },
+      playwright: { rows: 3, assertionOrdinals: 21 },
+    });
+    expect((reviewArtifact as any).forecast.proposedNewJsdomRows).toBe(0);
+    expect((reviewArtifact as any).forecast.proposedNewJsdomOrdinals).toBe(0);
+    expect(loaded.issues).toEqual([]);
+    expect(validateReview({ artifact: reviewArtifact, baseLedger, currentLedger: baseLedger, baseTrackedPaths, evidenceBytes: loaded.evidenceBytes })).toEqual([]);
   });
 
   it("allows only the exact approved three-row Playwright mapping outside jsdom timing", () => {

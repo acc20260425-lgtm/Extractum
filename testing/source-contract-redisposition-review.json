@@ -8410,16 +8410,16 @@
     },
     "futureOwnersByMechanism": {
       "node": {
-        "rows": 269,
-        "assertionOrdinals": 1707
+        "rows": 179,
+        "assertionOrdinals": 1109
       },
       "cargo": {
         "rows": 18,
         "assertionOrdinals": 156
       },
       "jsdom": {
-        "rows": 0,
-        "assertionOrdinals": 0
+        "rows": 90,
+        "assertionOrdinals": 598
       },
       "playwright": {
         "rows": 3,

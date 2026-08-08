@@ -28,6 +28,7 @@ const chromiumLauncherImport = new RegExp(
 type ProjectConvention = {
   name: string;
   include?: readonly string[];
+  exclude?: readonly string[];
   setupFiles?: readonly string[];
   svelteTestingOptions?: Readonly<{ autoCleanup: boolean }>;
 };
@@ -153,6 +154,18 @@ describe("test conventions", () => {
       expect(project.plugins).toEqual([]);
       expect(project.test.setupFiles).toBeUndefined();
     }
+  });
+
+  it("gives component behavior ownership only to the component project", () => {
+    const componentBehaviorPattern = "src/lib/components/**/*.behavior.test.ts";
+    const componentProject = projectConventions.find(({ name }) => name === "component");
+    const unitNodeProject = projectConventions.find(({ name }) => name === "unit-node");
+
+    expect(componentProject?.include).toContain(componentBehaviorPattern);
+    expect(unitNodeProject?.exclude).toContain(componentBehaviorPattern);
+    expect(componentBehaviorPattern).toMatch(/^src\/lib\/components\/.*\.behavior\.test\.ts$/);
+    expect("src/lib/telegram-checkpoint-2.behavior.test.ts").not.toMatch(/^src\/lib\/components\//);
+    expect("src/lib/telegram-contract-paths.behavior.test.ts").not.toMatch(/^src\/lib\/components\//);
   });
 
   it("keeps Chromium launch ownership out of Vitest test sources", () => {

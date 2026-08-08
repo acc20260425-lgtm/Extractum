@@ -6,6 +6,8 @@ This is a human-readable acceptance record for the committed redisposition artif
 
 Correction note (2026-08-08): the final-fix wave corrected Vitest mechanism ownership, fail-closed Task 3 candidate/policy binding, the approved SC-000085/090/316/333/416/441 dispositions or owners, and the accepted content-addressed blind evidence. It did not rerun or replace the prior single 300.700-second final verify observation.
 
+Forecast correction (2026-08-08): execution ownership now places the 90 rows / 598 assertion ordinals targeting `src/lib/components/**/*.behavior.test.ts` in the component/jsdom project. This corrects the Node/jsdom forecast to 179 / 1,109 and 90 / 598 respectively without changing the content-addressed historical packet mechanism bytes, decisions, review paths, hashes, or blind digests.
+
 ## Review pins and scope reconciliation
 
 - Review base: `a54507d63420bb870c3870c91d7e22b050abae3e`.
@@ -55,9 +57,9 @@ Future behavior owners are projected as follows:
 
 | Future mechanism | B2 rows | B3 rows | Total rows | Assertion ordinals |
 | --- | ---: | ---: | ---: | ---: |
-| Node/Vitest | 267 | 2 | 269 | 1707 |
+| Node/Vitest | 177 | 2 | 179 | 1109 |
 | Cargo | 15 | 3 | 18 | 156 |
-| jsdom/Vitest | 0 | 0 | 0 | 0 |
+| jsdom/Vitest | 90 | 0 | 90 | 598 |
 | Playwright | 0 | 3 | 3 | 21 |
 | **Total** | **282** | **8** | **290** | **1884** |
 

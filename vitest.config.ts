@@ -5,6 +5,7 @@ import { svelteTesting } from "@testing-library/svelte/vite";
 import sourceContractLedger from "./testing/source-contract-ledger.json";
 
 const COMPONENT_TEST_PATTERN = "src/**/*.component.test.ts";
+const COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts";
 const DEFAULT_TEST_PATTERN = "**/*.{test,spec}.?(c|m)[jt]s?(x)";
 const OS_INTEGRATION_FILES = Object.freeze([
   "scripts/process-shell-diagnostic/attempt.test.ts",
@@ -45,6 +46,7 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
     exclude: Object.freeze([
       ...DEFAULT_PROJECT_EXCLUDES,
       COMPONENT_TEST_PATTERN,
+      COMPONENT_BEHAVIOR_PATTERN,
       ...OS_INTEGRATION_FILES,
       ...ARCHITECTURE_FILES,
       ...LEGACY_TEST_FILES,
@@ -55,7 +57,7 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
   }),
   Object.freeze({
     name: "component",
-    include: Object.freeze([COMPONENT_TEST_PATTERN]),
+    include: Object.freeze([COMPONENT_TEST_PATTERN, COMPONENT_BEHAVIOR_PATTERN]),
     exclude: DEFAULT_PROJECT_EXCLUDES,
     environment: "jsdom",
     pool: "threads",
