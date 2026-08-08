@@ -189,6 +189,15 @@ describe("test conventions", () => {
     expect(() => expectProjectOwners(overlappingProjects, componentBehaviorPath, ["component"])).toThrow();
   });
 
+  it("process behavior ownership", () => {
+    for (const testPath of [
+      "scripts/process-shell-diagnostic/coordinator.behavior.test.ts",
+      "scripts/process-shell-diagnostic/runtime.behavior.test.ts",
+    ]) {
+      expectProjectOwners(projectConventions, testPath, ["os-integration"]);
+    }
+  });
+
   it("keeps Chromium launch ownership out of Vitest test sources", () => {
     for (const source of Object.values(testSources)) {
       expect(source).not.toMatch(chromiumLauncherImport);
