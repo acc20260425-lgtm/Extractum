@@ -48,13 +48,19 @@ for (const decision of artifact.decisions) {
       invariant: row.invariant,
       assertionCount: row.assertionCount,
       replacementIds: ids,
+      class: decision.class,
+      ownerEvidence: decision.ownerEvidence ?? null,
       criticalityRef: decision.criticalityRef ?? null,
+      deletionReason: decision.resolution?.deletionReason ?? null,
     });
     groups.set(key, entries);
   }
   covered.add(decision.id);
 }
-if (covered.size !== artifact.decisions.length) throw new Error("incomplete replacement map");
+const targetGroups = [...groups.keys()].filter((key) => !key.startsWith("delete:"));
+if (covered.size !== 436 || groups.size !== 141 || targetGroups.length !== 93) {
+  throw new Error(`incomplete replacement map: ${covered.size}/${groups.size}/${targetGroups.length}`);
+}
 const body = [...groups.entries()]
   .sort(([left], [right]) => left.localeCompare(right))
   .map(([key, entries]) => `## ${key}\n\n\`\`\`json\n${JSON.stringify(entries, null, 2)}\n\`\`\``)
@@ -62,11 +68,11 @@ const body = [...groups.entries()]
 const output = "tmp/analysis-smoke/slice-3c-replacement-map.md";
 fs.mkdirSync("tmp/analysis-smoke", { recursive: true });
 fs.writeFileSync(output, `# Slice 3C replacement map\n\n${body}\n`, "utf8");
-console.log(`${output}: ${covered.size} decisions, ${groups.size} owner/delete sections`);
+console.log(`${output}: ${covered.size} decisions, ${groups.size} owner/delete sections, ${targetGroups.length} targets`);
 '@ | node -
 ```
 
-For every target file, the RED test declarations use the complete title after `#` verbatim. A declaration may contain multiple observable assertions, but the plan does not create one process cycle per ledger row.
+For every target file, the RED test declarations use the complete title after `#` verbatim. `class` distinguishes new behavior from deletion and duplicate evidence; a D4 row uses `ownerEvidence` rather than reimplementing that owner. A `null` `criticalityRef` means there is no row-specific citation, not that the program lacks criticality policy; the complete citations remain in the artifact's top-level `criticalitySources`. Delete sections carry their frozen `deletionReason`. A declaration may contain multiple observable assertions, but the plan does not create one process cycle per ledger row.
 
 Cutover distribution:
 
@@ -499,7 +505,7 @@ git diff --check
 git commit -m "test: replace browser-owned source contracts"
 ```
 
-Expected: transition passes and the open-row count decreases by exactly 11. If the browser harness is blocked, preserve the evidence, leave these three legacy files present, and continue Tasks 7–14 without claiming Slice 3C completion.
+Expected: transition passes and the open-row count decreases by exactly 11. If the browser harness is blocked, preserve the evidence, leave these three legacy files present, and continue Tasks 7–14 without claiming Slice 3C completion. A deferred browser batch resumes as this task after Wave 3 and before Task 15; its cutover then applies the Cutover Protocol's factually-last runner-removal rule.
 
 ### Task 7: Add the Wave 2 process owners to `os-integration`
 
