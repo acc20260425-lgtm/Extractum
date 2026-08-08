@@ -261,8 +261,10 @@ describe("test conventions", () => {
     expect(VITEST_PROJECT_DEFINITIONS.every(({ exclude }) => exclude.includes("**/node_modules/**"))).toBe(true);
 
     expect(LEGACY_TEST_FILES).toEqual([
+      "scripts/process-shell-diagnostic/coordinator.test.ts",
       "scripts/process-shell-diagnostic/git-state.test.ts",
       "scripts/process-shell-diagnostic/report.test.ts",
+      "scripts/process-shell-diagnostic/runtime.test.ts",
       "scripts/run-vitest.test.ts",
       "scripts/testing/run-observation.test.ts",
       "scripts/testing/slice-1-baseline.test.ts",

@@ -24,6 +24,7 @@
     yesNo,
   } from "$lib/diagnostics-view-model";
   import type { BadgeVariant } from "$lib/components/ui/types";
+  import { EMPTY_DIAGNOSTIC_ISSUES_MESSAGE, diagnosticsTablesBeforeOverview, runDiagnosticsRefresh } from "$lib/diagnostics-page";
   import type { DiagnosticRuntimeCheck, DiagnosticSummaryDto } from "$lib/types/diagnostics";
 
   type StatusStripItem = {
@@ -128,29 +129,29 @@
   let diagnosticsTableMode = $state<"issues" | "all">("issues");
 
   async function refreshDiagnostics(initial: boolean) {
-    if (initial) {
-      loading = true;
-      status = "";
-    } else {
-      refreshing = true;
-      status = "Refreshing...";
-    }
-    error = null;
-
-    try {
-      summary = await loadDiagnosticSummary();
-      status = "";
-    } catch (caught) {
-      error = formatDiagnosticError("loading diagnostics", caught);
-      status = "";
-      if (initial) summary = null;
-    } finally {
-      if (initial) {
-        loading = false;
-      } else {
-        refreshing = false;
-      }
-    }
+    await runDiagnosticsRefresh({
+      initial,
+      load: loadDiagnosticSummary,
+      onStart: (isInitial) => {
+        if (isInitial) loading = true;
+        else refreshing = true;
+        status = isInitial ? "" : "Refreshing...";
+        error = null;
+      },
+      onSuccess: (nextSummary) => {
+        summary = nextSummary;
+        status = "";
+      },
+      onError: (caught, isInitial) => {
+        error = formatDiagnosticError("loading diagnostics", caught);
+        status = "";
+        if (isInitial) summary = null;
+      },
+      onFinish: (isInitial) => {
+        if (isInitial) loading = false;
+        else refreshing = false;
+      },
+    });
   }
 
   onMount(() => {
@@ -412,7 +413,7 @@
       </ExtractumButton>
     </div>
 
-    {#if diagnosticsTableMode === "issues"}
+    {#if diagnosticsTablesBeforeOverview(diagnosticsTableMode)}
       {@render diagnosticsTableArea(tableSections)}
       {@render diagnosticsOverviewArea(summary)}
     {:else}
@@ -524,7 +525,7 @@
       />
     {:else}
       <ExtractumStatusMessage tone="muted" className="diagnostics-empty-state">
-        No diagnostic issue rows match this view.
+        {EMPTY_DIAGNOSTIC_ISSUES_MESSAGE}
       </ExtractumStatusMessage>
     {/each}
   </div>

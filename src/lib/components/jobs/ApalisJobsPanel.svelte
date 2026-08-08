@@ -7,6 +7,7 @@
     type ExtractumDataGridColumn,
   } from "$lib/components/extractum-ui";
   import { formatDataGridDateTimeValue } from "$lib/components/extractum-ui/data-grid-date-format";
+  import { createApalisJobsRouteOrchestration } from "$lib/apalis-jobs-route";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
@@ -51,6 +52,10 @@
   let selectedJobId = $state<string | null>(null);
   let searchDebounce: ReturnType<typeof setTimeout> | null = null;
   let refreshSequence = 0;
+  const routeOrchestration = createApalisJobsRouteOrchestration({
+    confirmPrune: (message) => typeof globalThis.confirm === "function" && globalThis.confirm(message),
+    schedule: setTimeout,
+  });
 
   let selectedJob = $derived(
     selectedJobId ? response?.jobs.find((job) => job.id === selectedJobId) ?? null : null,
@@ -60,7 +65,7 @@
   let selectedRowIds = $derived(selectedJobId ? [selectedJobId] : []);
 
   onMount(() => {
-    void refreshJobs(true);
+    void routeOrchestration.manualRefresh(() => refreshJobs(true));
   });
 
   onDestroy(() => {
@@ -117,22 +122,21 @@
   }
 
   async function pruneOldTerminalJobs() {
-    const confirmed = confirm(
-      "Delete finished Apalis jobs older than 24 hours? This includes Done, Killed, and Failed jobs with no retries left. This cannot be undone.",
-    );
-    if (!confirmed) return;
-
-    pruning = true;
-    error = null;
-    pruneMessage = null;
-
     try {
-      const result = await pruneOldTerminalApalisJobs();
+      const result = await routeOrchestration.guardedPrune(
+        pruneOldTerminalApalisJobs,
+        () => refreshJobs(false),
+        () => {
+          pruning = true;
+          error = null;
+          pruneMessage = null;
+        },
+      );
+      if (result === null) return;
       pruneMessage =
         result.deletedCount === 1
           ? "Deleted 1 old finished job."
           : `Deleted ${result.deletedCount} old finished jobs.`;
-      await refreshJobs(false);
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
     } finally {
@@ -143,10 +147,10 @@
   function handleFilterChange(options: { debounce?: boolean } = {}) {
     clearSearchDebounce();
     if (options.debounce) {
-      searchDebounce = setTimeout(() => {
+      searchDebounce = routeOrchestration.scheduleSearch(() => {
         searchDebounce = null;
         void refreshJobs(false);
-      }, 250);
+      });
       return;
     }
     void refreshJobs(false);
@@ -209,7 +213,7 @@
       <p>Inspector and maintenance tools for local Apalis jobs.</p>
     </div>
     <div class="jobs-actions">
-      <Button variant="secondary" onclick={() => refreshJobs(false)} disabled={loading || refreshing || pruning}>
+      <Button variant="secondary" onclick={() => routeOrchestration.manualRefresh(() => refreshJobs(false))} disabled={loading || refreshing || pruning}>
         <RefreshCw size={15} aria-hidden="true" />
         Refresh
       </Button>

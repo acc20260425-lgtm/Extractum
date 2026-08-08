@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { Eraser, Play, RefreshCw, Save, Square, Terminal } from "@lucide/svelte";
+  import { Eraser, RefreshCw, Save } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import ProjectsSettings from "$lib/components/settings/projects-settings.svelte";
   import { SETTINGS_FOCUS } from "./settings-focus";
+  import { providerTestConsoleActions } from "$lib/provider-test-console";
+  import ProviderTestConsole from "$lib/components/settings/ProviderTestConsole.svelte";
   // Retained legacy marker; runtime copy is owned by SETTINGS_FOCUS.description:
   // Settings stay focused on LLM provider profiles and test runs.
 
@@ -19,16 +21,12 @@
     saveLlmProfile,
   } from "$lib/api/llm";
   import { formatAppError } from "$lib/app-error";
-  import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import MetaPill from "$lib/components/ui/MetaPill.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
-  import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel, LlmUsage } from "$lib/types/llm";
 
 
@@ -86,6 +84,7 @@
   let testUsage = $state<LlmUsage | null>(null);
   let testing = $state(false);
   let testDialogOpen = $state(false);
+  const testDialogActions = providerTestConsoleActions((open) => (testDialogOpen = open));
   let activeRequestId = $state<string | null>(null);
   let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -451,11 +450,11 @@
   }
 
   function openTestDialog() {
-    testDialogOpen = true;
+    testDialogActions.open();
   }
 
   function closeTestDialog() {
-    testDialogOpen = false;
+    testDialogActions.close();
   }
 
   onMount(() => {
@@ -734,16 +733,22 @@
             <Eraser size={15} aria-hidden="true" />
             Clear API key
           </Button>
-          <Button
-            variant="secondary"
-            type="button"
-            onclick={openTestDialog}
-            ariaLabel="Open provider test console"
-            title="Open provider test console"
-          >
-            <Terminal size={15} aria-hidden="true" />
-            Open test
-          </Button>
+          <ProviderTestConsole
+            open={testDialogOpen}
+            prompt={testPrompt}
+            providerLabel={providerLabel()}
+            providerModelLine={providerModelLine()}
+            {testing}
+            canRun={canSaveProfile()}
+            status={testStatus}
+            output={testOutput}
+            usage={testUsage ? usageLine(testUsage) : ""}
+            onOpen={openTestDialog}
+            onClose={closeTestDialog}
+            onPromptChange={(value) => (testPrompt = value)}
+            onRun={runTest}
+            onCancel={cancelTest}
+          />
         </div>
 
         {#if modelsStatus}
@@ -799,71 +804,6 @@
   </div>
 </section>
 
-<DesktopDialog
-  open={testDialogOpen}
-  title="Provider Test Console"
-  description="Run a live request with the profile currently open in settings before using it in reports."
-  labelledBy="provider-test-title"
-  width="52rem"
-  onClose={closeTestDialog}
->
-  <div class="test-dialog">
-    <label>Prompt
-      <Textarea
-        value={testPrompt}
-        rows={8}
-        placeholder={`Ask ${providerLabel()} something simple...`}
-        oninput={(event) => (testPrompt = (event.currentTarget as HTMLTextAreaElement).value)}
-      />
-    </label>
-
-    <div class="actions modal-actions">
-      <Button
-        onclick={runTest}
-        disabled={testing || !testPrompt.trim() || !canSaveProfile()}
-        ariaLabel="Run provider test request"
-        title="Run provider test request"
-      >
-        <Play size={15} aria-hidden="true" />
-        {testing ? "Streaming..." : "Run test"}
-      </Button>
-      {#if testing}
-        <Button
-          variant="danger-soft"
-          type="button"
-          onclick={cancelTest}
-          ariaLabel="Cancel provider test request"
-          title="Cancel provider test request"
-        >
-          <Square size={15} aria-hidden="true" /> Cancel
-        </Button>
-      {/if}
-      {#if provider || defaultModel}
-        <MetaPill>{providerModelLine()}</MetaPill>
-      {/if}
-    </div>
-
-    {#if testStatus}
-      <StatusMessage
-        tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
-      >
-        {testStatus}
-      </StatusMessage>
-    {/if}
-
-    <SurfaceCard
-      title="Streaming output"
-      meta={testUsage ? usageLine(testUsage) : ""}
-      className="output-surface"
-    >
-      {#if testOutput}
-        <pre>{testOutput}</pre>
-      {:else}
-        <EmptyState description="No output yet." />
-      {/if}
-    </SurfaceCard>
-  </div>
-</DesktopDialog>
 {/if}
 
 <style>
@@ -944,29 +884,6 @@
     margin-bottom: 0;
   }
 
-  :global(.ui-surface-card.output-surface) {
-    min-height: 14rem;
-  }
-
-  pre {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    font: inherit;
-    line-height: 1.6;
-  }
-
-  .test-dialog {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .modal-actions {
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .provider-notes h3 {
     margin: 0;
   }
@@ -976,9 +893,5 @@
       grid-template-columns: 1fr;
     }
 
-    .modal-actions {
-      flex-direction: column;
-      align-items: stretch;
-    }
   }
 </style>

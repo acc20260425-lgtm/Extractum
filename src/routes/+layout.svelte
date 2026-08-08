@@ -9,6 +9,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
+  import { apalisJobsNavigationItem } from "$lib/apalis-jobs-route";
 
   const SIDEBAR_COLLAPSED_KEY = "extractum.sidebar.collapsed";
 
@@ -100,11 +101,8 @@
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
     },
     {
-      href: "/jobs",
-      label: "Jobs",
-      caption: "Apalis queue",
+      ...apalisJobsNavigationItem("legacy"),
       icon: ListChecks,
-      active: (pathname: string) => pathname.startsWith("/jobs"),
     },
     {
       href: "/diagnostics",
@@ -152,11 +150,8 @@
       active: (pathname: string) => pathname.startsWith("/projects/runs"),
     },
     {
-      href: "/jobs",
-      label: "Jobs",
-      caption: "Apalis queue",
+      ...apalisJobsNavigationItem("projects"),
       icon: ListChecks,
-      active: (pathname: string) => pathname.startsWith("/jobs"),
     },
     {
       href: "/diagnostics",

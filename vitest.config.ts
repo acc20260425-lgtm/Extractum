@@ -10,10 +10,8 @@ const DEFAULT_TEST_PATTERN = "**/*.{test,spec}.?(c|m)[jt]s?(x)";
 const OS_INTEGRATION_FILES = Object.freeze([
   "scripts/process-shell-diagnostic/attempt.test.ts",
   "scripts/process-shell-diagnostic/coordinator.behavior.test.ts",
-  "scripts/process-shell-diagnostic/coordinator.test.ts",
   "scripts/process-shell-diagnostic/protocol.test.ts",
   "scripts/process-shell-diagnostic/runtime.behavior.test.ts",
-  "scripts/process-shell-diagnostic/runtime.test.ts",
   "scripts/testing/run-observation.behavior.test.ts",
 ]);
 const ARCHITECTURE_FILES = Object.freeze([
