@@ -62,8 +62,10 @@ an additive replacement commit or a component cutover returns a green state.
 
 ## Execution Waves
 
-Waves batch independent components for implementation and review; they do not
-redefine the graph:
+Waves batch independent targets for implementation and components for cutover;
+they do not redefine the graph. A component's cutover wave is the maximum wave
+rank among all of its targets. The target counts below therefore describe
+implementation volume, not the number of legacy files deleted by that wave.
 
 1. **Wave 0 -- deletion only.** Delete the 23 `(1, 0)` legacy files, closing
    70 rows through their existing deletion reasons. This is one deletion
@@ -78,15 +80,23 @@ redefine the graph:
    analysis- or product-wide checkpoint.
 4. **Wave 3 -- Cargo.** Implement the 18 exact Cargo identities, grouped by
    package and connected component.
-5. **Browser track.** Start the three Playwright targets after Wave 0 and run
-   them independently of Waves 1--3. A browser-harness problem blocks only its
-   connected components; it does not stop unrelated Vitest or Cargo work.
+5. **Browser track / cutover Wave 4.** Start the three Playwright targets after
+   Wave 0 and implement them independently of Waves 1--3. Browser has the
+   highest cutover rank, so a component containing both browser and Vitest
+   targets closes only after both sides are green.
 
-Each numbered wave has at most one integration cutover batch; the browser track
-has one of its own. A complete transition-validator run occurs once before
-that batch, not once per target file or per component under development. The
-plan does not add a subset-validation mode or a second Cargo-evidence path.
-The final complete `verify` still runs only once.
+Ten components span more than one implementation wave: six span Waves 1 and
+2, two span Waves 1 and 3, and two span a Vitest wave and the browser track.
+Their additive targets may land earlier, but their legacy files are assigned
+to the maximum cutover wave. Consequently Wave 1 does not claim that all 30
+one-row targets immediately remove their legacy files, and Wave 3 may close a
+component whose Node target was implemented in Wave 1.
+
+Each cutover Wave 0--4 has at most one integration batch. A complete
+transition-validator run occurs once before that batch, not once per target
+file or per component under development. The plan does not add a
+subset-validation mode or a second Cargo-evidence path. The final complete
+`verify` still runs only once.
 
 ## Replacement and Cutover Contract
 
@@ -136,6 +146,12 @@ belong to `unit-node`. The component project adds the narrow include pattern
 pattern. This places all 27 component behavior targets -- 90 rows and 598
 assertion ordinals -- under jsdom without changing any frozen replacement
 path or title. No existing tracked file currently matches that new pattern.
+Those targets inherit the component project's existing
+`scripts/testing/setup-component-tests.ts` setup and
+`svelteTestingOptions: { autoCleanup: false }`; Slice 3C adds no second setup
+file. The existing `src/lib/telegram-checkpoint-2.behavior.test.ts` and
+`src/lib/telegram-contract-paths.behavior.test.ts` files are outside
+`src/lib/components/` and remain in `unit-node`.
 
 The implementation's first runner-ownership change updates the redisposition
 forecast and its forecast validator from 269 Node rows and 0 jsdom rows to the
@@ -176,10 +192,13 @@ fixture.
 
 The browser track begins with one minimal route smoke that proves this harness
 and its cleanup. Failure to mount the real route without a production-only
-browser harness blocks only the three browser-connected components while
-Vitest and Cargo waves continue. After the browser command, a process audit
-rejects leaked Vite or Playwright Chromium descendants by PID and command-line
-marker.
+browser harness does not stop development of unrelated Vitest or Cargo
+targets, but it delays cutover of the two mixed browser/Vitest components,
+cutover of the one browser-only `(1, 1)` component, and therefore final removal
+of the legacy runner. In particular, the app-sidebar component also needs its
+jsdom target, while the dialog component also needs both desktop-dialog and
+modal-host jsdom targets. After the browser command, a process audit rejects
+leaked Vite or Playwright Chromium descendants by PID and command-line marker.
 
 ## Cargo Ownership
 
@@ -200,7 +219,7 @@ of the frozen invariant.
 
 The `legacy-contract` project remains present and non-empty until the final
 connected component is ready to close. The commit that deletes the last legacy
-file atomically removes:
+file is the Wave 4 cutover commit and atomically removes:
 
 - the `legacy-contract` Vitest project;
 - `LEGACY_TEST_FILES` and the ledger-derived unit exclusions;
@@ -236,6 +255,11 @@ batch cutover deletes its ready connected-component legacy files. Independent
 targets may be added in earlier green commits while those legacy declarations
 remain present. A cutover batch receives one read-only integration review and
 at most one combined fix wave before commit.
+
+Five components mix jsdom and Node targets. Such a batch reserves both
+frontend command slots for its focused `component` and `unit-node` owners; no
+third frontend command overlaps them. Multiple mixed components may share the
+same two commands only when their exact file paths are passed together.
 
 An empty or unexpectedly small selection is a failure. A correctness failure
 is preserved and fixed rather than replaced by an unexplained green rerun.
