@@ -63,9 +63,11 @@ an additive replacement commit or a component cutover returns a green state.
 ## Execution Waves
 
 Waves batch independent targets for implementation and components for cutover;
-they do not redefine the graph. A component's cutover wave is the maximum wave
-rank among all of its targets. The target counts below therefore describe
-implementation volume, not the number of legacy files deleted by that wave.
+they do not redefine the graph. Among numbered targets, a component's cutover
+wave is their maximum wave rank; any Playwright target assigns the component
+to the separate browser cutover bucket. The target counts below therefore
+describe implementation volume, not the number of legacy files deleted by
+that wave.
 
 1. **Wave 0 -- deletion only.** Delete the 23 `(1, 0)` legacy files, closing
    70 rows through their existing deletion reasons. This is one deletion
@@ -80,23 +82,38 @@ implementation volume, not the number of legacy files deleted by that wave.
    analysis- or product-wide checkpoint.
 4. **Wave 3 -- Cargo.** Implement the 18 exact Cargo identities, grouped by
    package and connected component.
-5. **Browser track / cutover Wave 4.** Start the three Playwright targets after
-   Wave 0 and implement them independently of Waves 1--3. Browser has the
-   highest cutover rank, so a component containing both browser and Vitest
-   targets closes only after both sides are green.
+5. **Browser track.** Start the three Playwright targets after Wave 0 and
+   implement them independently of Waves 1--3. A component containing both
+   browser and Vitest targets closes only after both sides are green, but the
+   browser cutover may occur before or after Cargo according to actual
+   readiness.
 
 Ten components span more than one implementation wave: six span Waves 1 and
 2, two span Waves 1 and 3, and two span a Vitest wave and the browser track.
 Their additive targets may land earlier, but their legacy files are assigned
-to the maximum cutover wave. Consequently Wave 1 does not claim that all 30
-one-row targets immediately remove their legacy files, and Wave 3 may close a
+to the maximum numbered cutover wave, or to the browser track when they contain
+a Playwright target. Consequently Wave 1 does not claim that all 30 one-row
+targets immediately remove their legacy files, and Wave 3 may close a
 component whose Node target was implemented in Wave 1.
 
-Each cutover Wave 0--4 has at most one integration batch. A complete
-transition-validator run occurs once before that batch, not once per target
-file or per component under development. The plan does not add a
-subset-validation mode or a second Cargo-evidence path. The final complete
-`verify` still runs only once.
+The resulting cutover distribution is:
+
+| Cutover bucket | Components | Legacy files | Rows closed |
+| --- | ---: | ---: | ---: |
+| Wave 0 | 23 | 23 | 70 |
+| Wave 1 | 14 | 14 | 29 |
+| Wave 2 | 35 | 37 | 271 |
+| Wave 3 | 9 | 9 | 55 |
+| Browser track | 3 | 3 | 11 |
+| **Total** | **84** | **86** | **436** |
+
+Wave 0 remains one special deletion-only batch. Wave 1, Wave 3, and the browser
+track each remain one integration batch. Wave 2 is divided into four or five
+cutover batches, each closing 7--10 legacy files without splitting a connected
+component. Each batch receives one complete transition-validator run and one
+integration review. This adds only the validator runs needed to keep the
+271-row wave reviewable; the plan does not add a subset-validation mode or a
+second Cargo-evidence path. The final complete `verify` still runs only once.
 
 ## Replacement and Cutover Contract
 
@@ -163,12 +180,14 @@ classifier for this approved forecast correction.
 Replacement files that spawn, interrupt, or audit real child-process trees
 belong to `os-integration` and retain its fork pool and process-safety policy.
 Pure wrapper and serialization tests remain in `unit-node` even when they
-share a directory with process tests. The explicit `os-integration` inventory
-changes in the same cutover batch that deletes the corresponding process
-legacy files. No process-owning test may silently fall back to the threaded
-unit project. Process preflight runs before retained OS, Cargo, or Playwright
-verification, and postflight checks look for repository-owned descendants
-rather than unrelated user processes.
+share a directory with process tests. A new process target enters the explicit
+`os-integration` inventory in the same additive commit that creates that
+target. Its corresponding legacy path remains in the inventory until the
+component cutover commit deletes the legacy file and removes the old entry.
+The overlap is intentional: at no point may a process-owning replacement fall
+back to the threaded unit project. Process preflight runs before retained OS,
+Cargo, or Playwright verification, and postflight checks look for
+repository-owned descendants rather than unrelated user processes.
 
 ## Application Playwright Owner
 
@@ -219,7 +238,7 @@ of the frozen invariant.
 
 The `legacy-contract` project remains present and non-empty until the final
 connected component is ready to close. The commit that deletes the last legacy
-file is the Wave 4 cutover commit and atomically removes:
+file -- whichever cutover batch is factually last -- atomically removes:
 
 - the `legacy-contract` Vitest project;
 - `LEGACY_TEST_FILES` and the ledger-derived unit exclusions;
