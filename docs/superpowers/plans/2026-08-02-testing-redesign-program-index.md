@@ -64,6 +64,24 @@ Before writing each next detailed plan:
 - Completed: `docs/superpowers/plans/2026-08-05-testing-redesign-slice-3b-component-contracts.md`
   at final implementation checkpoint `95ccec08`; its evidence record is
   `docs/superpowers/verification/2026-08-05-testing-redesign-slice-3b-component-contracts.md`.
+- Blocked final acceptance: `docs/superpowers/plans/2026-08-08-testing-redesign-slice-3c-source-contract-completion.md`.
+  Its transition inventory is closed at 671 ledger rows / 0 open, with all 86
+  legacy files and the legacy runner removed. Its original unsandboxed
+  `npm.cmd run verify` exited 1 after 253.645 seconds on one stale component
+  interaction selector. The focused owner passes after the bounded correction.
+  The user-authorized single corrective full run then exited 1 after 460.9
+  seconds at `check:rustfmt`. Focused diagnosis found and mechanically fixed a
+  formatting-only drift in `src-tauri/src/prompt_packs/runtime_commands.rs`;
+  the focused rustfmt gate now passes. The user-authorized final full run then
+  passed rustfmt and Cargo workspace check but exited 101 after 653.7 seconds
+  during Cargo workspace tests in the `extractum-prompt-packs` library test
+  binary. The final Git diff gate was not reached and no retry is authorized,
+  though the one authorized exact package diagnostic subsequently passed all
+  252 library tests in 143.09 seconds. One last authorized full run reproduced
+  workspace exit 101 after 492.4 seconds at the same package/binary boundary.
+  The failure is reproducible only in workspace context, the final Git diff
+  gate was not reached, and Slice 3 is not marked complete. See
+  `docs/superpowers/verification/2026-08-08-testing-redesign-slice-3c.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
@@ -74,6 +92,8 @@ SC-000649 evidence correction. After two fail-closed source-contract repairs
 and mechanical rustfmt, its final fresh unsandboxed `npm.cmd run verify` exited
 0 in 383.4 seconds. The integration handoff is green; Slice 3C may plan from
 this ledger state but must not expand this completed evidence checkpoint.
-Slice 4 continues without Nx under the approved TestingManifest architecture.
+Slice 4 remains next without Nx under the approved TestingManifest
+architecture, but it must not start until Slice 3 has an authorized successful
+full-gate completion path.
 The separate disposable Slice 2C Nx decision spike remains deferred until after
 Slice 4 has committed; no Nx package or configuration is adopted before then.

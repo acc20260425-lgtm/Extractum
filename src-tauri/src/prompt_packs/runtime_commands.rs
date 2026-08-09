@@ -84,7 +84,10 @@ impl YoutubeSummaryExecutionPort for TauriYoutubeSummaryExecutionPort {
             execute_prepared_api_run(
                 pool,
                 self.handle.state::<PromptPackRunState>().inner(),
-                self.handle.state::<Arc<LlmSchedulerState>>().inner().as_ref(),
+                self.handle
+                    .state::<Arc<LlmSchedulerState>>()
+                    .inner()
+                    .as_ref(),
                 events,
                 prepared,
                 profile,
@@ -241,9 +244,8 @@ fn build_youtube_summary_execution_task(
         let prepared = match prepare_run_execution(&pool, &ticket).await {
             Ok(value) => value,
             Err(error) => {
-                if let Err(failure_error) = execution_port
-                    .fail(&pool, events, &ticket, &error)
-                    .await
+                if let Err(failure_error) =
+                    execution_port.fail(&pool, events, &ticket, &error).await
                 {
                     eprintln!(
                         "Prompt Pack run {} failed and could not be marked failed: {failure_error}",
@@ -256,21 +258,22 @@ fn build_youtube_summary_execution_task(
         let result = match prepared {
             PreparedRunExecution::Api(api) => {
                 match execution_port.resolve_profile(api.profile_id()).await {
-                    Ok(profile) => execution_port
-                        .execute_api(&pool, events.clone(), api, profile)
-                        .await,
+                    Ok(profile) => {
+                        execution_port
+                            .execute_api(&pool, events.clone(), api, profile)
+                            .await
+                    }
                     Err(error) => Err(error),
                 }
             }
-            PreparedRunExecution::GeminiBrowser(browser_run) => execution_port
-                .execute_browser(&pool, events.clone(), browser_run)
-                .await
+            PreparedRunExecution::GeminiBrowser(browser_run) => {
+                execution_port
+                    .execute_browser(&pool, events.clone(), browser_run)
+                    .await
+            }
         };
         if let Err(error) = result {
-            if let Err(failure_error) = execution_port
-                .fail(&pool, events, &ticket, &error)
-                .await
-            {
+            if let Err(failure_error) = execution_port.fail(&pool, events, &ticket, &error).await {
                 eprintln!(
                     "Prompt Pack run {} failed and could not be marked failed: {failure_error}",
                     ticket.run_id()
@@ -390,6 +393,10 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
+    use super::{
+        build_youtube_summary_execution_task, ExecutionPortFuture, ExecutionTask,
+        YoutubeSummaryExecutionPort,
+    };
     use extractum_core::error::AppError;
     use extractum_llm::ResolvedLlmProfile;
     use extractum_prompt_packs::{
@@ -397,10 +404,6 @@ mod tests {
         PromptPackEvent, PromptPackEventSink, RunExecutionTicket,
     };
     use sqlx::SqlitePool;
-    use super::{
-        build_youtube_summary_execution_task, ExecutionPortFuture, ExecutionTask,
-        YoutubeSummaryExecutionPort,
-    };
 
     #[derive(Default)]
     struct RecordingExecutionPort {
@@ -485,7 +488,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled() {
+    async fn build_youtube_summary_execution_task_defers_profile_resolution_until_spawned_future_is_polled(
+    ) {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("test pool");
@@ -512,9 +516,7 @@ mod tests {
 
         dispatch_run_execution_ticket(
             RunExecutionTicket::for_app_test(91),
-            move |ticket| {
-                build_youtube_summary_execution_task(pool, ticket, execution_port)
-            },
+            move |ticket| build_youtube_summary_execution_task(pool, ticket, execution_port),
             move |task| {
                 *captured_for_spawn.lock().expect("captured task") = Some(task);
             },

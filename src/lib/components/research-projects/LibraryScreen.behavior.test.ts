@@ -91,12 +91,12 @@ it("library prototype contract > coordinates filter selection, row selection, an
   expect(screen.getByRole("complementary", { name: "Library filters" })).toBeTruthy();
   expect(await screen.findByRole("heading", { name: "Evidence video" })).toBeTruthy();
 
-  await fireEvent.click(screen.getByRole("button", { name: "Select grid row provider:telegram" }));
+  await fireEvent.click(screen.getByRole("row", { name: "provider:telegram" }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Telegram archive" })).toBeTruthy());
 
-  await fireEvent.click(screen.getByRole("button", { name: "Select grid row provider:youtube" }));
+  await fireEvent.click(screen.getByRole("row", { name: "provider:youtube" }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Evidence video" })).toBeTruthy());
-  await fireEvent.click(screen.getByRole("button", { name: "Select grid row source:12" }));
+  await fireEvent.click(screen.getByRole("row", { name: "source:12" }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Second evidence video" })).toBeTruthy());
 
   const separator = screen.getByRole("separator", { name: "Resize source inspector" });

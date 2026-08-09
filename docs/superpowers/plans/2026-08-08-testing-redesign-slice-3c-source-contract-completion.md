@@ -89,7 +89,7 @@ Cutover distribution:
 | Wave 2E | included below | 8 | 65 | 66 | 1 |
 | Wave 3 | 9 | 9 | 55 | 11 | 1 |
 | Browser | 3 | 3 | 11 | 0 | 1 |
-| **Total** | **84** | **86** | **436** | **0** | **9** |
+| **Total** | **79** | **86** | **436** | **0** | **9** |
 
 The remainder column is accounting-only: it subtracts rows in table order and does not prescribe when the independent browser batch runs. Operational cutovers verify their exact row delta, not an absolute global count. The row counts include accepted delete rows in mixed files. No batch splits a connected component.
 
@@ -924,7 +924,7 @@ Retain its exit code and one wall-clock duration. Do not rerun for a correctness
 The verification document records:
 
 - all 9 cutover batches and their commits;
-- 436 closed rows, 86 deleted legacy files, 84 completed components;
+- 436 closed rows, 86 deleted legacy files, 79 completed components;
 - final Node/jsdom/Cargo/Playwright owner counts;
 - the process preflight and sole full-verify observation;
 - zero open ledger rows and removal of the legacy runner;
