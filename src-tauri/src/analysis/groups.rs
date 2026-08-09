@@ -98,13 +98,11 @@ async fn prepare_analysis_source_group_input(
     Ok(input)
 }
 
-#[tauri::command]
 pub async fn list_analysis_source_groups(handle: AppHandle) -> AppResult<Vec<AnalysisSourceGroup>> {
     let pool = get_pool(&handle).await?;
     list_analysis_source_groups_in_pool(&pool).await
 }
 
-#[tauri::command]
 pub async fn create_analysis_source_group(
     handle: AppHandle,
     name: String,
@@ -123,7 +121,6 @@ pub async fn create_analysis_source_group(
     })
 }
 
-#[tauri::command]
 pub async fn update_analysis_source_group(
     handle: AppHandle,
     group_id: i64,
@@ -143,7 +140,6 @@ pub async fn update_analysis_source_group(
     })
 }
 
-#[tauri::command]
 pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     delete_analysis_source_group_in_pool(&pool, group_id).await

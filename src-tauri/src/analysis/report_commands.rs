@@ -8,7 +8,6 @@ use crate::llm::LlmSchedulerState;
 use super::report::{self, StartAnalysisReportRequest};
 use super::AnalysisState;
 
-#[tauri::command]
 pub async fn cancel_analysis_run(
     handle: AppHandle,
     state: tauri::State<'_, AnalysisState>,
@@ -19,7 +18,6 @@ pub async fn cancel_analysis_run(
         .await
 }
 
-#[tauri::command]
 #[expect(
     clippy::too_many_arguments,
     reason = "Tauri command signature is the frontend IPC contract; inputs are normalized into StartAnalysisReportRequest immediately."

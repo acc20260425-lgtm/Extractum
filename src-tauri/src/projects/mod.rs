@@ -771,7 +771,6 @@ pub async fn delete_project_youtube_video_source_from_library(
     delete_project_youtube_video_source_from_library_in_pool(&pool, project_id, source_id).await
 }
 
-#[tauri::command]
 #[expect(
     clippy::too_many_arguments,
     reason = "Tauri command signature mirrors start_analysis_report for project scope."
@@ -803,7 +802,6 @@ pub async fn start_project_analysis(
     crate::analysis::report::start_analysis_report_run(handle, state.inner(), request).await
 }
 
-#[tauri::command]
 pub async fn list_project_runs(
     handle: AppHandle,
     project_id: i64,

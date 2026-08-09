@@ -367,6 +367,7 @@ pub async fn seed_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
     state: State<'_, PromptPackRunState>,
 ) -> AppResult<PromptPackRunSummaryDto> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     let pool = get_pool(&handle).await?;
     seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
 }
@@ -377,6 +378,7 @@ pub async fn clear_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
     state: State<'_, PromptPackRunState>,
 ) -> AppResult<i64> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     let pool = get_pool(&handle).await?;
     clear_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
 }

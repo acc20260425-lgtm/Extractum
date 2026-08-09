@@ -83,6 +83,7 @@ pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
     handle: AppHandle,
     state: tauri::State<'_, SourceJobState>,
 ) -> AppResult<SourceJobRecord> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     jobs::seed_source_job_cancellation_smoke_fixture(handle, state.inner()).await
 }
 
@@ -91,5 +92,6 @@ pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
 pub(crate) async fn clear_source_job_cancellation_smoke_fixture(
     state: tauri::State<'_, SourceJobState>,
 ) -> AppResult<usize> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     jobs::clear_source_job_cancellation_smoke_fixture(state.inner()).await
 }

@@ -10,7 +10,6 @@ use tauri::AppHandle;
 
 use crate::db::get_pool;
 
-#[tauri::command]
 pub async fn list_analysis_prompt_templates(
     handle: AppHandle,
     template_kind: Option<String>,
@@ -19,7 +18,6 @@ pub async fn list_analysis_prompt_templates(
     list_analysis_prompt_templates_in_pool(&pool, template_kind).await
 }
 
-#[tauri::command]
 pub async fn create_analysis_prompt_template(
     handle: AppHandle,
     name: String,
@@ -30,7 +28,6 @@ pub async fn create_analysis_prompt_template(
     create_analysis_prompt_template_in_pool(&pool, name, template_kind, body).await
 }
 
-#[tauri::command]
 pub async fn update_analysis_prompt_template(
     handle: AppHandle,
     template_id: i64,
@@ -41,7 +38,6 @@ pub async fn update_analysis_prompt_template(
     update_analysis_prompt_template_in_pool(&pool, template_id, name, body).await
 }
 
-#[tauri::command]
 pub async fn delete_analysis_prompt_template(handle: AppHandle, template_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     delete_analysis_prompt_template_in_pool(&pool, template_id).await

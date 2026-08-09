@@ -17,7 +17,6 @@ use crate::llm::resolve_profile_for_backend;
 use super::events::TauriAnalysisEventSink;
 use super::store::resolve_legacy_analysis_chat_run_in_pool;
 
-#[tauri::command]
 pub async fn list_analysis_chat_messages(
     handle: AppHandle,
     run_id: i64,
@@ -26,13 +25,11 @@ pub async fn list_analysis_chat_messages(
     list_analysis_chat_messages_in_pool(&pool, run_id).await
 }
 
-#[tauri::command]
 pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     clear_analysis_chat_messages_in_pool(&pool, run_id).await
 }
 
-#[tauri::command]
 pub async fn ask_analysis_run_question(
     handle: AppHandle,
     run_id: i64,

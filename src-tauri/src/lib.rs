@@ -1,4 +1,6 @@
 mod external_process;
+#[cfg(test)]
+mod shutdown;
 use std::sync::Arc;
 
 use external_process::{
@@ -16,6 +18,9 @@ mod compression {
 mod db;
 mod diagnostics;
 mod process_tree;
+mod security_config;
+#[cfg(test)]
+mod security_config_tests;
 use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
 mod error {
@@ -34,9 +39,9 @@ mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 use projects::{
     add_project_sources, create_project, delete_project,
-    delete_project_youtube_video_source_from_library, get_project_data_range, list_project_runs,
-    list_project_sources, list_projects, list_research_projects, remove_project_sources,
-    set_project_archived, set_project_pinned, start_project_analysis, update_project,
+    delete_project_youtube_video_source_from_library, list_project_sources, list_projects,
+    list_research_projects, remove_project_sources, set_project_archived, set_project_pinned,
+    update_project,
 };
 mod prompt_packs;
 use prompt_packs::{
@@ -84,6 +89,32 @@ mod time {
 mod tx;
 
 use tauri::Manager;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StartupPromptPackStep {
+    SeedBuiltins,
+    CleanupInterruptedRuns,
+}
+
+const STARTUP_PROMPT_PACK_STEPS: [StartupPromptPackStep; 2] = [
+    StartupPromptPackStep::SeedBuiltins,
+    StartupPromptPackStep::CleanupInterruptedRuns,
+];
+
+async fn initialize_prompt_pack_runtime(handle: tauri::AppHandle) {
+    for step in STARTUP_PROMPT_PACK_STEPS {
+        match step {
+            StartupPromptPackStep::SeedBuiltins => {
+                if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
+                    eprintln!("Prompt Pack seed failed: {error}");
+                }
+            }
+            StartupPromptPackStep::CleanupInterruptedRuns => {
+                cleanup_interrupted_prompt_pack_runs(handle.clone()).await;
+            }
+        }
+    }
+}
 
 mod takeout_import;
 use takeout_import::{
@@ -151,21 +182,7 @@ use gemini_browser::{
 };
 
 mod analysis;
-use analysis::{
-    ask_analysis_run_question, cancel_analysis_run, cleanup_interrupted_analysis_runs,
-    clear_analysis_chat_messages, create_analysis_prompt_template, create_analysis_source_group,
-    delete_analysis_prompt_template, delete_analysis_run, delete_analysis_source_group,
-    get_analysis_run, get_analysis_run_trace, list_active_analysis_runs,
-    list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_run_messages,
-    list_analysis_runs, list_analysis_source_groups, list_analysis_sources,
-    resolve_analysis_trace_refs, start_analysis_report, update_analysis_prompt_template,
-    update_analysis_source_group, AnalysisState,
-};
-#[cfg(dev)]
-use analysis::{
-    clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
-    seed_analysis_redesign_fixtures,
-};
+use analysis::{cleanup_interrupted_analysis_runs, AnalysisState};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -174,7 +191,7 @@ fn ping_db() -> String {
 
 macro_rules! telegram_command_registration_inventory {
     ($consumer:ident, $($arguments:tt)*) => {
-        $consumer!(
+        $consumer! {
             $($arguments)*;
             list_accounts,
             get_account,
@@ -188,23 +205,31 @@ macro_rules! telegram_command_registration_inventory {
             tg_send_code,
             tg_sign_in,
             tg_logout,
-        )
+        }
     };
 }
 
 macro_rules! telegram_command_handler {
-    ([$($before:tt)*], [$($after:tt)*]; $($command:ident),* $(,)?) => {
+    (
+        [$($before:tt)*],
+        [
+            $($(#[$after_attribute:meta])* $after:ident
+                $(=> ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?])))?
+            ),* $(,)?
+        ];
+        $($command:ident),* $(,)?
+    ) => {
         tauri::generate_handler![
             $($before)*
             $($command,)*
-            $($after)*
+            $($(#[$after_attribute])* $after,)*
         ]
     };
 }
 
 macro_rules! application_command_inventory {
     ($consumer:ident) => {
-        telegram_command_registration_inventory!(
+        $crate::telegram_command_registration_inventory! {
             $consumer,
             [
                 ping_db,
@@ -225,9 +250,29 @@ macro_rules! application_command_inventory {
                 add_project_sources,
                 remove_project_sources,
                 delete_project_youtube_video_source_from_library,
-                start_project_analysis,
-                get_project_data_range,
-                list_project_runs,
+                start_project_analysis => (crate::projects::start_project_analysis; ((
+                    handle: tauri::AppHandle,
+                    state: tauri::State<'_, extractum_analysis::AnalysisState>,
+                    project_id: i64,
+                    period_from: i64,
+                    period_to: i64,
+                    output_language: String,
+                    prompt_template_id: i64,
+                    model_override: Option<String>,
+                    profile_id: Option<String>,
+                    youtube_corpus_mode: Option<String>,
+                    include_migrated_history: bool,
+                ) -> crate::error::AppResult<i64>; ["projectId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"])),
+                get_project_data_range => (crate::projects::get_project_data_range; ((
+                    handle: tauri::AppHandle,
+                    project_id: i64,
+                    youtube_corpus_mode: Option<String>,
+                    include_migrated_history: bool,
+                ) -> crate::error::AppResult<crate::projects::ProjectDataRange>; ["projectId", "youtubeCorpusMode", "includeMigratedHistory"])),
+                list_project_runs => (crate::projects::list_project_runs; ((
+                    handle: tauri::AppHandle,
+                    project_id: i64,
+                ) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisRunSummary>>; ["projectId"])),
                 get_prompt_pack_library,
                 preflight_youtube_summary_run,
                 start_youtube_summary_run,
@@ -288,35 +333,38 @@ macro_rules! application_command_inventory {
                 gemini_bridge_list_runs,
                 gemini_bridge_get_run,
                 gemini_bridge_open_run_folder,
-                list_analysis_sources,
+                list_analysis_sources => (crate::analysis::list_analysis_sources; ((
+                    handle: tauri::AppHandle,
+                    repair_state: tauri::State<'_, crate::sources::SourceIdentityRepairState>,
+                ) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisSourceOption>>; [])),
                 list_library_sources,
                 list_library_catalog,
-                list_analysis_prompt_templates,
-                create_analysis_prompt_template,
-                update_analysis_prompt_template,
-                delete_analysis_prompt_template,
-                list_analysis_source_groups,
-                create_analysis_source_group,
-                update_analysis_source_group,
-                delete_analysis_source_group,
-                list_analysis_runs,
-                list_active_analysis_runs,
-                get_analysis_run,
-                list_analysis_run_messages,
-                delete_analysis_run,
-                get_analysis_run_trace,
-                resolve_analysis_trace_refs,
-                list_analysis_chat_messages,
-                clear_analysis_chat_messages,
-                ask_analysis_run_question,
-                start_analysis_report,
-                cancel_analysis_run,
+                list_analysis_prompt_templates => (crate::analysis::list_analysis_prompt_templates; ((handle: tauri::AppHandle, template_kind: Option<String>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisPromptTemplate>>; ["templateKind"])),
+                create_analysis_prompt_template => (crate::analysis::create_analysis_prompt_template; ((handle: tauri::AppHandle, name: String, template_kind: String, body: String) -> crate::error::AppResult<extractum_analysis::AnalysisPromptTemplate>; ["name", "templateKind", "body"])),
+                update_analysis_prompt_template => (crate::analysis::update_analysis_prompt_template; ((handle: tauri::AppHandle, template_id: i64, name: String, body: String) -> crate::error::AppResult<extractum_analysis::AnalysisPromptTemplate>; ["templateId", "name", "body"])),
+                delete_analysis_prompt_template => (crate::analysis::delete_analysis_prompt_template; ((handle: tauri::AppHandle, template_id: i64) -> crate::error::AppResult<()>; ["templateId"])),
+                list_analysis_source_groups => (crate::analysis::list_analysis_source_groups; ((handle: tauri::AppHandle) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisSourceGroup>>; [])),
+                create_analysis_source_group => (crate::analysis::create_analysis_source_group; ((handle: tauri::AppHandle, name: String, source_type: String, source_ids: Vec<i64>) -> crate::error::AppResult<extractum_analysis::AnalysisSourceGroup>; ["name", "sourceType", "sourceIds"])),
+                update_analysis_source_group => (crate::analysis::update_analysis_source_group; ((handle: tauri::AppHandle, group_id: i64, name: String, source_type: String, source_ids: Vec<i64>) -> crate::error::AppResult<extractum_analysis::AnalysisSourceGroup>; ["groupId", "name", "sourceType", "sourceIds"])),
+                delete_analysis_source_group => (crate::analysis::delete_analysis_source_group; ((handle: tauri::AppHandle, group_id: i64) -> crate::error::AppResult<()>; ["groupId"])),
+                list_analysis_runs => (crate::analysis::list_analysis_runs; ((handle: tauri::AppHandle, source_id: Option<i64>, source_group_id: Option<i64>, limit: Option<i64>, query: Option<String>, status: Option<String>, provider: Option<String>, model: Option<String>, template: Option<String>, date_from: Option<String>, date_to: Option<String>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisRunSummary>>; ["sourceId", "sourceGroupId", "limit", "query", "status", "provider", "model", "template", "dateFrom", "dateTo"])),
+                list_active_analysis_runs => (crate::analysis::list_active_analysis_runs; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisRunSummary>>; [])),
+                get_analysis_run => (crate::analysis::get_analysis_run; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<Option<extractum_analysis::AnalysisRunDetail>>; ["runId"])),
+                list_analysis_run_messages => (crate::analysis::list_analysis_run_messages; ((handle: tauri::AppHandle, run_id: i64, after: Option<extractum_analysis::AnalysisRunMessageCursor>, limit: Option<i64>, source_id: Option<i64>, around_ref: Option<String>) -> crate::error::AppResult<extractum_analysis::AnalysisRunMessagesPage>; ["runId", "after", "limit", "sourceId", "aroundRef"])),
+                delete_analysis_run => (crate::analysis::delete_analysis_run; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>, run_id: i64) -> crate::error::AppResult<()>; ["runId"])),
+                get_analysis_run_trace => (crate::analysis::get_analysis_run_trace; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<extractum_analysis::AnalysisTraceData>; ["runId"])),
+                resolve_analysis_trace_refs => (crate::analysis::resolve_analysis_trace_refs; ((handle: tauri::AppHandle, run_id: i64, refs: Vec<String>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisTraceRef>>; ["runId", "refs"])),
+                list_analysis_chat_messages => (crate::analysis::list_analysis_chat_messages; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisChatMessage>>; ["runId"])),
+                clear_analysis_chat_messages => (crate::analysis::clear_analysis_chat_messages; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<()>; ["runId"])),
+                ask_analysis_run_question => (crate::analysis::ask_analysis_run_question; ((handle: tauri::AppHandle, run_id: i64, question: String, model_override: Option<String>, profile_id: Option<String>) -> crate::error::AppResult<String>; ["runId", "question", "modelOverride", "profileId"])),
+                start_analysis_report => (crate::analysis::start_analysis_report; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>, source_id: Option<i64>, source_group_id: Option<i64>, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool) -> crate::error::AppResult<i64>; ["sourceId", "sourceGroupId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"])),
+                cancel_analysis_run => (crate::analysis::cancel_analysis_run; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>, scheduler: tauri::State<'_, std::sync::Arc<extractum_llm::LlmSchedulerState>>, run_id: i64) -> crate::error::AppResult<()>; ["runId"])),
                 #[cfg(dev)]
-                seed_analysis_redesign_fixtures,
+                seed_analysis_redesign_fixtures => (crate::analysis::seed_analysis_redesign_fixtures; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>) -> crate::error::AppResult<crate::analysis::AnalysisRedesignFixtureSummary>; [])),
                 #[cfg(dev)]
-                clear_analysis_redesign_fixture_active_runs,
+                clear_analysis_redesign_fixture_active_runs => (crate::analysis::clear_analysis_redesign_fixture_active_runs; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>) -> crate::error::AppResult<()>; [])),
                 #[cfg(dev)]
-                clear_analysis_redesign_fixtures,
+                clear_analysis_redesign_fixtures => (crate::analysis::clear_analysis_redesign_fixtures; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>) -> crate::error::AppResult<crate::analysis::AnalysisRedesignFixtureSummary>; [])),
                 preview_youtube_source,
                 add_youtube_source,
                 sync_youtube_source,
@@ -340,9 +388,64 @@ macro_rules! application_command_inventory {
                 clear_youtube_auth,
                 resolve_youtube_thumbnail
             ]
-        )
+        }
     };
 }
+
+macro_rules! define_application_ipc_wrapper {
+    (
+        $(#[$attribute:meta])* $command:ident =>
+        ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?]))
+    ) => {
+        $(#[$attribute])*
+        #[tauri::command]
+        pub(super) async fn $command($($parameter: $parameter_type),*) -> $result {
+            $implementation($($parameter),*).await
+        }
+    };
+    ($(#[$attribute:meta])* $command:ident) => {};
+}
+
+macro_rules! define_application_ipc_wrappers {
+    (
+        [$($before:ident,)*],
+        [
+            $($(#[$after_attribute:meta])* $after:ident
+                $(=> ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?])))?
+            ),* $(,)?
+        ];
+        $($telegram:ident),* $(,)?
+    ) => {
+        $(
+            define_application_ipc_wrapper!(
+                $(#[$after_attribute])* $after
+                $(=> ($implementation; (($($parameter: $parameter_type),*) -> $result; [$($wire),*])))?
+            );
+        )*
+    };
+}
+
+mod application_ipc_commands {
+    application_command_inventory!(define_application_ipc_wrappers);
+}
+
+use application_ipc_commands::{
+    ask_analysis_run_question, cancel_analysis_run, clear_analysis_chat_messages,
+    create_analysis_prompt_template, create_analysis_source_group, delete_analysis_prompt_template,
+    delete_analysis_run, delete_analysis_source_group, get_analysis_run, get_analysis_run_trace,
+    get_project_data_range, list_active_analysis_runs, list_analysis_chat_messages,
+    list_analysis_prompt_templates, list_analysis_run_messages, list_analysis_runs,
+    list_analysis_source_groups, list_analysis_sources, list_project_runs,
+    resolve_analysis_trace_refs, start_analysis_report, start_project_analysis,
+    update_analysis_prompt_template, update_analysis_source_group,
+};
+#[cfg(dev)]
+use application_ipc_commands::{
+    clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
+    seed_analysis_redesign_fixtures,
+};
+
+pub(crate) use {application_command_inventory, telegram_command_registration_inventory};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -372,17 +475,23 @@ pub fn run() {
         );
 
     #[cfg(dev)]
-    let builder = builder.plugin(
-        tauri_plugin_mcp_bridge::Builder::new()
-            .bind_address("127.0.0.1")
-            .build(),
-    );
+    let builder = {
+        security_config::require_local_dev_command(security_config::MCP_BIND_ADDRESS)
+            .expect("MCP bridge requires a localhost development build");
+        builder.plugin(
+            tauri_plugin_mcp_bridge::Builder::new()
+                .bind_address(security_config::MCP_BIND_ADDRESS)
+                .build(),
+        )
+    };
 
     builder
         .setup(|app| {
-            #[cfg(feature = "csp-verification")]
-            if let Some(window) = app.get_webview_window("main") {
-                window.open_devtools();
+            if security_config::production_devtools_allowed(true) {
+                #[cfg(feature = "csp-verification")]
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
+                }
             }
 
             let worker_handle = app.handle().clone();
@@ -393,10 +502,7 @@ pub fn run() {
             });
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
-                    eprintln!("Prompt Pack seed failed: {error}");
-                }
-                cleanup_interrupted_prompt_pack_runs(handle.clone()).await;
+                initialize_prompt_pack_runtime(handle.clone()).await;
                 cleanup_interrupted_analysis_runs(handle.clone()).await;
                 restore_telegram_accounts(handle).await;
             });
@@ -459,10 +565,25 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn startup_seeds_prompt_packs_before_interrupted_run_cleanup() {
+        assert_eq!(
+            super::STARTUP_PROMPT_PACK_STEPS,
+            [
+                super::StartupPromptPackStep::SeedBuiltins,
+                super::StartupPromptPackStep::CleanupInterruptedRuns,
+            ]
+        );
+    }
+
     macro_rules! complete_application_inventory_names {
         (
             [$($before:ident,)*],
-            [$($(#[$after_attribute:meta])* $after:ident),* $(,)?];
+            [
+                $($(#[$after_attribute:meta])* $after:ident
+                    $(=> ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?])))?
+                ),* $(,)?
+            ];
             $($command:ident),* $(,)?
         ) => {
             [

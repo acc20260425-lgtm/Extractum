@@ -276,6 +276,7 @@ pub async fn seed_takeout_cancellation_smoke_fixture(
     handle: AppHandle,
     state: tauri::State<'_, TakeoutImportState>,
 ) -> AppResult<TakeoutImportJobRecord> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     state::seed_takeout_cancellation_smoke_fixture(handle, state.inner()).await
 }
 
@@ -284,6 +285,7 @@ pub async fn seed_takeout_cancellation_smoke_fixture(
 pub async fn clear_takeout_cancellation_smoke_fixture(
     state: tauri::State<'_, TakeoutImportState>,
 ) -> AppResult<usize> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     state::clear_takeout_cancellation_smoke_fixture(state.inner()).await
 }
 

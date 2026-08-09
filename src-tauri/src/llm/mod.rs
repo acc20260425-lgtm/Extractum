@@ -471,6 +471,111 @@ mod tests {
     };
     use crate::error::AppError;
 
+    #[tokio::test]
+    async fn secure_profile_and_transport_ownership_remains_application_scoped() {
+        use crate::migrations::apply_all_migrations_for_test_pool;
+        use crate::secret_store::tests::InMemorySecretStore;
+        use crate::secret_store::{llm_profile_api_key_secret, SecretStore, SecretStoreState};
+        use secrecy::ExposeSecret;
+        use std::sync::Arc;
+
+        macro_rules! registered_command_names {
+            ([$($before:ident,)*], [$($(#[$after_attribute:meta])* $after:ident $(=> ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?])))?),* $(,)?]; $($telegram:ident),* $(,)?) => {
+                [
+                    $(stringify!($before),)*
+                    $(stringify!($telegram),)*
+                    $($(#[$after_attribute])* stringify!($after),)*
+                ]
+            };
+        }
+        let registered = crate::application_command_inventory!(registered_command_names);
+        for command in [
+            "get_llm_profiles",
+            "get_llm_request_snapshots",
+            "save_llm_profile",
+            "clear_llm_profile_api_key",
+            "delete_llm_profile",
+            "set_active_llm_profile",
+            "list_llm_provider_models",
+            "ask_llm_stream",
+            "cancel_llm_request",
+        ] {
+            assert!(
+                registered.contains(&command),
+                "unregistered command: {command}"
+            );
+        }
+        assert_eq!(super::LLM_RESPONSE_EVENT, "llm://response");
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        let store = Arc::new(InMemorySecretStore::new());
+        let secret_store = SecretStoreState::new(store.clone());
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "application-profile",
+            "openai_compatible",
+            "private-model",
+            Some("private-api-key"),
+            "http://127.0.0.1:3010/v1",
+            true,
+        )
+        .await
+        .expect("save application-owned profile");
+
+        let database_secrets: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM app_settings WHERE key LIKE '%api_key%' OR value = 'private-api-key'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("query profile settings");
+        let stored_secret = store
+            .get_secret(&llm_profile_api_key_secret("application-profile"))
+            .expect("read secure profile secret");
+        let diagnostics = load_provider_diagnostics_from_pool(&pool, &secret_store)
+            .await
+            .expect("load application diagnostics");
+        let diagnostics_json = serde_json::to_string(&diagnostics.profiles_by_provider)
+            .expect("serialize diagnostics");
+        let event = StreamEvent::new(
+            "request-1".to_string(),
+            "queued",
+            "openai_compatible".to_string(),
+            "private-model".to_string(),
+        )
+        .queue_position(1)
+        .build();
+
+        assert_eq!(database_secrets, 0);
+        assert_eq!(
+            stored_secret
+                .as_ref()
+                .map(|secret| secret.expose_secret().as_str()),
+            Some("private-api-key")
+        );
+        assert_eq!(
+            diagnostics.active_provider.as_deref(),
+            Some("openai_compatible")
+        );
+        assert!(!diagnostics_json.contains("application-profile"));
+        assert!(!diagnostics_json.contains("private-api-key"));
+        assert_eq!(
+            serde_json::to_value(event).expect("serialize transport event")["kind"],
+            serde_json::json!("queued")
+        );
+        super::tests::llm_stream_events_serialize_exact_lifecycle_contract();
+        assert_eq!(
+            serde_json::to_value(AppError::network("transport failed"))
+                .expect("serialize command error"),
+            serde_json::json!({"kind": "network", "message": "transport failed"})
+        );
+    }
+
     #[test]
     fn llm_stream_events_serialize_exact_lifecycle_contract() {
         let base = || {

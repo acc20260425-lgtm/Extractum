@@ -161,7 +161,6 @@ pub(crate) async fn get_project_data_range_in_pool(
     })
 }
 
-#[tauri::command]
 pub async fn get_project_data_range(
     handle: AppHandle,
     project_id: i64,

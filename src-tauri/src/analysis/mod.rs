@@ -37,7 +37,7 @@ pub(crate) use self::corpus::{
 #[cfg(dev)]
 pub use self::fixtures::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
-    seed_analysis_redesign_fixtures,
+    seed_analysis_redesign_fixtures, AnalysisRedesignFixtureSummary,
 };
 #[allow(unused_imports)]
 pub(crate) use self::groups::load_analysis_source_group_for_enrichment;
@@ -58,8 +58,8 @@ pub(crate) use extractum_analysis::{
     load_analysis_run_diagnostics,
 };
 
-const ANALYSIS_RUN_EVENT: &str = "analysis://run";
-const ANALYSIS_CHAT_EVENT: &str = "analysis://chat";
+pub(crate) const ANALYSIS_RUN_EVENT: &str = "analysis://run";
+pub(crate) const ANALYSIS_CHAT_EVENT: &str = "analysis://chat";
 
 fn is_analysis_trace_ref_digits(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
@@ -112,7 +112,6 @@ fn has_normalizable_analysis_trace_ref(refs: &[String]) -> bool {
     })
 }
 
-#[tauri::command]
 pub async fn list_analysis_sources(
     handle: AppHandle,
     repair_state: tauri::State<'_, SourceIdentityRepairState>,
@@ -139,7 +138,6 @@ pub async fn list_analysis_sources(
     .map_err(AppError::database)
 }
 
-#[tauri::command]
 pub async fn list_analysis_runs(
     handle: AppHandle,
     source_id: Option<i64>,
@@ -170,7 +168,6 @@ pub async fn list_analysis_runs(
     list_analysis_runs_in_pool(&pool, filters).await
 }
 
-#[tauri::command]
 pub async fn list_active_analysis_runs(
     handle: AppHandle,
     state: tauri::State<'_, AnalysisState>,
@@ -194,7 +191,6 @@ pub async fn list_active_analysis_runs(
     Ok(active_runs)
 }
 
-#[tauri::command]
 pub async fn get_analysis_run(
     handle: AppHandle,
     run_id: i64,
@@ -203,7 +199,6 @@ pub async fn get_analysis_run(
     get_analysis_run_in_pool(&pool, run_id).await
 }
 
-#[tauri::command]
 pub async fn list_analysis_run_messages(
     handle: AppHandle,
     run_id: i64,
@@ -216,7 +211,6 @@ pub async fn list_analysis_run_messages(
     list_analysis_run_messages_in_pool(&pool, run_id, after, limit, source_id, around_ref).await
 }
 
-#[tauri::command]
 pub async fn get_analysis_run_trace(
     handle: AppHandle,
     run_id: i64,
@@ -225,7 +219,6 @@ pub async fn get_analysis_run_trace(
     get_analysis_run_trace_in_pool(&pool, run_id).await
 }
 
-#[tauri::command]
 pub async fn delete_analysis_run(
     handle: AppHandle,
     state: tauri::State<'_, AnalysisState>,
@@ -235,7 +228,6 @@ pub async fn delete_analysis_run(
     delete_analysis_run_in_pool(&pool, state.inner(), run_id).await
 }
 
-#[tauri::command]
 pub async fn resolve_analysis_trace_refs(
     handle: AppHandle,
     run_id: i64,

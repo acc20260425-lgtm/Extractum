@@ -58,15 +58,15 @@ fn candidate_chrome_paths() -> Vec<PathBuf> {
     candidates
 }
 
-trait ChromeChild: Send {
+pub(super) trait ChromeChild: Send {
     fn kill(&mut self) -> std::io::Result<()>;
     fn wait(&mut self) -> std::io::Result<std::process::ExitStatus>;
     fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>>;
 }
 
-struct SystemChromeChild {
-    child: Child,
-    process_tree: ProcessTreeGuard,
+pub(super) struct SystemChromeChild {
+    pub(super) child: Child,
+    pub(super) process_tree: ProcessTreeGuard,
 }
 
 impl ChromeChild for SystemChromeChild {
@@ -90,7 +90,7 @@ pub(crate) struct ChromeCdpProcess {
 }
 
 impl ChromeCdpProcess {
-    fn new(child: Box<dyn ChromeChild>) -> Self {
+    pub(super) fn new(child: Box<dyn ChromeChild>) -> Self {
         Self {
             child,
             shut_down: false,

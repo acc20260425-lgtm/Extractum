@@ -56,11 +56,11 @@ pub struct AnalysisRedesignFixtureSummary {
     pub youtube_playlist_items: i64,
 }
 
-#[tauri::command]
 pub async fn seed_analysis_redesign_fixtures(
     handle: AppHandle,
     state: State<'_, AnalysisState>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     let pool = get_pool(&handle).await?;
     let previous_run_ids = fixture_run_ids(&pool).await?;
     remove_fixture_active_runs(state.inner(), &previous_run_ids).await;
@@ -70,22 +70,22 @@ pub async fn seed_analysis_redesign_fixtures(
     Ok(summary)
 }
 
-#[tauri::command]
 pub async fn clear_analysis_redesign_fixtures(
     handle: AppHandle,
     state: State<'_, AnalysisState>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     let pool = get_pool(&handle).await?;
     let run_ids = fixture_run_ids(&pool).await?;
     remove_fixture_active_runs(state.inner(), &run_ids).await;
     clear_analysis_redesign_fixtures_in_pool(&pool).await
 }
 
-#[tauri::command]
 pub async fn clear_analysis_redesign_fixture_active_runs(
     handle: AppHandle,
     state: State<'_, AnalysisState>,
 ) -> AppResult<()> {
+    crate::security_config::require_local_dev_command(crate::security_config::MCP_BIND_ADDRESS)?;
     let pool = get_pool(&handle).await?;
     let run_ids = fixture_run_ids(&pool).await?;
     remove_fixture_active_runs(state.inner(), &run_ids).await;

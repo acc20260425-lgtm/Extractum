@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use extractum_analysis::{
-    load_analysis_chat_run, prepare_active_analysis_run_summaries, prepare_analysis_run_detail,
+    prepare_active_analysis_run_summaries, prepare_analysis_run_detail,
     prepare_analysis_run_summaries, prepare_legacy_analysis_chat_run, AnalysisChatRun,
     AnalysisForeignLabelMatch, AnalysisForeignLabelRef, AnalysisForeignLabels,
     AnalysisProjectLabel, AnalysisRunDetail, AnalysisRunListFilters, AnalysisRunSummary,
@@ -164,10 +164,6 @@ pub(crate) async fn resolve_legacy_analysis_chat_run_in_pool(
     pool: &SqlitePool,
     run_id: i64,
 ) -> AppResult<AnalysisChatRun> {
-    let run = load_analysis_chat_run(pool, run_id).await?;
-    if !run.needs_legacy_foreign_label() {
-        return Ok(run);
-    }
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
     let enrichment = prepare_legacy_analysis_chat_run(&mut *transaction, run_id).await?;
     let labels = load_foreign_labels(&mut *transaction, enrichment.foreign_label_refs()).await?;

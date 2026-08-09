@@ -185,7 +185,7 @@ impl GeminiBrowserSidecarProcess {
     }
 }
 
-fn configure_sidecar_command(command: &mut Command) {
+pub(crate) fn configure_sidecar_command(command: &mut Command) {
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -7,7 +7,13 @@ use extractum_analysis::AnalysisRunListFilters;
 use serde_json::json;
 
 async fn application_read_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+    application_read_pool_with_max_connections(5).await
+}
+
+async fn application_read_pool_with_max_connections(max_connections: u32) -> sqlx::SqlitePool {
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(max_connections)
+        .connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
     for statement in [
@@ -386,6 +392,397 @@ fn analysis_wire_values_serialize_to_exact_json_objects() {
         serde_json::to_value(AppError::conflict("wire failure")).expect("serialize app error"),
         json!({"kind": "conflict", "message": "wire failure"})
     );
+}
+
+#[test]
+fn analysis_command_event_and_app_error_wire_contracts_are_exact() {
+    #[derive(Debug)]
+    struct WireParameter {
+        rust_name: &'static str,
+        rust_type: &'static str,
+        wire_name: &'static str,
+    }
+
+    #[derive(Debug)]
+    struct CommandWireContract {
+        name: &'static str,
+        parameters: Vec<WireParameter>,
+    }
+
+    fn lower_camel_case(value: &str) -> String {
+        let mut parts = value.split('_');
+        let mut result = parts.next().unwrap_or_default().to_string();
+        for part in parts {
+            let mut characters = part.chars();
+            if let Some(first) = characters.next() {
+                result.extend(first.to_uppercase());
+                result.extend(characters);
+            }
+        }
+        result
+    }
+
+    macro_rules! collect_wire_contract {
+        ($contracts:ident, $(#[$attribute:meta])* $command:ident => ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?]))) => {
+            $(#[$attribute])*
+            {
+                let _signature_witness = |$($parameter: $parameter_type),*| {
+                    fn assert_output<R, F: std::future::Future<Output = R>>(_: F) {}
+                    assert_output::<$result, _>(crate::$command($($parameter),*));
+                };
+                let rust_parameters = [
+                    $((stringify!($parameter), stringify!($parameter_type))),*
+                ]
+                .into_iter()
+                .filter(|(name, _)| !matches!(*name, "handle" | "state" | "scheduler" | "repair_state"))
+                .collect::<Vec<_>>();
+                let wire_names = [$($wire),*];
+                assert_eq!(rust_parameters.len(), wire_names.len(), "{} wire parameter count", stringify!($command));
+                let parameters = rust_parameters
+                    .into_iter()
+                    .zip(wire_names)
+                    .map(|((rust_name, rust_type), wire_name)| {
+                        assert_eq!(lower_camel_case(rust_name), wire_name, "{} parameter", stringify!($command));
+                        WireParameter { rust_name, rust_type, wire_name }
+                    })
+                    .collect();
+                $contracts.push(CommandWireContract { name: stringify!($command), parameters });
+            }
+        };
+        ($contracts:ident, $(#[$attribute:meta])* $command:ident) => {};
+    }
+
+    macro_rules! analysis_wire_contracts {
+        ([$($before:ident,)*], [$($(#[$after_attribute:meta])* $after:ident $(=> ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?])))?),* $(,)?]; $($telegram:ident),* $(,)?) => {{
+            let mut contracts = Vec::new();
+            $(collect_wire_contract!(contracts, $(#[$after_attribute])* $after $(=> ($implementation; (($($parameter : $parameter_type),*) -> $result; [$($wire),*])))?);)*
+            contracts
+        }};
+    }
+
+    let contracts = crate::application_command_inventory!(analysis_wire_contracts);
+    assert_eq!(contracts.len(), 27);
+    assert_eq!(
+        contracts
+            .iter()
+            .map(|contract| contract.name)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        27,
+        "the production command declaration must contain 27 unique command identities"
+    );
+    assert!(contracts
+        .iter()
+        .all(
+            |contract| contract
+                .parameters
+                .iter()
+                .all(|parameter| !parameter.rust_name.is_empty()
+                    && !parameter.rust_type.is_empty()
+                    && !parameter.wire_name.is_empty())
+        ));
+
+    assert_eq!(super::ANALYSIS_RUN_EVENT, "analysis://run");
+    assert_eq!(super::ANALYSIS_CHAT_EVENT, "analysis://chat");
+    analysis_wire_values_serialize_to_exact_json_objects();
+
+    use extractum_analysis::{AnalysisChatEvent, AnalysisChunkSummaryEvent, AnalysisRunEvent};
+    let run_lifecycle = [
+        "queued",
+        "started",
+        "progress",
+        "delta",
+        "completed",
+        "failed",
+        "cancelled",
+    ];
+    let serialized_run_kinds = run_lifecycle
+        .into_iter()
+        .map(|kind| {
+            let event = AnalysisRunEvent {
+                run_id: 1,
+                request_id: None,
+                kind: kind.to_string(),
+                phase: "persist".to_string(),
+                queue_position: None,
+                message: None,
+                progress_current: None,
+                progress_total: None,
+                delta: None,
+                chunk_summary: None,
+                error: None,
+            };
+            serde_json::to_value(event).expect("serialize every run lifecycle kind")["kind"]
+                .as_str()
+                .expect("run kind string")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(serialized_run_kinds, run_lifecycle);
+    assert_eq!(
+        serde_json::to_string(&AnalysisRunEvent {
+            run_id: 1,
+            request_id: None,
+            kind: "queued".to_string(),
+            phase: "persist".to_string(),
+            queue_position: None,
+            message: None,
+            progress_current: None,
+            progress_total: None,
+            delta: None,
+            chunk_summary: None,
+            error: None,
+        })
+        .expect("serialize exact run-event layout"),
+        r#"{"run_id":1,"request_id":null,"kind":"queued","phase":"persist","queue_position":null,"message":null,"progress_current":null,"progress_total":null,"delta":null,"chunk_summary":null,"error":null}"#
+    );
+
+    let chat_lifecycle = ["queued", "started", "delta", "completed"];
+    let serialized_chat_kinds = chat_lifecycle
+        .into_iter()
+        .map(|kind| {
+            let event = AnalysisChatEvent {
+                request_id: "request-1".to_string(),
+                run_id: 1,
+                kind: kind.to_string(),
+                queue_position: None,
+                delta: None,
+                message: None,
+                error: None,
+            };
+            serde_json::to_value(event).expect("serialize every chat lifecycle kind")["kind"]
+                .as_str()
+                .expect("chat kind string")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(serialized_chat_kinds, chat_lifecycle);
+    assert_eq!(
+        serde_json::to_string(&AnalysisChatEvent {
+            request_id: "request-1".to_string(),
+            run_id: 1,
+            kind: "queued".to_string(),
+            queue_position: None,
+            delta: None,
+            message: None,
+            error: None,
+        })
+        .expect("serialize exact chat-event layout"),
+        r#"{"request_id":"request-1","run_id":1,"kind":"queued","queue_position":null,"delta":null,"message":null,"error":null}"#
+    );
+
+    let chunk = AnalysisChunkSummaryEvent {
+        index: 1,
+        total: 2,
+        message_count: 3,
+        summary: "summary".to_string(),
+        topics: vec!["topic".to_string()],
+        notable_points: vec!["point".to_string()],
+        candidate_refs: vec!["source:1:item:1".to_string()],
+    };
+    assert_eq!(
+        serde_json::to_string(&chunk).expect("serialize exact chunk layout"),
+        r#"{"index":1,"total":2,"message_count":3,"summary":"summary","topics":["topic"],"notable_points":["point"],"candidate_refs":["source:1:item:1"]}"#
+    );
+
+    use crate::error::AppErrorKind;
+    fn assert_exhaustive_error_kind(kind: AppErrorKind) {
+        match kind {
+            AppErrorKind::Validation
+            | AppErrorKind::NotFound
+            | AppErrorKind::Auth
+            | AppErrorKind::Network
+            | AppErrorKind::Conflict
+            | AppErrorKind::Internal => {}
+        }
+    }
+    let error_kinds = [
+        AppErrorKind::Validation,
+        AppErrorKind::NotFound,
+        AppErrorKind::Auth,
+        AppErrorKind::Network,
+        AppErrorKind::Conflict,
+        AppErrorKind::Internal,
+    ];
+    let _ = error_kinds.map(assert_exhaustive_error_kind);
+    assert_eq!(error_kinds.map(|kind| kind as usize), [0, 1, 2, 3, 4, 5]);
+    assert_eq!(
+        serde_json::to_string(&error_kinds).expect("serialize exact error-kind wire values"),
+        r#"["validation","not_found","auth","network","conflict","internal"]"#
+    );
+    assert_eq!(
+        serde_json::to_string(&AppError::conflict("wire failure"))
+            .expect("serialize exact AppError fields"),
+        r#"{"kind":"conflict","message":"wire failure"}"#
+    );
+}
+
+#[tokio::test]
+async fn analysis_coordinators_share_one_app_owned_transaction() {
+    use crate::analysis::store::{
+        get_analysis_source_group_response_in_pool, list_analysis_source_groups_in_pool,
+    };
+    use crate::migrations::apply_all_migrations_for_test_pool;
+    use crate::notebooklm_export::load_export_source_group_in_pool;
+    use crate::projects::{delete_project_in_pool, list_research_projects_in_pool};
+    use std::time::Duration;
+
+    let pool = application_read_pool_with_max_connections(1).await;
+    sqlx::query("INSERT INTO sources (id, title) VALUES (7, 'Live source')")
+        .execute(&pool)
+        .await
+        .expect("insert legacy-label source");
+    insert_run(
+        &pool,
+        41,
+        "single_source",
+        Some(7),
+        None,
+        None,
+        "running",
+        100,
+        None,
+    )
+    .await;
+
+    let filters = AnalysisRunListFilters::for_analysis(
+        None, None, 20, None, None, None, None, None, None, None,
+    )
+    .expect("construct filters");
+    let listed = tokio::time::timeout(
+        Duration::from_secs(2),
+        list_analysis_runs_in_pool(&pool, filters),
+    )
+    .await
+    .expect("list coordinator must not reacquire its sole pool connection")
+    .expect("list through coordinator transaction");
+    let active_ids = std::collections::HashSet::from([41]);
+    let active = tokio::time::timeout(
+        Duration::from_secs(2),
+        list_active_analysis_runs_in_pool(&pool, &active_ids),
+    )
+    .await
+    .expect("active coordinator must not reacquire its sole pool connection")
+    .expect("list active through coordinator transaction");
+    let detail = tokio::time::timeout(Duration::from_secs(2), get_analysis_run_in_pool(&pool, 41))
+        .await
+        .expect("detail coordinator must not reacquire its sole pool connection")
+        .expect("get through coordinator transaction")
+        .expect("run detail");
+    let chat = tokio::time::timeout(
+        Duration::from_secs(2),
+        resolve_legacy_analysis_chat_run_in_pool(&pool, 41),
+    )
+    .await
+    .expect("legacy chat coordinator must not reacquire its sole pool connection")
+    .expect("resolve chat through coordinator transaction");
+
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, 41);
+    assert_eq!(listed[0].scope_label, "Live source");
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].id, 41);
+    assert_eq!(detail.id, 41);
+    assert!(chat.needs_legacy_foreign_label());
+
+    let mut transaction = pool
+        .begin()
+        .await
+        .expect("coordinators release transaction");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM analysis_runs")
+        .fetch_one(&mut *transaction)
+        .await
+        .expect("read after coordinators");
+    transaction
+        .rollback()
+        .await
+        .expect("rollback witness transaction");
+    assert_eq!(count, 1);
+
+    let application_pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .expect("connect full application pool");
+    apply_all_migrations_for_test_pool(&application_pool)
+        .await
+        .expect("apply application migrations");
+    sqlx::query("INSERT INTO sources (id, source_type, source_subtype, external_id, title, created_at) VALUES (7, 'youtube', 'video', 'video-7', 'Video seven', 1)")
+        .execute(&application_pool).await.expect("insert export source");
+    sqlx::query("INSERT INTO analysis_source_groups (id, name, created_at, updated_at, source_type) VALUES (3, 'Research group', 1, 1, 'youtube')")
+        .execute(&application_pool).await.expect("insert source group");
+    sqlx::query("INSERT INTO analysis_source_group_members (group_id, source_id, created_at) VALUES (3, 7, 1)")
+        .execute(&application_pool).await.expect("insert group member");
+    sqlx::query("INSERT INTO projects (id, name, description, created_at, updated_at) VALUES (5, 'Rollback project', NULL, 1, 1)")
+        .execute(&application_pool).await.expect("insert project");
+    sqlx::query("INSERT INTO analysis_runs (id, run_type, scope_type, project_id, period_from, period_to, output_language, prompt_template_version, provider_profile, provider, model, status, created_at) VALUES (51, 'report', 'project', 5, 0, 1, 'English', 1, 'default', 'gemini', 'gemini-2.5-flash', 'completed', 1)")
+        .execute(&application_pool).await.expect("insert project run");
+
+    let groups = tokio::time::timeout(
+        Duration::from_secs(2),
+        list_analysis_source_groups_in_pool(&application_pool),
+    )
+    .await
+    .expect("group-list coordinator must not reacquire its sole pool connection")
+    .expect("list groups through coordinator transaction");
+    assert_eq!(groups.len(), 1);
+    let group = tokio::time::timeout(
+        Duration::from_secs(2),
+        get_analysis_source_group_response_in_pool(&application_pool, 3),
+    )
+    .await
+    .expect("group-detail coordinator must not reacquire its sole pool connection")
+    .expect("get group through coordinator transaction")
+    .expect("group fixture");
+    assert_eq!(group.members.len(), 1);
+    let export = tokio::time::timeout(
+        Duration::from_secs(2),
+        load_export_source_group_in_pool(&application_pool, 3),
+    )
+    .await
+    .expect("export coordinator must not reacquire its sole pool connection")
+    .expect("load export group through coordinator transaction");
+    assert_eq!(export.members.len(), 1);
+    let projects = tokio::time::timeout(
+        Duration::from_secs(2),
+        list_research_projects_in_pool(&application_pool),
+    )
+    .await
+    .expect("project-list coordinator must not reacquire its sole pool connection")
+    .expect("list projects through coordinator transaction");
+    assert_eq!(projects.len(), 1);
+
+    sqlx::query("CREATE TRIGGER reject_project_delete BEFORE DELETE ON projects BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END")
+        .execute(&application_pool).await.expect("install rollback failure injection");
+    assert!(tokio::time::timeout(
+        Duration::from_secs(2),
+        delete_project_in_pool(&application_pool, 5),
+    )
+    .await
+    .expect("project-delete coordinator must not reacquire its sole pool connection")
+    .is_err());
+    let mut transaction = application_pool
+        .begin()
+        .await
+        .expect("all application coordinators release their transaction");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM projects")
+            .fetch_one(&mut *transaction)
+            .await
+            .expect("read after every coordinator"),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM analysis_runs WHERE project_id = 5")
+            .fetch_one(&mut *transaction)
+            .await
+            .expect("rollback preserves participant deletion"),
+        1
+    );
+    transaction
+        .rollback()
+        .await
+        .expect("rollback final witness transaction");
 }
 
 fn ordered(source: &str, markers: &[&str]) {

@@ -28,6 +28,8 @@ use model::{
     NotebookLmExportRequest, NotebookLmExportResult, NotebookLmExportScope, ParticipantSummary,
     DEFAULT_MAX_BYTES_PER_FILE, DEFAULT_MAX_WORDS_PER_FILE, DEFAULT_MIN_MESSAGE_LENGTH,
 };
+#[cfg(test)]
+pub(crate) use query::load_export_source_group_in_pool;
 use query::{
     load_export_messages, load_export_source, load_export_source_group, ExportHistoryScope,
     NotebookLmExportSourceGroup,

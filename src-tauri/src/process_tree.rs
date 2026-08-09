@@ -148,11 +148,15 @@ impl ProcessTreeGuard {
 #[cfg(all(test, windows))]
 mod tests {
     use super::{ProcessTreeGuard, TERMINATION_IDLE};
+
     use std::{
         fs,
         io::{BufRead, BufReader},
         process::{Command, Stdio},
-        sync::atomic::AtomicU8,
+        sync::{
+            atomic::{AtomicU8, AtomicUsize, Ordering as AtomicOrdering},
+            Mutex,
+        },
         thread,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
@@ -186,8 +190,10 @@ mod tests {
         child.wait().expect("reap child");
     }
 
-    #[test]
-    fn terminates_a_descendant_created_after_assignment() {
+    fn assert_owned_descendant_is_reaped() {
+        static OBSERVATION_LOCK: Mutex<()> = Mutex::new(());
+        let _observation = OBSERVATION_LOCK.lock().expect("process observation lock");
+        OWNED_DESCENDANT_OBSERVATIONS.fetch_add(1, AtomicOrdering::SeqCst);
         let signal = std::env::temp_dir().join(format!(
             "extractum-process-tree-{}-{}.signal",
             std::process::id(),
@@ -235,8 +241,8 @@ mod tests {
                         "if (Get-Process -Id {descendant_pid} -ErrorAction SilentlyContinue) {{ exit 1 }}"
                     ),
                 ])
-                .status()
-                .expect("query descendant");
+                    .status()
+                    .expect("query descendant");
             if status.success() {
                 return;
             }
@@ -244,6 +250,24 @@ mod tests {
         }
 
         panic!("post-assignment descendant survived job termination");
+    }
+
+    static OWNED_DESCENDANT_OBSERVATIONS: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn terminates_a_descendant_created_after_assignment() {
+        assert_owned_descendant_is_reaped();
+    }
+
+    #[test]
+    fn windows_guard_contains_and_reaps_owned_descendants() {
+        let before = OWNED_DESCENDANT_OBSERVATIONS.load(AtomicOrdering::SeqCst);
+        assert_owned_descendant_is_reaped();
+        assert_owned_descendant_is_reaped();
+        assert_eq!(
+            OWNED_DESCENDANT_OBSERVATIONS.load(AtomicOrdering::SeqCst) - before,
+            2
+        );
     }
 
     #[test]
