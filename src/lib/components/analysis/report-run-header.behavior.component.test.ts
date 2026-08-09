@@ -1,9 +1,12 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ComponentProps } from "svelte";
 import type { AnalysisRunDetail } from "$lib/types/analysis";
 import ReportRunHeader from "./report-run-header.svelte";
 
 afterEach(cleanup);
+
+type Props = ComponentProps<typeof ReportRunHeader>;
 
 function run(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetail {
   return {
@@ -41,7 +44,7 @@ function run(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetail {
   };
 }
 
-function props(currentRun: AnalysisRunDetail, overrides: Record<string, unknown> = {}) {
+function props(currentRun: AnalysisRunDetail, overrides: Partial<Props> = {}): Props {
   return {
     currentRun,
     sourceViewBasis: "run_snapshot" as const,
@@ -53,7 +56,7 @@ function props(currentRun: AnalysisRunDetail, overrides: Record<string, unknown>
     canCancelCurrentRun: false,
     formatTimestamp: (value: number | null) => `time:${value}`,
     formatPeriod: () => "Aug 1-Aug 2",
-    runTargetLabel: (value: AnalysisRunDetail) => value.scope_label,
+    runTargetLabel: (value) => value.scope_label,
     statusTone: () => "success" as const,
     onCancelCurrentRun: vi.fn(),
     ...overrides,

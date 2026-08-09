@@ -27,7 +27,7 @@ function item(id: number, sourceId: number, content: string): SourceItem {
     forumTopicId: null, forumTopicTitle: null, forumTopicTopMessageId: null, replyToMessageId: null,
     replyToPeerKind: null, replyToPeerId: null, replyToTopMessageId: null, reactionCount: null,
     historyScope: "current", isMigratedHistory: false, migrationDomain: null,
-    historyScopeLabel: "Current history", pageCursor: `cursor-${id}`,
+    historyScopeLabel: "Current supergroup history", pageCursor: `cursor-${id}`,
   };
 }
 

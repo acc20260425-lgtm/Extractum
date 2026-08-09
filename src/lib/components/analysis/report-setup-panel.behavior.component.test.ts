@@ -23,7 +23,7 @@ function source(): Source {
     createdAt: 1_699_000_000,
     telegramUsername: "research",
     avatarDataUrl: null,
-    migratedHistoryStatus: "imported",
+    migratedHistoryStatus: "available",
     migratedHistoryDetectedAt: 1_699_500_000,
     migratedHistoryRefreshedAt: 1_700_000_000,
     migratedHistoryRowCount: 14,
