@@ -2,9 +2,7 @@
   import { onMount } from "svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import RunCompanionTabs from "$lib/components/analysis/run-companion-tabs.svelte";
-  import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";
-  import CompactSourceRail from "$lib/components/analysis/compact-source-rail.svelte";
+  import { analysisRouteComponents } from "$lib/analysis-route-components";
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
@@ -198,7 +196,6 @@
     canonicalEvidenceTraceRef,
     focusedLiveSourceTargetForTrace,
     loadedSourceDataContainsTraceRef,
-    pendingFocusMatchesCurrent,
     sourceReturnContextIsActive,
     sourceScopeForEvidence,
     type EvidenceHighlightToken,
@@ -219,7 +216,6 @@
   import {
     fallbackWorkspaceSelection,
     loadPersistedAnalysisWorkspaceState,
-    persistableAnalysisWorkspaceState,
     restoredUiStateFromPersisted,
     savePersistedAnalysisWorkspaceState,
   } from "$lib/analysis-workspace-persistence";
@@ -273,10 +269,45 @@
   } from "$lib/types/youtube";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
   import { reportCanvasGroupEditorProps } from "$lib/analysis-group-editor-props";
+  import { reportCanvasWorkspaceProps } from "$lib/analysis-report-props";
+  import {
+    compactSourceRailRouteProps,
+    loadRunSnapshotPage,
+    refreshCatalogForTerminalSourceJob,
+    reportCanvasRouteProps,
+    reportLaunchPreflightProps,
+    returnToEvidenceReview as returnToEvidenceReviewRuntime,
+    shouldLoadRunSnapshot,
+  } from "$lib/analysis-route-runtime";
+  import {
+    clearEvidenceNavigation,
+    createEvidenceRequestSequence,
+    createLatestRequestGate,
+    createRouteTimer,
+    createSavedRunsLoadScheduler,
+    focusedSourceLoadExit,
+    focusedSourceRequestMatches,
+    shouldProbeRunSnapshot,
+    youtubeSyncOptionsForSource,
+  } from "$lib/analysis-route-effects";
+  import {
+    persistWorkspaceWhenReady,
+    restoreWorkspaceBeforeActiveRuns,
+  } from "$lib/analysis-route-workspace-runtime";
+  import {
+    changeCompanionTab as changeCompanionTabState,
+    runCompanionRouteProps,
+    runIdFromHref,
+    showEvidenceInSource as startEvidenceSourceNavigation,
+    submitCompanionQuestion,
+  } from "$lib/analysis-run-companion-route-runtime";
 
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
   const SOURCE_ITEMS_PAGE_LIMIT = 120;
+  const RouteSourceRail = analysisRouteComponents.sourceRail;
+  const RouteReportCanvas = analysisRouteComponents.reportCanvas;
+  const RouteRunCompanion = analysisRouteComponents.runCompanion;
 
   function createNotebookLmExportId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -314,7 +345,6 @@
   let youtubeVideoDetail = $state<YoutubeVideoDetail | null>(null);
   let youtubePlaylistDetail = $state<YoutubePlaylistDetail | null>(null);
   let youtubeDetailError = $state<YoutubeDetailErrorState>(null);
-  let youtubeDetailRequestKey = $state("");
   let llmProfiles = $state<LlmProfile[]>([]);
   let activeLlmProfile = $state("default");
   let selectedLlmProfileId = $state("");
@@ -368,6 +398,9 @@
   let reportCanvasGroupEditor = $derived(
     reportCanvasGroupEditorProps(selectedGroupEditorId, setSelectedGroupEditorId),
   );
+  const reportWorkspaceProps = $derived(
+    reportCanvasWorkspaceProps(workspaceUiState.workspaceSelection),
+  );
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -396,8 +429,9 @@
   let sourceReturnContext = $state<SourceReturnContext>(null);
   let pendingEvidenceSourceFocus = $state<PendingEvidenceSourceFocus | null>(null);
   let transientSourceHighlight = $state<EvidenceHighlightToken | null>(null);
-  let evidenceSourceFocusSequence = 0;
-  let sourceHighlightClearTimer: ReturnType<typeof setTimeout> | null = null;
+  const evidenceRequestSequence = createEvidenceRequestSequence();
+  const youtubeDetailRequestGate = createLatestRequestGate();
+  const sourceHighlightTimer = createRouteTimer();
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
   let runFilter = $state<AnalysisRunFilter>("all");
@@ -436,8 +470,6 @@
     overwriteExisting: false,
   });
   let statusTimer: number | null = null;
-  let savedRunsLoadTimer: ReturnType<typeof setTimeout> | null = null;
-  const savedRunsLoadDelayMs = 250;
   let llmModelsRequestKey = "";
 
   function isErrorStatus(value: string) {
@@ -896,6 +928,42 @@
     runSnapshotError,
   }));
 
+  const reportCanvasRuntimeProps = $derived.by(() => reportCanvasRouteProps({
+    workspaceUiState,
+    snapshot: {
+      availability: runSnapshotAvailability,
+      loading: loadingRunSnapshotMessages,
+      error: runSnapshotError,
+    },
+    sourceReturnContext: activeSourceReturnContext,
+    onChangeCanvasMode: changeCanvasMode,
+    onViewLiveSource: viewLiveSourceForOpenedRun,
+    onBackToRunSnapshot: backToRunSnapshot,
+    onReturnToEvidenceReview: returnToEvidenceReview,
+  }));
+
+  const reportLaunchPreflight = $derived(
+    reportLaunchPreflightProps(currentSourceMetric(), currentReportLaunchDisabledReason()),
+  );
+
+  const compactRailRuntimeProps = $derived.by(() => compactSourceRailRouteProps({
+    workspaceSelection: workspaceUiState.workspaceSelection,
+    startingMigratedHistorySourceIds,
+    sourceJobsBySource,
+    onSelectSource: (sourceId) => void selectSource(sourceId),
+    onSelectGroup: selectGroup,
+    onStartMigratedHistoryImport: (sourceId) => void startMigratedHistoryImport(sourceId),
+  }));
+
+  const companionRuntimeProps = $derived.by(() => runCompanionRouteProps({
+    workspaceUiState,
+    focusedChunkSummaries: focusedRunChunkSummaries(focusedLiveRun),
+    selectedRunIsActive,
+    activeRuns,
+    savedRuns: runs,
+    runsFilter,
+  }));
+
   const chatAvailability = $derived(chatAvailabilityForRun({
     currentRun,
     snapshotAvailability: runSnapshotAvailability,
@@ -950,14 +1018,7 @@
     if (typeof window === "undefined") {
       return null;
     }
-
-    const rawRunId = new URL(window.location.href).searchParams.get("runId");
-    if (!rawRunId) {
-      return null;
-    }
-
-    const runId = Number(rawRunId);
-    return Number.isInteger(runId) && runId > 0 ? runId : null;
+    return runIdFromHref(window.location.href);
   }
 
   function persistWorkspaceState() {
@@ -965,13 +1026,16 @@
       return;
     }
 
-    savePersistedAnalysisWorkspaceState(window.localStorage,
-      persistableAnalysisWorkspaceState(workspaceUiState, {
+    persistWorkspaceWhenReady({
+      ready: workspacePersistenceReady,
+      state: workspaceUiState,
+      runs: {
         historyScope,
         runFilter,
         runsFilter,
-      }),
-    );
+      },
+      save: (state) => savePersistedAnalysisWorkspaceState(window.localStorage, state),
+    });
   }
 
   function applyWorkspaceUiState(next: AnalysisWorkspaceUiState) {
@@ -1006,19 +1070,16 @@
   }
 
   function returnToEvidenceReview() {
-    const context = activeSourceReturnContext;
-    if (context?.kind !== "evidence") {
-      return;
-    }
-
-    pendingEvidenceSourceFocus = null;
-    clearSourceHighlight();
-    selectedTraceRef = context.traceRef;
-    dispatchWorkspaceEvent({
-      type: "return_to_evidence_review",
-      traceRef: context.traceRef,
+    return returnToEvidenceReviewRuntime({
+      activeContext: activeSourceReturnContext,
+      clearPendingFocus: () => (pendingEvidenceSourceFocus = null),
+      clearHighlight: clearSourceHighlight,
+      dispatch: (event) => {
+        selectedTraceRef = event.traceRef;
+        dispatchWorkspaceEvent(event);
+      },
+      clearReturnContext: () => (sourceReturnContext = null),
     });
-    sourceReturnContext = null;
   }
 
   function resetRunSnapshotState() {
@@ -1041,11 +1102,11 @@
   }
 
   function resetYoutubeDetailState() {
+    youtubeDetailRequestGate.invalidate();
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
     youtubeDetailError = null;
     loadingYoutubeDetail = false;
-    youtubeDetailRequestKey = "";
   }
 
   function resetSourceItemsReader() {
@@ -1300,6 +1361,11 @@
     formatError: formatAppError,
   });
 
+  const savedRunsLoadScheduler = createSavedRunsLoadScheduler(
+    (params: AnalysisHistoryScopeParams | null, filter) =>
+      runWorkflow.loadRunsForScope(params, filter),
+  );
+
   const workspaceWorkflow = createAnalysisWorkspaceWorkflow({
     getState: () => ({ workspaceSelection: workspaceUiState.workspaceSelection }),
     patch: applyWorkspaceWorkflowPatch,
@@ -1345,10 +1411,7 @@
   }
 
   function changeCompanionTab(nextTab: CompanionTab) {
-    dispatchWorkspaceEvent({
-      type: "change_companion_tab",
-      companionTab: nextTab,
-    });
+    applyWorkspaceUiState(changeCompanionTabState(workspaceUiState, nextTab));
   }
 
   async function focusTraceRef(ref: string) {
@@ -1371,57 +1434,41 @@
     });
   }
 
-  function nextEvidenceSourceRequestId() {
-    evidenceSourceFocusSequence += 1;
-    return `evidence-source-${evidenceSourceFocusSequence}`;
-  }
-
   function clearSourceHighlight(tokenId?: string) {
     if (tokenId && transientSourceHighlight?.tokenId !== tokenId) {
       return;
     }
 
-    if (sourceHighlightClearTimer) {
-      clearTimeout(sourceHighlightClearTimer);
-      sourceHighlightClearTimer = null;
-    }
+    sourceHighlightTimer.dispose();
     transientSourceHighlight = null;
   }
 
   function scheduleSourceHighlightClear(tokenId: string) {
-    if (sourceHighlightClearTimer) {
-      clearTimeout(sourceHighlightClearTimer);
-    }
-    sourceHighlightClearTimer = setTimeout(() => {
+    sourceHighlightTimer.schedule(() => {
       clearSourceHighlight(tokenId);
     }, 2500);
   }
 
   function clearEvidenceSourceNavigation() {
-    sourceReturnContext = null;
-    pendingEvidenceSourceFocus = null;
-    clearSourceHighlight();
+    clearEvidenceNavigation({
+      clearReturnContext: () => (sourceReturnContext = null),
+      clearPendingFocus: () => (pendingEvidenceSourceFocus = null),
+      clearHighlight: clearSourceHighlight,
+    });
   }
 
   type FocusedSourceRequest = {
     requestId: string;
+    runId: number | null;
     sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
     sourceViewBasis: EvidenceSourceViewBasis;
     traceRef: string;
   };
 
   function currentFocusMatchesRequest(request: FocusedSourceRequest) {
-    if (selectedTraceRef !== request.traceRef) {
-      return false;
-    }
-
     const currentSourceScope = currentEvidenceSourceScope(request.sourceScope.sourceId);
-    if (currentSourceScope === null) {
-      return false;
-    }
-
-    return pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
-      requestId: request.requestId,
+    return focusedSourceRequestMatches(request, {
+      pending: pendingEvidenceSourceFocus,
       runId: currentRun?.id ?? null,
       sourceScope: currentSourceScope,
       sourceViewBasis: workspaceUiState.sourceViewBasis,
@@ -1441,25 +1488,39 @@
   }
 
   function completeFocusedSourceLoadWithoutTarget(traceSourceId: number, request: FocusedSourceRequest) {
-    if (!currentFocusMatchesRequest(request)) {
+    const exit = focusedSourceLoadExit(request, {
+      pending: pendingEvidenceSourceFocus,
+      runId: currentRun?.id ?? null,
+      sourceScope: currentEvidenceSourceScope(request.sourceScope.sourceId),
+      sourceViewBasis: workspaceUiState.sourceViewBasis,
+      selectedTraceRef,
+    }, { kind: "missing_target" });
+    if (!exit.accepted) {
       return;
     }
 
     clearFocusedSourceLoadingFlags(traceSourceId, request);
     pendingEvidenceSourceFocus = null;
     clearSourceHighlight();
-    status = "Selected evidence was not found in the loaded source window.";
+    status = exit.status;
   }
 
   function failFocusedSourceLoad(traceSourceId: number, request: FocusedSourceRequest, error: unknown) {
-    if (!currentFocusMatchesRequest(request)) {
+    const exit = focusedSourceLoadExit(request, {
+      pending: pendingEvidenceSourceFocus,
+      runId: currentRun?.id ?? null,
+      sourceScope: currentEvidenceSourceScope(request.sourceScope.sourceId),
+      sourceViewBasis: workspaceUiState.sourceViewBasis,
+      selectedTraceRef,
+    }, { kind: "failed", error });
+    if (!exit.accepted) {
       return;
     }
 
     clearFocusedSourceLoadingFlags(traceSourceId, request);
     pendingEvidenceSourceFocus = null;
     clearSourceHighlight();
-    status = formatAppError("loading selected source evidence", error);
+    status = exit.status;
   }
 
   async function loadSourcePageAroundTrace({
@@ -1480,6 +1541,7 @@
     }
     const focusRequest: FocusedSourceRequest = {
       requestId,
+      runId: currentRun?.id ?? null,
       sourceScope,
       sourceViewBasis: decision.sourceViewBasis,
       traceRef: canonicalRef,
@@ -1491,12 +1553,13 @@
         if (!run) return;
         loadingRunSnapshotMessages = true;
         runSnapshotError = "";
-        const page = await listAnalysisRunMessages({
+        const page = await loadRunSnapshotPage({
           runId: run.id,
           after: null,
           limit: 50,
           sourceId: trace.source_id,
           aroundRef: canonicalRef,
+          listMessages: listAnalysisRunMessages,
         });
         if (!currentFocusMatchesRequest(focusRequest)) {
           return;
@@ -1706,6 +1769,7 @@
     const pending = pendingEvidenceSourceFocus;
     clearFocusedSourceLoadingFlags(traceSourceId, {
       requestId,
+      runId: pending?.runId ?? currentRun?.id ?? null,
       sourceScope,
       sourceViewBasis,
       traceRef,
@@ -1764,46 +1828,30 @@
       }
     }
 
-    const requestId = nextEvidenceSourceRequestId();
     const runId = currentRun?.id;
     if (runId === undefined) {
       status = "Select evidence from an opened run before showing it in source.";
       return;
     }
 
-    clearSourceHighlight();
-    sourceReturnContext = {
-      kind: "evidence",
-      runId,
-      sourceScope,
-      sourceViewBasis: decision.sourceViewBasis,
-      traceRef: canonicalRef,
-    };
-    pendingEvidenceSourceFocus = {
-      requestId,
-      runId,
-      sourceScope,
-      sourceViewBasis: decision.sourceViewBasis,
-      traceRef: canonicalRef,
-    };
-    selectedTraceRef = canonicalRef;
-    dispatchWorkspaceEvent({
-      type: "show_evidence_in_source",
-      sourceViewBasis: decision.sourceViewBasis,
+    const outcome = await startEvidenceSourceNavigation({
+      currentRun,
+      selectedTrace: trace,
       highlightedRef: canonicalRef,
-    });
-
-    if (decision.kind === "live_source") {
-      status = decision.warning;
-    }
-
-    await loadSourcePageAroundTrace({
-      decision,
-      trace,
-      requestId,
-      canonicalRef,
+      snapshotAvailability: runSnapshotAvailability,
+      snapshotProbeState: runSnapshotProbeState,
       sourceScope,
+      nextRequestId: () => evidenceRequestSequence.next(),
+      clearHighlight: clearSourceHighlight,
+      setReturnContext: (context) => (sourceReturnContext = context),
+      setPendingFocus: (focus) => (pendingEvidenceSourceFocus = focus),
+      dispatch: dispatchWorkspaceEvent,
+      loadSourceWindow: loadSourcePageAroundTrace,
     });
+    selectedTraceRef = canonicalRef;
+    if (outcome.kind === "started" && outcome.decision.kind === "live_source") {
+      status = outcome.decision.warning;
+    }
   }
 
   async function submitRunQuestionFromCompanion() {
@@ -1823,8 +1871,11 @@
       return;
     }
 
-    changeCompanionTab("chat");
-    await chatWorkflow.askRunQuestion();
+    await submitCompanionQuestion(
+      workspaceUiState,
+      () => chatWorkflow.askRunQuestion(),
+      (next) => (workspaceUiState = next),
+    );
   }
 
   function changeRunsFilter(next: CompanionRunsFilterState) {
@@ -2201,13 +2252,13 @@
 
   async function loadYoutubeDetail(source: Source) {
     const requestKey = `${source.id}:${source.sourceSubtype}`;
-    youtubeDetailRequestKey = requestKey;
+    const request = youtubeDetailRequestGate.begin(requestKey);
     youtubeDetailError = null;
     loadingYoutubeDetail = true;
     try {
       if (source.sourceSubtype === "playlist") {
         const detail = await getYoutubePlaylistDetail(source.id);
-        if (youtubeDetailRequestKey !== requestKey) {
+        if (!youtubeDetailRequestGate.isCurrent(request)) {
           return;
         }
         youtubePlaylistDetail = detail;
@@ -2219,7 +2270,7 @@
         youtubeDetailError = null;
       } else {
         const detail = await getYoutubeVideoDetail(source.id);
-        if (youtubeDetailRequestKey !== requestKey) {
+        if (!youtubeDetailRequestGate.isCurrent(request)) {
           return;
         }
         youtubeVideoDetail = detail;
@@ -2231,7 +2282,7 @@
         youtubeDetailError = null;
       }
     } catch (error) {
-      if (youtubeDetailRequestKey !== requestKey) {
+      if (!youtubeDetailRequestGate.isCurrent(request)) {
         return;
       }
       youtubeVideoDetail = null;
@@ -2242,7 +2293,7 @@
         message: formatAppError("loading YouTube detail", error),
       };
     } finally {
-      if (youtubeDetailRequestKey === requestKey) {
+      if (youtubeDetailRequestGate.complete(request)) {
         loadingYoutubeDetail = false;
       }
     }
@@ -2287,28 +2338,16 @@
     await runWorkflow.loadRuns();
   }
 
-  function clearSavedRunsLoadTimer() {
-    if (savedRunsLoadTimer) {
-      clearTimeout(savedRunsLoadTimer);
-      savedRunsLoadTimer = null;
-    }
-  }
-
   function scheduleSavedRunsLoad(
     params: AnalysisHistoryScopeParams | null,
     filter: CompanionRunsFilterState,
   ) {
-    clearSavedRunsLoadTimer();
-
     if (params === null) {
+      savedRunsLoadScheduler.dispose();
       void runWorkflow.loadRunsForScope(null, filter);
       return;
     }
-
-    savedRunsLoadTimer = setTimeout(() => {
-      savedRunsLoadTimer = null;
-      void runWorkflow.loadRunsForScope(params, filter);
-    }, savedRunsLoadDelayMs);
+    savedRunsLoadScheduler.schedule(params, filter);
   }
 
   async function loadSourceJobs() {
@@ -2422,7 +2461,11 @@
     if (
       currentRun &&
       workspaceUiState.canvasMode === "source" &&
-      workspaceUiState.sourceViewBasis === "run_snapshot"
+      shouldLoadRunSnapshot({
+        runId: currentRun.id,
+        sourceViewBasis: workspaceUiState.sourceViewBasis,
+        lastSnapshotLoadKey,
+      })
     ) {
       void loadRunSnapshotFirstPage(currentRun.id);
     }
@@ -2479,11 +2522,7 @@
       }
 
       if (source.sourceType === "youtube") {
-        await syncYoutubeSource(sourceId, {
-          metadata: true,
-          transcripts: source.sourceSubtype === "video",
-          comments: source.sourceSubtype === "video",
-        });
+        await syncYoutubeSource(sourceId, youtubeSyncOptionsForSource(source.sourceSubtype));
         status = "YouTube sync started.";
       } else {
         const result = await syncSource(sourceId);
@@ -2866,7 +2905,10 @@
   });
 
   $effect(() => {
-    if (currentRun) {
+    if (currentRun && shouldProbeRunSnapshot({
+      runId: currentRun.id,
+      canvasMode: workspaceUiState.canvasMode,
+    })) {
       void loadRunSnapshotFirstPage(currentRun.id);
     }
   });
@@ -2928,23 +2970,30 @@
     let detachTakeoutImportListener: (() => void) | null = null;
     let detachSourceJobListener: (() => void) | null = null;
 
-    restorePersistedWorkspaceState();
     void loadAccounts();
     void (async () => {
-      await Promise.all([loadSourceCatalog(), loadGroups()]);
-      const restoredSelectionApplied = await applyRestoredWorkspaceSelection();
-      if (!restoredSelectionApplied && selectedSourceId) {
-        const sourceId = Number(selectedSourceId);
-        const selected = sourceCatalog.find((source) => source.id === sourceId);
-        void Promise.all([
-          selected && sourceCapabilities(selected).hasTopics
-            ? loadSourceTopics(sourceId)
-            : Promise.resolve(),
-          loadItems(sourceId),
-          selected?.sourceType === "youtube" ? loadYoutubeDetail(selected) : Promise.resolve(),
-        ]);
-      }
-      await loadActiveRuns();
+      await restoreWorkspaceBeforeActiveRuns({
+        restore: restorePersistedWorkspaceState,
+        loadSourcesAndGroups: async () => {
+          await Promise.all([loadSourceCatalog(), loadGroups()]);
+        },
+        applyRestoredSelection: async () => {
+          const restoredSelectionApplied = await applyRestoredWorkspaceSelection();
+          if (!restoredSelectionApplied && selectedSourceId) {
+            const sourceId = Number(selectedSourceId);
+            const selected = sourceCatalog.find((source) => source.id === sourceId);
+            void Promise.all([
+              selected && sourceCapabilities(selected).hasTopics
+                ? loadSourceTopics(sourceId)
+                : Promise.resolve(),
+              loadItems(sourceId),
+              selected?.sourceType === "youtube" ? loadYoutubeDetail(selected) : Promise.resolve(),
+            ]);
+          }
+          return restoredSelectionApplied;
+        },
+        loadActiveRuns,
+      });
       const openedRunIdFromLocation = openRunIdFromLocation();
       if (openedRunIdFromLocation !== null) {
         void openRun(openedRunIdFromLocation);
@@ -3023,7 +3072,10 @@
         ? sourceActionPending(syncingIds, job.source_id)
         : clearSourceActionPending(syncingIds, job.source_id);
       if (!isActiveSourceJob(job)) {
-        void Promise.all([loadSourceCatalog(), loadGroups()]);
+        void refreshCatalogForTerminalSourceJob(job, job.source_id, {
+          loadSourceCatalog,
+          loadGroups,
+        });
         const selected = currentSource();
         if (selected?.sourceType === "youtube") {
           void loadYoutubeDetail(selected);
@@ -3043,7 +3095,7 @@
         clearTimeout(statusTimer);
         statusTimer = null;
       }
-      clearSavedRunsLoadTimer();
+      savedRunsLoadScheduler.dispose();
       clearSourceHighlight();
       if (detachAnalysisListener !== null) {
         detachAnalysisListener();
@@ -3071,7 +3123,7 @@
 {/if}
 
 <section class="analysis-workspace">
-  <CompactSourceRail
+  <RouteSourceRail
     {sourceCatalog}
     {groups}
     {sourceMetrics}
@@ -3080,14 +3132,13 @@
     {railQuery}
     {filteredSourceCatalog}
     {filteredGroups}
-    workspaceSelection={workspaceUiState.workspaceSelection}
+    workspaceSelection={compactRailRuntimeProps.workspaceSelection}
     {syncingIds}
     {deletingSourceIds}
     {startingTakeoutSourceIds}
-    {startingMigratedHistorySourceIds}
+    {...compactRailRuntimeProps.railData}
     {takeoutJobsBySource}
     {takeoutRecoveryBySource}
-    {sourceJobsBySource}
     {youtubeSummaries}
     {youtubeRuntimeStatus}
     {formatTimestamp}
@@ -3097,11 +3148,11 @@
     {runtimeBadge}
     {sourceSyncDisabledReason}
     onChangeRailQuery={(value) => (railQuery = value)}
-    onSelectSource={(sourceId) => void selectSource(sourceId)}
-    onSelectGroup={selectGroup}
+    onSelectSource={compactRailRuntimeProps.onSelectSource}
+    onSelectGroup={compactRailRuntimeProps.onSelectGroup}
     onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
     onStartTakeoutImport={(sourceId) => void startTakeoutImport(sourceId)}
-    onStartMigratedHistoryImport={(sourceId) => void startMigratedHistoryImport(sourceId)}
+    onStartMigratedHistoryImport={compactRailRuntimeProps.onStartMigratedHistoryImport}
     onCancelTakeoutImport={(jobId) => void cancelTakeoutImport(jobId)}
     onCancelSourceJob={(jobId) => void cancelYoutubeSourceJob(jobId)}
     onOpenSourceManager={() => (sourceManagerOpen = true)}
@@ -3109,21 +3160,16 @@
   />
 
   <!-- Retained legacy cutover marker: selectedGroupEditorId={selectedGroupEditorId} -->
-  <ReportCanvas
-    workspaceSelection={workspaceUiState.workspaceSelection}
+  <RouteReportCanvas
+    {...reportWorkspaceProps}
     currentSource={currentSource()}
     takeoutRecovery={currentTakeoutRecovery()}
     currentGroup={currentGroup()}
-    currentSourceMetric={currentSourceMetric()}
+    currentSourceMetric={reportLaunchPreflight.currentSourceMetric}
     currentScopeTitle={currentScopeTitle()}
     currentScopeSummary={currentScopeSummary()}
-    canvasMode={workspaceUiState.canvasMode}
-    sourceViewBasis={workspaceUiState.sourceViewBasis}
-    {runSnapshotAvailability}
-    snapshotProbeState={runSnapshotProbeState}
+    {...reportCanvasRuntimeProps}
     {runSnapshotMessages}
-    {loadingRunSnapshotMessages}
-    {runSnapshotError}
     hasMoreRunSnapshotMessages={runSnapshotHasMore}
     {youtubeTranscriptSegments}
     {loadingYoutubeTranscriptSegments}
@@ -3173,7 +3219,6 @@
     {telegramHistoryScope}
     {selectedTraceRef}
     highlightToken={transientSourceHighlight}
-    sourceReturnContext={activeSourceReturnContext}
     traceRefCount={traceData.refs.length}
     {selectedTemplate}
     {templateName}
@@ -3202,14 +3247,10 @@
     {phaseLabel}
     {accountLabel}
     {sourceSyncDisabledReason}
-    reportLaunchDisabledReason={currentReportLaunchDisabledReason()}
+    reportLaunchDisabledReason={reportLaunchPreflight.reportLaunchDisabledReason}
     {startOfDayUnix}
     {endOfDayUnix}
     {isGroupSourceSelected}
-    onChangeCanvasMode={(mode) => changeCanvasMode(mode)}
-    onViewLiveSource={() => viewLiveSourceForOpenedRun()}
-    onBackToRunSnapshot={() => backToRunSnapshot()}
-    onReturnToEvidenceReview={returnToEvidenceReview}
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
     onLoadMoreSourceItems={() => void loadMoreSourceItems()}
@@ -3270,8 +3311,8 @@
   />
 
   <div class="companion-slot">
-    <RunCompanionTabs
-      companionTab={workspaceUiState.companionTab}
+    <RouteRunCompanion
+      companionTab={companionRuntimeProps.companionTab}
       {currentRun}
       snapshotAvailability={runSnapshotAvailability}
       snapshotProbeState={runSnapshotProbeState}
@@ -3279,16 +3320,16 @@
       {traceData}
       {selectedTraceRef}
       {selectedTrace}
-      focusedChunkSummaries={focusedRunChunkSummaries(focusedLiveRun)}
-      {selectedRunIsActive}
-      {activeRuns}
-      savedRuns={runs}
+      focusedChunkSummaries={companionRuntimeProps.focusedChunkSummaries}
+      selectedRunIsActive={companionRuntimeProps.selectedRunIsActive}
+      activeRuns={companionRuntimeProps.activeRuns}
+      savedRuns={companionRuntimeProps.savedRuns}
       {loadingActiveRuns}
       {loadingRuns}
       {activeRunId}
       {deletingRunIds}
       workspaceSelection={workspaceUiState.workspaceSelection}
-      {runsFilter}
+      runsFilter={companionRuntimeProps.runsFilter}
       {loadingChat}
       {chatMessages}
       {chatQuestion}

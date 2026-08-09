@@ -6,6 +6,12 @@
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import type { ChatAvailability, CompanionRunsFilterState } from "$lib/analysis-run-companion-state";
+  import {
+    companionChunkPresentation,
+    runCompanionPanelId,
+    runCompanionTabId,
+    runCompanionTabLabel,
+  } from "$lib/analysis-run-companion-tabs-model";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { CompanionTab, WorkspaceSelection } from "$lib/analysis-workspace-state";
@@ -125,19 +131,21 @@
     onDeleteRun: (run: AnalysisRunSummary) => void | Promise<void>;
   } = $props();
 
+  const chunkPresentation = $derived(
+    companionChunkPresentation(focusedChunkSummaries, selectedRunIsActive, currentRun !== null),
+  );
+  const panelId = runCompanionPanelId();
+
   function tabId(tab: CompanionTab) {
-    return `run-companion-tab-${tab}`;
+    return runCompanionTabId(tab);
   }
 
   function chunkTabLabel() {
-    const count = focusedChunkSummaries.length;
-    if (count === 0) return "Chunks";
-    const total = focusedChunkSummaries.at(-1)?.total ?? null;
-    return total && total > 0 ? `Chunks ${count}/${total}` : `Chunks ${count}`;
+    return runCompanionTabLabel("chunks", chunkPresentation.label);
   }
 
   function chunksDisabled() {
-    return currentRun === null;
+    return chunkPresentation.disabled;
   }
 </script>
 
@@ -148,8 +156,8 @@
       <h3>{currentRun ? `Run #${currentRun.id}` : "Runs"}</h3>
     </div>
     <div class="companion-tab-list" role="tablist" aria-label="Run companion tabs">
-      <Button id={tabId("evidence")} role="tab" size="sm" variant="secondary" selected={companionTab === "evidence"} ariaSelected={companionTab === "evidence"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("evidence")}>Evidence</Button>
-      <Button id={tabId("chat")} role="tab" size="sm" variant="secondary" selected={companionTab === "chat"} ariaSelected={companionTab === "chat"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("chat")}>Chat</Button>
+      <Button id={tabId("evidence")} role="tab" size="sm" variant="secondary" selected={companionTab === "evidence"} ariaSelected={companionTab === "evidence"} ariaControls={panelId} onclick={() => onChangeCompanionTab("evidence")}>{runCompanionTabLabel("evidence", chunkPresentation.label)}</Button>
+      <Button id={tabId("chat")} role="tab" size="sm" variant="secondary" selected={companionTab === "chat"} ariaSelected={companionTab === "chat"} ariaControls={panelId} onclick={() => onChangeCompanionTab("chat")}>{runCompanionTabLabel("chat", chunkPresentation.label)}</Button>
       <Button
         id={tabId("chunks")}
         role="tab"
@@ -157,7 +165,7 @@
         variant="secondary"
         selected={companionTab === "chunks"}
         ariaSelected={companionTab === "chunks"}
-        ariaControls="run-companion-panel"
+        ariaControls={panelId}
         disabled={chunksDisabled()}
         title={chunksDisabled() ? "Open a run to inspect chunk summaries." : undefined}
         onclick={() => {
@@ -166,11 +174,11 @@
       >
         {chunkTabLabel()}
       </Button>
-      <Button id={tabId("runs")} role="tab" size="sm" variant="secondary" selected={companionTab === "runs"} ariaSelected={companionTab === "runs"} ariaControls="run-companion-panel" smokeId="run-companion-runs-tab" onclick={() => onChangeCompanionTab("runs")}>Runs</Button>
+      <Button id={tabId("runs")} role="tab" size="sm" variant="secondary" selected={companionTab === "runs"} ariaSelected={companionTab === "runs"} ariaControls={panelId} smokeId="run-companion-runs-tab" onclick={() => onChangeCompanionTab("runs")}>{runCompanionTabLabel("runs", chunkPresentation.label)}</Button>
     </div>
   </div>
 
-  <div id="run-companion-panel" class="companion-panel" role="tabpanel" aria-labelledby={tabId(companionTab)}>
+  <div id={panelId} class="companion-panel" role="tabpanel" aria-labelledby={tabId(companionTab)}>
     {#if companionTab === "evidence"}
       <RunEvidenceTab
         {currentRun}
@@ -206,8 +214,8 @@
       {#if currentRun}
         <ChunkSummaries
           summaries={focusedChunkSummaries}
-          running={selectedRunIsActive}
-          framed={false}
+          running={chunkPresentation.running}
+          framed={chunkPresentation.framed}
         />
       {:else}
         <EmptyState description="Open a run to inspect chunk summaries." />

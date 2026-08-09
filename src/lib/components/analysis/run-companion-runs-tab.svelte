@@ -3,11 +3,11 @@
   import {
     filterCompanionRuns,
     hasActiveCompanionRunsFilter,
-    runsFilterDefaults,
     type CompanionRunsFilterState,
     type CompanionRunEntry,
   } from "$lib/analysis-run-companion-state";
   import { snapshotAffordanceForRun } from "$lib/analysis-run-snapshot-affordance";
+  import { clearCompanionRunsFilter } from "$lib/analysis-run-companion-tabs-model";
   import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -194,7 +194,7 @@
     {#if hasActiveFilters}
       <div class="filtered-empty">
         <EmptyState description="No analysis report runs match these filters." />
-        <Button size="sm" variant="secondary" onclick={() => onChangeRunsFilter(runsFilterDefaults())}>Clear filters</Button>
+        <Button size="sm" variant="secondary" onclick={() => onChangeRunsFilter(clearCompanionRunsFilter(runsFilter))}>Clear filters</Button>
       </div>
     {:else}
       <div class="runs-empty-guidance">

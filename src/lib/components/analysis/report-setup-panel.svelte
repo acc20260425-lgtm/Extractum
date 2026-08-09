@@ -8,9 +8,9 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import {
-    legacyScopeFromWorkspaceSelection,
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
+  import { reportSetupCompatibility } from "$lib/analysis-report-leaf-compatibility";
   import type {
     AnalysisPromptTemplate,
     AnalysisSourceGroup,
@@ -137,10 +137,10 @@
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
 
-  const legacyWorkspaceSelection = $derived(
-    legacyScopeFromWorkspaceSelection(workspaceSelection),
+  const setupCompatibility = $derived(
+    reportSetupCompatibility(workspaceSelection),
   );
-  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
+  const analysisScope = $derived(setupCompatibility.analysisScope);
   const isYoutubeScope = $derived(
     (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),
@@ -183,7 +183,7 @@
 <section class="report-setup-panel" aria-label="Report setup" data-smoke-id="analysis-report-setup">
   <div class="scope-hero">
     <div class="scope-hero-copy">
-      <span class="eyebrow">{analysisScope === "source_group" ? "Source group workspace" : "Source workspace"}</span>
+      <span class="eyebrow">{setupCompatibility.workspaceEyebrow}</span>
       <h2>{currentScopeTitle}</h2>
       <p>{currentScopeSummary}</p>
     </div>
@@ -201,7 +201,7 @@
   <div class="scope-facts">
     <div class="scope-fact">
       <span class="scope-fact-label">Scope</span>
-      <strong>{analysisScope === "source_group" ? "Group analysis" : "Single source"}</strong>
+      <strong>{setupCompatibility.analysisModeLabel}</strong>
     </div>
     <div class="scope-fact">
       <span class="scope-fact-label">Window</span>
@@ -447,7 +447,7 @@
       <div class="preflight-points">
         <div class="preflight-point">
           <strong>1. Scope</strong>
-          <span>{analysisScope === "source_group" ? "Run across the saved group." : "Run against the selected source."}</span>
+          <span>{setupCompatibility.runDescription}</span>
         </div>
         <div class="preflight-point">
           <strong>2. Template</strong>

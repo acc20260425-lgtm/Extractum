@@ -11,6 +11,7 @@
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { sourceCapabilities } from "$lib/source-capabilities";
+  import { reportSetupProps } from "$lib/analysis-report-props";
   import {
     type CanvasMode,
     type SourceViewBasis,
@@ -381,6 +382,14 @@
     [key: string]: unknown;
   } = $props();
 
+  const setupRouteProps = $derived(reportSetupProps({
+    workspaceSelection,
+    selectedTemplate,
+    reportLaunchDisabledReason,
+    onRunReport,
+    onSyncCurrentSource,
+  }));
+
   let templateEditorOpen = $state(false);
   let groupEditorOpen = $state(false);
 
@@ -548,7 +557,7 @@
       />
     {:else}
       <ReportSetupPanel
-        {workspaceSelection}
+        {...setupRouteProps}
         {currentSource}
         {currentGroup}
         {currentSourceMetric}
@@ -579,14 +588,12 @@
         {selectedRunIsActive}
         {activeProgress}
         {activePhase}
-        {selectedTemplate}
         {syncingIds}
         {formatTimestamp}
         {formatPeriod}
         {phaseLabel}
         {accountLabel}
         {sourceSyncDisabledReason}
-        {reportLaunchDisabledReason}
         {startOfDayUnix}
         {endOfDayUnix}
         onChangePeriodFrom={onChangePeriodFrom}
@@ -598,8 +605,6 @@
         onChangeLlmProfile={onChangeLlmProfile}
         onChangeLlmModel={onChangeLlmModel}
         onChangeCustomModelOverride={onChangeCustomModelOverride}
-        onRunReport={onRunReport}
-        onSyncCurrentSource={onSyncCurrentSource}
       />
     {/if}
   {:else}

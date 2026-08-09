@@ -16,10 +16,10 @@
     type SnapshotProbeState,
   } from "$lib/analysis-run-snapshot-affordance";
   import {
-    legacyScopeFromWorkspaceSelection,
     type SourceViewBasis,
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
+  import { reportSourceCompatibility } from "$lib/analysis-report-leaf-compatibility";
   import {
     analysisRunMessageToReaderItem,
     sourceFilterOptionsFromGroupMembers,
@@ -211,10 +211,9 @@
     runStatus: currentRun?.status ?? "completed",
     surface: "source-tab",
   }));
-  const legacyWorkspaceSelection = $derived(
-    legacyScopeFromWorkspaceSelection(workspaceSelection),
+  const sourceCompatibility = $derived(
+    reportSourceCompatibility(workspaceSelection),
   );
-  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
   const canvasSurface = $derived(sourceCanvasSurface(sourceBasis));
   const liveReaderItems = $derived.by(() =>
     sourceItems.map((item) =>
@@ -309,7 +308,7 @@
       : [],
   );
   const displayScopeTitle = $derived(currentScopeTitle ?? fallbackScopeTitle());
-  const readerSurfaceLabel = $derived(analysisScope === "source_group" ? "Group sources" : "Source material");
+  const readerSurfaceLabel = $derived(sourceCompatibility.readerSurfaceLabel);
   const youtubeRuntimeDiagnostic = $derived(
     currentSource?.sourceType === "youtube" ? sourceSyncDisabledReason(currentSource) : null,
   );
@@ -459,8 +458,8 @@
       sourceBasisState={canvasSurface}
       canViewLiveSource={false}
       canBackToRunSnapshot={!!currentRun && canReturnToRunSnapshot(snapshotAvailability)}
-      selectedSourceId={analysisScope === "source_group" ? selectedGroupSourceId : null}
-      sourceOptions={analysisScope === "source_group" ? liveGroupSourceOptions : []}
+      selectedSourceId={sourceCompatibility.showSourceGroup ? selectedGroupSourceId : null}
+      sourceOptions={sourceCompatibility.showSourceGroup ? liveGroupSourceOptions : []}
       {onViewLiveSource}
       {onBackToRunSnapshot}
       onChangeSelectedSourceId={onChangeSelectedGroupSourceId}
@@ -473,7 +472,7 @@
 </section>
 
 {#snippet liveSourceSurface()}
-  {#if analysisScope === "single_source" && currentSource}
+  {#if sourceCompatibility.showSingleSource && currentSource}
     {#if sourceBrowserShellAppliesToSource(currentSource)}
       {#if youtubeRuntimeDiagnostic}
         <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
@@ -529,7 +528,7 @@
     {:else}
       <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
     {/if}
-  {:else if analysisScope === "source_group" && currentGroup}
+  {:else if sourceCompatibility.showSourceGroup && currentGroup}
     {#if sourceBrowserShellAppliesToSubject({ kind: "source_group", group: currentGroup })}
       <SourceBrowserShell
         bounded={sourceBrowserBounded}
