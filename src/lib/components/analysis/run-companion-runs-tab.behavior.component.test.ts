@@ -68,22 +68,6 @@ function props(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("analysis companion layout", () => {
-  it("does not add companion-width-specific inner layouts to Chat, Chunks, or Runs", () => {
-    render(RunCompanionRunsTab, { props: props() });
-
-    expect({
-      guidance: screen.getByText("Run a report to create the first saved workspace.").textContent,
-      tablist: screen.queryByRole("tablist"),
-      complementary: screen.queryByRole("complementary"),
-    }).toEqual({
-      guidance: "Run a report to create the first saved workspace.",
-      tablist: null,
-      complementary: null,
-    });
-  });
-});
-
 describe("analysis priority UX contract", () => {
   it("keeps run filters progressive when no runs exist", () => {
     render(RunCompanionRunsTab, { props: props() });

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement only the classes, dispositions, paths, declaration titles, invariants, deletion reasons, and criticality decisions frozen in `testing/source-contract-redisposition-review.json` and `testing/source-contract-ledger.json`.
-- The approved ownership corrections are exact: component behavior owners belong to `component`; SC-000464 belongs jointly to the comprehensive service Cargo owner and actual application execution-task owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its real-wrapper component owner for the other 18 ordinals. SC-000025/435/552 also use real route/component owners. Task 9 additionally follows the exact 44-row amendment table in the approved design: A=9/63, B=26/212, C=4/24, D=5/42. The earlier B=25/D=6 wording was a bookkeeping error; no sixth D row exists. The final forecast is Node 139 rows/787 ordinals, jsdom 124/867, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; none of the 44 Task 9 IDs is sampled, calibrated, or in a mandatory cohort, SC-000464 was not a sampled blind result, and SC-000515's prior blind packet remains historical evidence.
+- The approved ownership corrections are exact: component behavior owners belong to `component`; SC-000464 belongs jointly to the comprehensive service Cargo owner and actual application execution-task owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its real-wrapper component owner for the other 18 ordinals. SC-000025/435/552 also use real route/component owners. Task 9 additionally follows the exact 44-row amendment table in the approved design: A=9/63, B=26/212, C=3/21, D=6/45. SC-000076 is the sixth D row because its negative inner-layout constraint has no truthful jsdom seam. The final forecast is Node 139 rows/787 ordinals, jsdom 123/864, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; none of the 44 Task 9 IDs is sampled, calibrated, or in a mandatory cohort, SC-000464 was not a sampled blind result, and SC-000515's prior blind packet remains historical evidence.
 - Do not use `?raw`, `readFileSync`, or another direct production-source reader in a replacement test. Do not add a `sourceReaderExceptions` entry.
 - A small behavior-neutral pure-function or adapter extraction is allowed only when the frozen behavior has no truthful existing seam. Stop the connected component if path, title, mechanism, invariant, disposition, or criticality would need to change.
 - Do not add Nx, a migration scheduler, a second ledger, a subset transition validator, timing thresholds, warmups, medians, or benchmark artifacts.
@@ -150,7 +150,7 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 **Interfaces:**
 - Produces `COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts"` in both component include and unit exclusion.
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
-- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; the first Task 4 corrections produce `178/1101`, `90/598`, `19/161`, `3/21`, the first real-component owner correction produces `174/1065`, `94/634`, `19/161`, `3/21`, and the Task 9 exact amendment produces the final `139/787`, `124/867`, `19/161`, `3/21`.
+- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; the first Task 4 corrections produce `178/1101`, `90/598`, `19/161`, `3/21`, the first real-component owner correction produces `174/1065`, `94/634`, `19/161`, `3/21`, and the Task 9 exact amendment produces the final `139/787`, `123/864`, `19/161`, `3/21`.
 
 - [ ] **Step 1: Generate the complete replacement map once**
 
@@ -607,12 +607,12 @@ provisional seven-file list. Its exact accounting table is:
 | --- | ---: | ---: | --- |
 | A — unit reducer/API | 9 | 63 | SC-000093, SC-000094, SC-000108, SC-000114, SC-000117, SC-000119, SC-000124, SC-000126, SC-000127 |
 | B — component behavior | 26 | 212 | SC-000060, SC-000061, SC-000062, SC-000063, SC-000065, SC-000066, SC-000067, SC-000068, SC-000069, SC-000070, SC-000097, SC-000098, SC-000100, SC-000101, SC-000102, SC-000103, SC-000104, SC-000109, SC-000110, SC-000111, SC-000112, SC-000113, SC-000120, SC-000122, SC-000123, SC-000125 |
-| C — component/route composition | 4 | 24 | SC-000071, SC-000076, SC-000106, SC-000107 |
-| D — delete D3 visual | 5 | 42 | SC-000072, SC-000073, SC-000074, SC-000075, SC-000105 |
+| C — component/route composition | 3 | 21 | SC-000071, SC-000106, SC-000107 |
+| D — delete D3 visual | 6 | 45 | SC-000072, SC-000073, SC-000074, SC-000075, SC-000076, SC-000105 |
 | **Total** | **44** | **341** | — |
 
-The former B=25/D=6 statement was arithmetic-only bookkeeping drift. The
-audited source declarations prove B=26/D=5 and there is no sixth D row.
+SC-000076 is the sixth D row because its negative inner-layout constraint is
+non-observable in jsdom; no Playwright owner is added.
 
 **Phase 1 — amendment and nine A owners only:**
 
@@ -640,14 +640,12 @@ src/lib/analysis-redesign-safety-contract.behavior.test.ts             SC-000117
 **Phase 2 — future B/C component owners (not created in Phase 1):**
 
 ```text
-src/lib/components/analysis/chunk-summaries.behavior.component.test.ts
 src/lib/components/analysis/compact-source-rail.behavior.component.test.ts
 src/lib/components/analysis/report-canvas.behavior.component.test.ts
 src/lib/components/analysis/report-run-header.behavior.component.test.ts
 src/lib/components/analysis/report-setup-panel.behavior.component.test.ts
 src/lib/components/analysis/report-source-surface.behavior.component.test.ts
 src/lib/components/analysis/report-workspace-tools.behavior.component.test.ts
-src/lib/components/analysis/run-chat-tab.behavior.component.test.ts
 src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts
 src/lib/components/analysis/run-companion-tabs.behavior.component.test.ts
 src/lib/components/analysis/source-activity-view.behavior.component.test.ts
@@ -661,9 +659,9 @@ src/routes/analysis/analysis-route-composition.behavior.component.test.ts
 src/routes/analysis/analysis-route-llm-controls.behavior.component.test.ts
 ```
 
-SC-000071, SC-000076, and SC-000106 have exhaustive, non-overlapping ordinal
-subgroups and no top-level disposition. SC-000107 is the fourth C row but is a
-whole-row route-composition behavior owner. The five D rows and the delete
+SC-000071 and SC-000106 have exhaustive, non-overlapping ordinal subgroups and
+no top-level disposition. SC-000107 is the third C row but is a whole-row
+route-composition behavior owner. The six D rows and the delete
 subgroups of SC-000071/106 gain no Playwright replacement.
 
 **Phase 2 delete exactly after all A/B/C owners are green:**
@@ -681,7 +679,7 @@ src/lib/analysis-redesign-safety-contract.test.ts
 - [ ] **Phase-2 batch-specific execution:** Closes exactly 44 validator-open
   rows while deleting seven legacy files containing 50 total ledger rows; the
   six omitted rows were already closed earlier and must not be duplicated.
-  Run the three A files in one non-empty `unit-node` selection and all 19 B/C
+  Run the three A files in one non-empty `unit-node` selection and all 17 B/C
   files in one non-empty `component` selection. Follow the Cutover Protocol and
   commit as `test: cut over source contracts wave 2b` only after both selections
   are green and the exact transition validator succeeds.

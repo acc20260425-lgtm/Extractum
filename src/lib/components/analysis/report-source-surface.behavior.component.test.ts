@@ -142,11 +142,13 @@ describe("analysis redesign final safety contract", () => {
     });
 
     expect(screen.getByRole("region", { name: "Source group sources" })).toBeTruthy();
-    expect(screen.getByText("Alpha channel")).toBeTruthy();
-    expect(screen.getByText("Beta channel")).toBeTruthy();
-    expect(screen.getByText("Alpha evidence")).toBeTruthy();
-    expect(screen.getByText("Beta evidence")).toBeTruthy();
-    expect(screen.queryByText(/pseudo-chat/i)).toBeNull();
+    const alphaSource = screen.getByRole("region", { name: "Alpha channel" });
+    const betaSource = screen.getByRole("region", { name: "Beta channel" });
+    expect(alphaSource).toBeTruthy();
+    expect(betaSource).toBeTruthy();
+    expect(within(alphaSource).getByText("Alpha evidence")).toBeTruthy();
+    expect(within(betaSource).getByText("Beta evidence")).toBeTruthy();
+    expect(within(alphaSource).queryByText("Beta evidence")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Source focus" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Alpha channel (1)" })).toBeTruthy();
     await fireEvent.change(screen.getByRole("combobox", { name: "Source focus" }), { target: { value: "1" } });

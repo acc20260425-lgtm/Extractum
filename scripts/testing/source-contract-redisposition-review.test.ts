@@ -951,8 +951,8 @@ describe("source-contract redisposition review", () => {
       loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
     ]);
     const aIds = new Set(["SC-000093", "SC-000094", "SC-000108", "SC-000114", "SC-000117", "SC-000119", "SC-000124", "SC-000126", "SC-000127"]);
-    const cIds = new Set(["SC-000071", "SC-000076", "SC-000106", "SC-000107"]);
-    const dIds = new Set(["SC-000072", "SC-000073", "SC-000074", "SC-000075", "SC-000105"]);
+    const cIds = new Set(["SC-000071", "SC-000106", "SC-000107"]);
+    const dIds = new Set(["SC-000072", "SC-000073", "SC-000074", "SC-000075", "SC-000076", "SC-000105"]);
     const task9Ids = new Set([
       ...Array.from({ length: 14 }, (_, index) => `SC-${String(60 + index).padStart(6, "0")}`).filter((id) => id !== "SC-000064"),
       "SC-000074", "SC-000075", "SC-000076", "SC-000093", "SC-000094", "SC-000097", "SC-000098",
@@ -968,8 +968,8 @@ describe("source-contract redisposition review", () => {
     expect(decisions).toHaveLength(44);
     expect([aIds.size, ordinalTotal(aIds)]).toEqual([9, 63]);
     expect([bIds.size, ordinalTotal(bIds)]).toEqual([26, 212]);
-    expect([cIds.size, ordinalTotal(cIds)]).toEqual([4, 24]);
-    expect([dIds.size, ordinalTotal(dIds)]).toEqual([5, 42]);
+    expect([cIds.size, ordinalTotal(cIds)]).toEqual([3, 21]);
+    expect([dIds.size, ordinalTotal(dIds)]).toEqual([6, 45]);
 
     for (const decision of decisions) {
       const groups = decision.resolution?.subgroups ?? [decision.resolution];
@@ -989,7 +989,7 @@ describe("source-contract redisposition review", () => {
       }
     }
 
-    for (const id of ["SC-000071", "SC-000076", "SC-000106"]) {
+    for (const id of ["SC-000071", "SC-000106"]) {
       const row = rowById.get(id) as any;
       const decision = decisions.find((item: any) => item.id === id);
       expect(Object.keys(decision.resolution)).toEqual(["subgroups"]);
@@ -1000,13 +1000,27 @@ describe("source-contract redisposition review", () => {
       expect(decision.resolution.subgroups.filter((group: any) => group.disposition === "delete").every((group: any) => group.deletionReason.includes("D3_NON_OBSERVABLE_VISUAL"))).toBe(true);
     }
 
+    const companionLayoutDecision = decisions.find((item: any) => item.id === "SC-000076");
+    const companionLayoutReason = "D3_NON_OBSERVABLE_VISUAL: Absence of companion-width-specific inner layout rules in Chat, Chunks, and Runs is a non-normative CSS/visual constraint with no truthful jsdom seam, and the approved correction adds no Playwright owner.";
+    expect(companionLayoutDecision).toEqual({
+      id: "SC-000076",
+      sourceHash: "9feecb79fe7819496b19f4b299ebfc19de69a990e0b4595443108ad496fcb4df",
+      authorRunId: "redisposition-task-4-author-run",
+      class: "D3_NON_OBSERVABLE_VISUAL",
+      reason: companionLayoutReason,
+      resolution: {
+        disposition: "delete",
+        deletionReason: companionLayoutReason,
+      },
+    });
+
     expect((reviewArtifact as any).forecast.futureOwnersByMechanism).toEqual({
       node: { rows: 139, assertionOrdinals: 787 },
       cargo: { rows: 19, assertionOrdinals: 161 },
-      jsdom: { rows: 124, assertionOrdinals: 867 },
+      jsdom: { rows: 123, assertionOrdinals: 864 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });
-    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 281, delete: 151, mixed: 4 });
+    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 281, delete: 152, mixed: 3 });
 
     const input: any = {
       artifact: reviewArtifact,
@@ -1129,11 +1143,11 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      B2_NEW_CHEAP_BEHAVIOR: 277,
+      B2_NEW_CHEAP_BEHAVIOR: 276,
       B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
       D1_COMPLETED_HISTORY_ONLY: 6,
       D2_IMPLEMENTATION_SHAPE: 122,
-      D3_NON_OBSERVABLE_VISUAL: 15,
+      D3_NON_OBSERVABLE_VISUAL: 16,
       D4_DUPLICATE_EVIDENCE: 8,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
@@ -1238,7 +1252,7 @@ describe("source-contract redisposition review", () => {
     expect(executionForecast).toEqual({
       node: { rows: 139, assertionOrdinals: 787 },
       cargo: { rows: 19, assertionOrdinals: 161 },
-      jsdom: { rows: 124, assertionOrdinals: 867 },
+      jsdom: { rows: 123, assertionOrdinals: 864 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });
     expect((reviewArtifact as any).forecast.proposedNewJsdomRows).toBe(0);

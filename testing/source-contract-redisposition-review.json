@@ -916,47 +916,12 @@
       "id": "SC-000076",
       "sourceHash": "9feecb79fe7819496b19f4b299ebfc19de69a990e0b4595443108ad496fcb4df",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Does not add companion-width-specific inner layouts to Chat, Chunks, or Runs. The approved Task 9 correction partitions every frozen ordinal between truthful rendered behavior and any explicitly deleted non-observable CSS detail.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Absence of companion-width-specific inner layout rules in Chat, Chunks, and Runs is a non-normative CSS/visual constraint with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "subgroups": [
-          {
-            "assertionOrdinals": [
-              1
-            ],
-            "invariant": "The rendered Chat leaf remains free of companion-width-only layout state.",
-            "disposition": "behavior",
-            "replacementIds": [
-              "test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
-            ]
-          },
-          {
-            "assertionOrdinals": [
-              2
-            ],
-            "invariant": "The rendered Chunks leaf remains free of companion-width-only layout state.",
-            "disposition": "behavior",
-            "replacementIds": [
-              "test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
-            ]
-          },
-          {
-            "assertionOrdinals": [
-              3
-            ],
-            "invariant": "The rendered Runs leaf remains free of companion-width-only layout state.",
-            "disposition": "behavior",
-            "replacementIds": [
-              "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
-            ]
-          }
-        ]
-      },
-      "ownerEvidence": [
-        "test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs",
-        "test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs",
-        "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
-      ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Absence of companion-width-specific inner layout rules in Chat, Chunks, and Runs is a non-normative CSS/visual constraint with no truthful jsdom seam, and the approved correction adds no Playwright owner."
+      }
     },
     {
       "id": "SC-000077",
@@ -8622,8 +8587,8 @@
     },
     "afterByDisposition": {
       "behavior": 281,
-      "delete": 151,
-      "mixed": 4
+      "delete": 152,
+      "mixed": 3
     },
     "futureOwnersByMechanism": {
       "node": {
@@ -8635,8 +8600,8 @@
         "assertionOrdinals": 161
       },
       "jsdom": {
-        "rows": 124,
-        "assertionOrdinals": 867
+        "rows": 123,
+        "assertionOrdinals": 864
       },
       "playwright": {
         "rows": 3,

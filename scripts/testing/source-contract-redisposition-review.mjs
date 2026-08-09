@@ -55,10 +55,11 @@ const TASK9_AMENDMENT_IDS = [
   "SC-000117", "SC-000119", "SC-000120", "SC-000122", "SC-000123", "SC-000124", "SC-000125", "SC-000126", "SC-000127",
 ];
 const TASK9_AMENDMENT_ID_SET = new Set(TASK9_AMENDMENT_IDS);
-const TASK9_MIXED_IDS = new Set(["SC-000071", "SC-000076", "SC-000106"]);
-const APPROVED_TASK9_AMENDMENT_DIGEST = "dd3cad5db8f8004008b08f61b040f745bb9b201021b19226911c31776bab0c15";
-const APPROVED_TASK9_DECISION_SHAPE_DIGEST = "448fa64a449014a5b38f64ac10c9ad40a7efc0bf3e672002beaa3f79b4448f81";
+const TASK9_MIXED_IDS = new Set(["SC-000071", "SC-000106"]);
+const APPROVED_TASK9_AMENDMENT_DIGEST = "edb0a74a23d33b7cf35127aa650c7612e573a05ad17bdedff3d57766739e898d";
+const APPROVED_TASK9_DECISION_SHAPE_DIGEST = "386713b33d7696fa23c642ed3f8d48e20242bc68723ac1b5e1199b13ceaa6f79";
 const APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST = "8a6bedc1ea155a67e620205ee15e9e078a4adfdaba27c7190a5c3a1d054fff39";
+const APPROVED_TASK9_PRE_SC076_AMENDMENT_LEDGER_DIGEST = "f9c8e24d93f29a7927c27dfd73caff629cb3368712616c5edbe5d0fe1fa325b4";
 const APPROVED_SC_000515_SUBGROUPS = [
   {
     assertionOrdinals: [1, 11, 19],
@@ -1663,10 +1664,16 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     === canonicalJson(rowsOutsideTask9(fullyAppliedLedger.rows));
   const isApprovedTask9PreCorrectionLedger = isApprovedTask4CorrectionScope
     && currentOutsideTask9IsCorrected
-    && task9CurrentDigest === APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST;
+    && [
+      APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST,
+      APPROVED_TASK9_PRE_SC076_AMENDMENT_LEDGER_DIGEST,
+    ].includes(task9CurrentDigest);
   if (isApprovedTask4CorrectionScope
     && currentOutsideTask9IsCorrected
-    && task9CurrentDigest !== APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST
+    && ![
+      APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST,
+      APPROVED_TASK9_PRE_SC076_AMENDMENT_LEDGER_DIGEST,
+    ].includes(task9CurrentDigest)
     && task9CurrentDigest !== task9CorrectedDigest) {
     issues.push("ledger: Task 9 resolutions must equal the exact pre-correction or corrected state");
   }

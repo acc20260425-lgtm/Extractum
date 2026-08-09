@@ -19,10 +19,10 @@ decision gate.
 The scope is exactly 436 validator-open rows in 86 legacy files:
 
 - 281 behavior rows with exact future owner identities;
-- 4 mixed rows with exact ordinal subgroups;
-- 151 accepted deletion rows;
+- 3 mixed rows with exact ordinal subgroups;
+- 152 accepted deletion rows;
 - 139 Node/Vitest rows covering 787 assertion ordinals;
-- 124 jsdom/Vitest rows covering 867 assertion ordinals;
+- 123 jsdom/Vitest rows covering 864 assertion ordinals;
 - 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
 - 86 Vitest target files, 20 Cargo identities, and 3 Playwright target files.
@@ -46,9 +46,10 @@ SC-000464 with the application Cargo tail that exercises the actual spawned
 execution task.
 
 The Task 9 architecture correction below is also approved and exact. The
-legacy audit establishes `A=9 rows/63 ordinals`, `B=26/212`, `C=4/24`, and
-`D=5/42`, for `44 rows/341 ordinals`. The earlier `B=25`, `D=6` wording was a
-bookkeeping error: there is no sixth D row. None of these 44 IDs belongs to a
+amended legacy audit establishes `A=9 rows/63 ordinals`, `B=26/212`,
+`C=3/21`, and `D=6/45`, for `44 rows/341 ordinals`. SC-000076 is the sixth D
+row because its negative inner-layout constraint has no truthful jsdom seam.
+None of these 44 IDs belongs to a
 sampled blind result, calibration set, or mandatory cohort, so every historical
 evidence byte remains unchanged. Categories mean: A retains a truthful
 unit-node reducer/API owner; B moves to a real component-project owner; C uses
@@ -82,7 +83,7 @@ component-project suffix where applicable. `id`, `sourceHash`, `authorityHash`,
 | SC-000073 (8) | D | 1-8 delete → `D3_NON_OBSERVABLE_VISUAL: Mini-logo dimensions, object-fit, and background tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
 | SC-000074 (10) | D | 1-10 delete → `D3_NON_OBSERVABLE_VISUAL: Desktop and narrow analysis grid breakpoint tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
 | SC-000075 (10) | D | 1-10 delete → `D3_NON_OBSERVABLE_VISUAL: Evidence trace container-query columns, padding, and border tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
-| SC-000076 (3) | C | 1 behavior, invariant “The rendered Chat leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs`.<br>2 behavior, invariant “The rendered Chunks leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs`.<br>3 behavior, invariant “The rendered Runs leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs` |
+| SC-000076 (3) | D | 1-3 delete → `D3_NON_OBSERVABLE_VISUAL: Absence of companion-width-specific inner layout rules in Chat, Chunks, and Runs is a non-normative CSS/visual constraint with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
 | SC-000093 (5) | A | 1-5 behavior → `test:vitest:src/lib/analysis-evidence-source-navigation.behavior.test.ts#analysis evidence source navigation > detects selected traces in loaded snapshot and live source windows` |
 | SC-000094 (3) | A | 1-3 behavior → `test:vitest:src/lib/analysis-evidence-source-navigation.behavior.test.ts#analysis evidence source navigation > returns false when a successful focused load does not contain the selected trace` |
 | SC-000097 (6) | B | 1-6 behavior → `test:vitest:src/routes/analysis/analysis-route-llm-controls.behavior.component.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls` |
@@ -267,10 +268,10 @@ source-shape ordinals from Node behavior ownership to architecture ownership,
 The final component-owner correction moves another four rows/36 ordinals from
 Node to jsdom, producing 174 Node rows/1,065 ordinals, 94 jsdom rows/634
 ordinals, and 19 Cargo rows/161 ordinals.
-The subsequent exact Task 9 correction moves 30 analysis rows' observable
-component/route-composition ownership to jsdom and deletes 45 non-observable
-visual ordinals across five D rows plus two mixed subgroups. The final forecast
-is therefore Node 139 rows/787 ordinals, jsdom 124/867, Cargo 19/161, and
+The subsequent exact Task 9 correction moves 29 analysis rows' observable
+component/route-composition ownership to jsdom and deletes 48 non-observable
+visual ordinals across six D rows plus two mixed subgroups. The final forecast
+is therefore Node 139 rows/787 ordinals, jsdom 123/864, Cargo 19/161, and
 Playwright 3/21; proposed-new-jsdom remains 0/0 because every component path is
 an approved correction rather than an unreviewed proposal.
 SC-000464's exact owner is:
@@ -417,8 +418,8 @@ Slice 3C is complete only when:
 
 - validator-open rows fall from 436 to 0;
 - all 86 legacy files are absent;
-- all 281 behavior rows and all subgroups of the four mixed rows resolve
-  through their exact owners/dispositions, and all 151 delete rows close through their accepted
+- all 281 behavior rows and all subgroups of the three mixed rows resolve
+  through their exact owners/dispositions, and all 152 delete rows close through their accepted
   deletion reasons;
 - the legacy Vitest project, census owner, npm script, and verify gate are
   absent;

@@ -87,13 +87,14 @@ describe("analysis redesign final route contract", () => {
 
 describe("analysis redesign final safety contract", () => {
   it("surfaces saved Telegram historical scope instead of treating it as ordinary current history", async () => {
-    render(ReportRunHeader, {
+    const view = render(ReportRunHeader, {
       props: props(run({ telegram_history_scope: "current_plus_migrated" })),
     });
 
     await fireEvent.click(screen.getByText("Run details"));
     expect(screen.getByText("Telegram history")).toBeTruthy();
     expect(screen.getByText("Current + migrated historical scope")).toBeTruthy();
-    expect(screen.getAllByText("Deleted research channel")).toHaveLength(2);
+    await view.rerender(props(run({ telegram_history_scope: "current" })));
+    expect(screen.queryByText("Telegram history")).toBeNull();
   });
 });
