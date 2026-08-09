@@ -184,10 +184,10 @@ The resulting cutover distribution is:
 | --- | ---: | ---: | ---: |
 | Wave 0 | 23 | 23 | 70 |
 | Wave 1 | 14 | 14 | 29 |
-| Wave 2 | 35 | 37 | 271 |
+| Wave 2 | 30 | 37 | 271 |
 | Wave 3 | 9 | 9 | 55 |
 | Browser track | 3 | 3 | 11 |
-| **Total** | **84** | **86** | **436** |
+| **Total** | **79** | **86** | **436** |
 
 Wave 0 remains one special deletion-only batch. Wave 1, Wave 3, and the browser
 track each remain one integration batch. Wave 2 is divided into four or five
