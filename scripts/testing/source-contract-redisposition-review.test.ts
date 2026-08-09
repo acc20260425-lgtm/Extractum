@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import reviewArtifact from "../../testing/source-contract-redisposition-review.json";
+import currentLedger from "../../testing/source-contract-ledger.json";
 import {
   applyReview,
   canonicalJson,
@@ -941,6 +942,104 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, currentLedger: unapprovedLedger })).toContain("ledger: rows changed outside approved review apply");
   });
 
+  it("permits only the exact Task 9 truthful-owner amendment and its atomic ledger transition", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, currentPresentPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadCurrentPresentTrackedPaths({ repoRoot }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const aIds = new Set(["SC-000093", "SC-000094", "SC-000108", "SC-000114", "SC-000117", "SC-000119", "SC-000124", "SC-000126", "SC-000127"]);
+    const cIds = new Set(["SC-000071", "SC-000076", "SC-000106", "SC-000107"]);
+    const dIds = new Set(["SC-000072", "SC-000073", "SC-000074", "SC-000075", "SC-000105"]);
+    const task9Ids = new Set([
+      ...Array.from({ length: 14 }, (_, index) => `SC-${String(60 + index).padStart(6, "0")}`).filter((id) => id !== "SC-000064"),
+      "SC-000074", "SC-000075", "SC-000076", "SC-000093", "SC-000094", "SC-000097", "SC-000098",
+      ...Array.from({ length: 6 }, (_, index) => `SC-${String(100 + index).padStart(6, "0")}`),
+      ...Array.from({ length: 9 }, (_, index) => `SC-${String(106 + index).padStart(6, "0")}`),
+      "SC-000117", "SC-000119", "SC-000120", "SC-000122", "SC-000123", "SC-000124", "SC-000125", "SC-000126", "SC-000127",
+    ]);
+    const rowById = new Map(realBaseLedger.rows.map((row: any) => [row.id, row]));
+    const decisions = (reviewArtifact as any).decisions.filter((decision: any) => task9Ids.has(decision.id));
+    const ordinalTotal = (ids: Set<string>) => [...ids].reduce((total, id) => total + (rowById.get(id) as any).assertionCount, 0);
+    const bIds = new Set(decisions.map((decision: any) => decision.id).filter((id: string) => !aIds.has(id) && !cIds.has(id) && !dIds.has(id)));
+
+    expect(decisions).toHaveLength(44);
+    expect([aIds.size, ordinalTotal(aIds)]).toEqual([9, 63]);
+    expect([bIds.size, ordinalTotal(bIds)]).toEqual([26, 212]);
+    expect([cIds.size, ordinalTotal(cIds)]).toEqual([4, 24]);
+    expect([dIds.size, ordinalTotal(dIds)]).toEqual([5, 42]);
+
+    for (const decision of decisions) {
+      const groups = decision.resolution?.subgroups ?? [decision.resolution];
+      const owners = groups.flatMap((group: any) => group?.replacementIds ?? []);
+      if (aIds.has(decision.id)) {
+        expect(decision.class).toBe("B2_NEW_CHEAP_BEHAVIOR");
+        expect(owners.every((owner: string) => owner.startsWith("test:vitest:src/lib/analysis-") && owner.includes(".behavior.test.ts#"))).toBe(true);
+      } else if (dIds.has(decision.id)) {
+        expect(decision.class).toBe("D3_NON_OBSERVABLE_VISUAL");
+        expect(decision.resolution.disposition).toBe("delete");
+        expect(decision.resolution.deletionReason).toContain("D3_NON_OBSERVABLE_VISUAL");
+        expect(owners).toEqual([]);
+      } else {
+        expect(decision.class).toBe("B2_NEW_CHEAP_BEHAVIOR");
+        expect(owners.length).toBeGreaterThan(0);
+        expect(owners.every((owner: string) => owner.startsWith("test:vitest:") && owner.includes(".behavior.component.test.ts#"))).toBe(true);
+      }
+    }
+
+    for (const id of ["SC-000071", "SC-000076", "SC-000106"]) {
+      const row = rowById.get(id) as any;
+      const decision = decisions.find((item: any) => item.id === id);
+      expect(Object.keys(decision.resolution)).toEqual(["subgroups"]);
+      const ordinals = decision.resolution.subgroups.flatMap((group: any) => group.assertionOrdinals).sort((left: number, right: number) => left - right);
+      expect(ordinals).toEqual(Array.from({ length: row.assertionCount }, (_, index) => index + 1));
+      expect(new Set(ordinals).size).toBe(row.assertionCount);
+      expect(decision.resolution.subgroups.every((group: any) => typeof group.invariant === "string" && group.invariant.length > 0)).toBe(true);
+      expect(decision.resolution.subgroups.filter((group: any) => group.disposition === "delete").every((group: any) => group.deletionReason.includes("D3_NON_OBSERVABLE_VISUAL"))).toBe(true);
+    }
+
+    expect((reviewArtifact as any).forecast.futureOwnersByMechanism).toEqual({
+      node: { rows: 139, assertionOrdinals: 787 },
+      cargo: { rows: 19, assertionOrdinals: 161 },
+      jsdom: { rows: 124, assertionOrdinals: 867 },
+      playwright: { rows: 3, assertionOrdinals: 21 },
+    });
+    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 281, delete: 151, mixed: 4 });
+
+    const input: any = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      currentPresentPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    };
+    expect(validateReview(input)).toEqual([]);
+
+    const mutatedReason = clone(reviewArtifact) as any;
+    mutatedReason.decisions.find((item: any) => item.id === "SC-000060").reason += " mutated";
+    expect(validateReview({ ...input, artifact: mutatedReason })).toContain("Task 9: approved amendment table digest mismatch");
+
+    const old060ReplacementIds = [
+      "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped",
+    ];
+    const partialArtifact = clone(reviewArtifact) as any;
+    const partialDecision = partialArtifact.decisions.find((item: any) => item.id === "SC-000060");
+    partialDecision.ownerEvidence = clone(old060ReplacementIds);
+    partialDecision.resolution = { disposition: "behavior", replacementIds: clone(old060ReplacementIds) };
+    expect(validateReview({ ...input, artifact: partialArtifact })).toContain("Task 9: approved amendment table digest mismatch");
+
+    const correctedLedger = applyReview(input).ledger;
+    expect(validateReview({ ...input, currentLedger: correctedLedger })).toEqual([]);
+    const partialLedger = clone(correctedLedger) as any;
+    const partialLedgerRow = partialLedger.rows.find((item: any) => item.id === "SC-000060");
+    partialLedgerRow.disposition = "behavior";
+    partialLedgerRow.replacementIds = clone(old060ReplacementIds);
+    expect(validateReview({ ...input, currentLedger: partialLedger })).toContain("ledger: Task 9 resolutions must equal the exact pre-correction or corrected state");
+  }, 30_000);
+
   it("recomputes final disposition forecasts and accepted loss from decisions", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([
@@ -986,11 +1085,11 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      B2_NEW_CHEAP_BEHAVIOR: 282,
+      B2_NEW_CHEAP_BEHAVIOR: 277,
       B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
       D1_COMPLETED_HISTORY_ONLY: 6,
       D2_IMPLEMENTATION_SHAPE: 122,
-      D3_NON_OBSERVABLE_VISUAL: 10,
+      D3_NON_OBSERVABLE_VISUAL: 15,
       D4_DUPLICATE_EVIDENCE: 8,
     });
     expect(reviewArtifact.protectedRows).toHaveLength(14);
@@ -1093,9 +1192,9 @@ describe("source-contract redisposition review", () => {
     const executionForecast = (reviewArtifact as any).forecast.futureOwnersByMechanism;
 
     expect(executionForecast).toEqual({
-      node: { rows: 174, assertionOrdinals: 1065 },
+      node: { rows: 139, assertionOrdinals: 787 },
       cargo: { rows: 19, assertionOrdinals: 161 },
-      jsdom: { rows: 94, assertionOrdinals: 634 },
+      jsdom: { rows: 124, assertionOrdinals: 867 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });
     expect((reviewArtifact as any).forecast.proposedNewJsdomRows).toBe(0);

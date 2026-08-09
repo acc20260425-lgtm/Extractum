@@ -47,6 +47,17 @@ const FINAL_TASK4_OWNER_CORRECTIONS = new Map([
     after: "test:vitest:src/routes/settings/settings-focus.behavior.component.test.ts#keeps Settings focused on LLM configuration",
   }],
 ]);
+const TASK9_AMENDMENT_IDS = [
+  ...Array.from({ length: 14 }, (_, index) => `SC-${String(60 + index).padStart(6, "0")}`).filter((id) => id !== "SC-000064"),
+  "SC-000074", "SC-000075", "SC-000076", "SC-000093", "SC-000094", "SC-000097", "SC-000098",
+  ...Array.from({ length: 6 }, (_, index) => `SC-${String(100 + index).padStart(6, "0")}`),
+  ...Array.from({ length: 9 }, (_, index) => `SC-${String(106 + index).padStart(6, "0")}`),
+  "SC-000117", "SC-000119", "SC-000120", "SC-000122", "SC-000123", "SC-000124", "SC-000125", "SC-000126", "SC-000127",
+];
+const TASK9_AMENDMENT_ID_SET = new Set(TASK9_AMENDMENT_IDS);
+const TASK9_MIXED_IDS = new Set(["SC-000071", "SC-000076", "SC-000106"]);
+const APPROVED_TASK9_AMENDMENT_DIGEST = "dd3cad5db8f8004008b08f61b040f745bb9b201021b19226911c31776bab0c15";
+const APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST = "8a6bedc1ea155a67e620205ee15e9e078a4adfdaba27c7190a5c3a1d054fff39";
 const APPROVED_SC_000515_SUBGROUPS = [
   {
     assertionOrdinals: [1, 11, 19],
@@ -396,6 +407,32 @@ function resolutionOnly(row) {
   return Object.fromEntries([...RESOLUTION_KEYS].filter((key) => own(row, key)).map((key) => [key, row[key]]));
 }
 
+function task9AmendmentDigest(decisions) {
+  const snapshot = (decisions ?? [])
+    .filter((decision) => TASK9_AMENDMENT_ID_SET.has(decision?.id))
+    .sort((left, right) => compareId(left.id, right.id))
+    .map((decision) => ({
+      id: decision.id,
+      class: decision.class,
+      reason: decision.reason,
+      ...(own(decision, "ownerEvidence") ? { ownerEvidence: decision.ownerEvidence } : {}),
+      resolution: decision.resolution,
+    }));
+  return sha256Text(canonicalJson(snapshot));
+}
+
+function task9LedgerResolutionDigest(rows) {
+  const snapshot = (rows ?? [])
+    .filter((row) => TASK9_AMENDMENT_ID_SET.has(row?.id))
+    .sort((left, right) => compareId(left.id, right.id))
+    .map((row) => ({ id: row.id, resolution: resolutionOnly(row) }));
+  return sha256Text(canonicalJson(snapshot));
+}
+
+function rowsOutsideTask9(rows) {
+  return (rows ?? []).filter((row) => !TASK9_AMENDMENT_ID_SET.has(row?.id));
+}
+
 function envelopeWithoutRows(ledger) {
   const { rows, sourceReaderExceptions, ...envelope } = ledger ?? {};
   return envelope;
@@ -527,7 +564,7 @@ function resolutionIds(row) {
   ].filter((id) => typeof id === "string" && !id.startsWith("test:playwright:"));
 }
 
-function validateResolution(decision, row, protectedIds, resolvedOwners, issues) {
+function validateResolution(decision, row, protectedIds, resolvedOwners, issues, approvedTask9Amendment = false) {
   const prefix = `${decision.id}:`;
   const requiredD3Reason = REQUIRED_D3_REASONS.get(decision.id);
   const resolution = decision.resolution;
@@ -565,13 +602,18 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues)
     const approvedMixedGridDisposition = decision.id === "SC-000515"
       && isMixed
       && ["architecture", "behavior"].includes(subgroup.disposition);
-    if (subgroup.disposition !== requiredDisposition && !approvedMixedGridDisposition) {
+    const approvedTask9MixedDisposition = approvedTask9Amendment
+      && TASK9_MIXED_IDS.has(decision.id)
+      && isMixed
+      && ["behavior", "delete"].includes(subgroup.disposition);
+    if (subgroup.disposition !== requiredDisposition && !approvedMixedGridDisposition && !approvedTask9MixedDisposition) {
       issues.push(`${prefix} ${decision.class} requires ${requiredDisposition} disposition`);
     }
     if (subgroup.disposition === "delete") {
       if (own(subgroup, "replacementIds")) issues.push(`${prefix} delete resolution must not include replacementIds`);
       if (typeof subgroup.deletionReason !== "string" || !subgroup.deletionReason.trim()) issues.push(`${prefix} delete resolution requires a deletionReason`);
-      if (typeof subgroup.deletionReason === "string" && (subgroup.deletionReason.trim() === decision.class || (!subgroup.deletionReason.includes(decision.class) && !requiredD3Reason))) issues.push(`${prefix} deletion reason must contain row-specific text`);
+      if (typeof subgroup.deletionReason === "string" && !approvedTask9MixedDisposition
+        && (subgroup.deletionReason.trim() === decision.class || (!subgroup.deletionReason.includes(decision.class) && !requiredD3Reason))) issues.push(`${prefix} deletion reason must contain row-specific text`);
       for (const ordinal of isMixed ? subgroup.assertionOrdinals ?? [] : Array.from({ length: row.assertionCount }, (_, index) => index + 1)) deletedOrdinals.add(ordinal);
     } else {
       if (!Array.isArray(subgroup.replacementIds) || !subgroup.replacementIds.length) issues.push(`${prefix} retained resolution requires replacementIds`);
@@ -832,7 +874,10 @@ function validateAcceptedLoss(artifact, issues) {
 
 function expectedSample(decisions, protectedIds) {
   const population = decisions
-    .filter((decision) => decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR" && decision.class !== "D5_ACCEPTED_LOSS" && !protectedIds.has(decision.id) && !decision.resolution?.subgroups)
+    .filter((decision) => decision.class !== "B3_PROTECTED_EXPENSIVE_BEHAVIOR"
+      && decision.class !== "D5_ACCEPTED_LOSS"
+      && !protectedIds.has(decision.id)
+      && (!decision.resolution?.subgroups || TASK9_MIXED_IDS.has(decision.id)))
     .map((decision) => decision.id).sort(compareId);
   return { population, rowIds: [...population].sort((left, right) => compareText(sha256Text(left), sha256Text(right))).slice(0, Math.ceil(population.length * 0.1)) };
 }
@@ -850,7 +895,9 @@ function expectedTailReviewPopulation(artifact) {
   const b3RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId);
   const d5RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId);
   const mixedRowIds = (artifact.decisions ?? [])
-    .filter((decision) => Array.isArray(decision.resolution?.subgroups) && decision.id !== "SC-000515")
+    .filter((decision) => Array.isArray(decision.resolution?.subgroups)
+      && decision.id !== "SC-000515"
+      && !TASK9_MIXED_IDS.has(decision.id))
     .map((decision) => decision.id)
     .sort(compareId);
   for (const id of [...b3RowIds, ...d5RowIds, ...mixedRowIds]) excluded.add(id);
@@ -1538,6 +1585,11 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const decisions = Array.isArray(artifact.decisions) ? [...artifact.decisions].sort((left, right) => compareId(left?.id, right?.id)) : [];
   const decisionIds = new Set();
   const isApprovedTask4CorrectionScope = baseOpenIds.size === 436;
+  const approvedTask9Amendment = !isApprovedTask4CorrectionScope
+    || task9AmendmentDigest(decisions) === APPROVED_TASK9_AMENDMENT_DIGEST;
+  if (isApprovedTask4CorrectionScope && !approvedTask9Amendment) {
+    issues.push("Task 9: approved amendment table digest mismatch");
+  }
   for (const decision of decisions) {
     if (!decision || typeof decision !== "object") {
       issues.push("scope: invalid decision");
@@ -1593,14 +1645,29 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       }
       return canonicalJson(correctedCurrentLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
     })();
+  const task9CurrentDigest = task9LedgerResolutionDigest(currentLedger.rows);
+  const task9CorrectedDigest = task9LedgerResolutionDigest(fullyAppliedLedger.rows);
+  const currentOutsideTask9IsCorrected = canonicalJson(rowsOutsideTask9(currentLedger.rows))
+    === canonicalJson(rowsOutsideTask9(fullyAppliedLedger.rows));
+  const isApprovedTask9PreCorrectionLedger = isApprovedTask4CorrectionScope
+    && currentOutsideTask9IsCorrected
+    && task9CurrentDigest === APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST;
+  if (isApprovedTask4CorrectionScope
+    && currentOutsideTask9IsCorrected
+    && task9CurrentDigest !== APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST
+    && task9CurrentDigest !== task9CorrectedDigest) {
+    issues.push("ledger: Task 9 resolutions must equal the exact pre-correction or corrected state");
+  }
   if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
     && canonicalJson(currentLedger.rows) !== canonicalJson(fullyAppliedLedger.rows)
-    && !isApprovedPreCorrectionLedger) {
+    && !isApprovedPreCorrectionLedger
+    && !isApprovedTask9PreCorrectionLedger) {
     issues.push("ledger: rows changed outside approved review apply");
   }
   if (canonicalJson(currentOpenResolutions) !== canonicalJson(baseOpenResolutions)
     && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)
-    && !isApprovedPreCorrectionLedger) {
+    && !isApprovedPreCorrectionLedger
+    && !isApprovedTask9PreCorrectionLedger) {
     issues.push("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
   }
 
@@ -1627,7 +1694,7 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (!baseRow) continue;
     const protectedRow = protectedRows.find((item) => item.id === decision.id);
     if (decision.class !== "UNCLASSIFIED" && (protectedRow || decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR") && (!criticalityIds.has(decision.criticalityRef) || (protectedRow && protectedRow.criticalityRef !== decision.criticalityRef))) issues.push(`${decision.id}: protected behavior requires a valid criticalityRef`);
-    validateResolution(decision, baseRow, protectedIds, resolvedOwners, issues);
+    validateResolution(decision, baseRow, protectedIds, resolvedOwners, issues, approvedTask9Amendment);
   }
 
   validateTimingAndForecast(artifact, baseLedger, issues);
@@ -1776,7 +1843,10 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     const emergingExpectations = new Map([
       ["emerging-b3", decisions.filter((decision) => decision.class === "B3_PROTECTED_EXPENSIVE_BEHAVIOR").map((decision) => decision.id).sort(compareId)],
       ["emerging-d5", decisions.filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId)],
-      ["emerging-mixed", decisions.filter((decision) => Array.isArray(decision.resolution?.subgroups)).map((decision) => decision.id).sort(compareId)],
+      ["emerging-mixed", decisions
+        .filter((decision) => Array.isArray(decision.resolution?.subgroups) && !TASK9_MIXED_IDS.has(decision.id))
+        .map((decision) => decision.id)
+        .sort(compareId)],
     ]);
     for (const [name, expectedIds] of emergingExpectations) {
       const cohorts = mandatoryCohorts.filter((cohort) => cohort?.name === name);

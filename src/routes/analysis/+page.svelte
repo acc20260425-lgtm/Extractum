@@ -216,7 +216,6 @@
     type CompanionTab,
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
-  import { workspaceRouteProps } from "$lib/analysis-workspace-route-props";
   import {
     fallbackWorkspaceSelection,
     loadPersistedAnalysisWorkspaceState,
@@ -352,7 +351,6 @@
     defaultAnalysisWorkspaceUiState(),
   );
   let workspacePersistenceReady = $state(false);
-  const workspaceRoute = $derived(workspaceRouteProps(workspaceUiState));
   let restoredWorkspaceSelection = $state<WorkspaceSelection | null>(null);
   const legacyWorkspaceSelection = $derived(
     legacyScopeFromWorkspaceSelection(workspaceUiState.workspaceSelection),
@@ -3082,7 +3080,7 @@
     {railQuery}
     {filteredSourceCatalog}
     {filteredGroups}
-    workspaceSelection={workspaceRoute.workspaceSelection}
+    workspaceSelection={workspaceUiState.workspaceSelection}
     {syncingIds}
     {deletingSourceIds}
     {startingTakeoutSourceIds}
@@ -3112,15 +3110,15 @@
 
   <!-- Retained legacy cutover marker: selectedGroupEditorId={selectedGroupEditorId} -->
   <ReportCanvas
-    workspaceSelection={workspaceRoute.workspaceSelection}
+    workspaceSelection={workspaceUiState.workspaceSelection}
     currentSource={currentSource()}
     takeoutRecovery={currentTakeoutRecovery()}
     currentGroup={currentGroup()}
     currentSourceMetric={currentSourceMetric()}
     currentScopeTitle={currentScopeTitle()}
     currentScopeSummary={currentScopeSummary()}
-    canvasMode={workspaceRoute.canvasMode}
-    sourceViewBasis={workspaceRoute.sourceViewBasis}
+    canvasMode={workspaceUiState.canvasMode}
+    sourceViewBasis={workspaceUiState.sourceViewBasis}
     {runSnapshotAvailability}
     snapshotProbeState={runSnapshotProbeState}
     {runSnapshotMessages}
@@ -3273,7 +3271,7 @@
 
   <div class="companion-slot">
     <RunCompanionTabs
-      companionTab={workspaceRoute.companionTab}
+      companionTab={workspaceUiState.companionTab}
       {currentRun}
       snapshotAvailability={runSnapshotAvailability}
       snapshotProbeState={runSnapshotProbeState}
@@ -3289,7 +3287,7 @@
       {loadingRuns}
       {activeRunId}
       {deletingRunIds}
-      workspaceSelection={workspaceRoute.workspaceSelection}
+      workspaceSelection={workspaceUiState.workspaceSelection}
       {runsFilter}
       {loadingChat}
       {chatMessages}

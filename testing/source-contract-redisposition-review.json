@@ -660,52 +660,64 @@
       "sourceHash": "81b19daeda01324d88680d1b17abe89662026e28b6df0ea50d00d880ed79ad22",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the collapsed rail compact and source-scoped. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the collapsed rail compact and source-scoped. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped"
+      ]
     },
     {
       "id": "SC-000061",
       "sourceHash": "4331aaad815892054377f7937940ac574ac8d2481e143841f3ecafea79e93b5f",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Puts full list, search, management, and detailed status in the expanded source panel. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > puts full list, search, management, and detailed status in the expanded source panel.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Puts full list, search, management, and detailed status in the expanded source panel. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > puts full list, search, management, and detailed status in the expanded source panel"
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > puts full list, search, management, and detailed status in the expanded source panel"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > puts full list, search, management, and detailed status in the expanded source panel"
+      ]
     },
     {
       "id": "SC-000062",
       "sourceHash": "094ce86cd136ba75f54de93b10e131eb44930909da81162142a592fe9a6cecda",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Passes migrated history action state through the compact rail. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > passes migrated history action state through the compact rail.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Passes migrated history action state through the compact rail. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > passes migrated history action state through the compact rail"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > passes migrated history action state through the compact rail"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > passes migrated history action state through the compact rail"
+      ]
     },
     {
       "id": "SC-000063",
       "sourceHash": "2db6713a489af62eefe16d05766995850cb918ecb77b89c9259384cf0a5fd202",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps detailed Takeout import progress in the expanded source panel. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps detailed Takeout import progress in the expanded source panel.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps detailed Takeout import progress in the expanded source panel. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps detailed Takeout import progress in the expanded source panel"
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps detailed Takeout import progress in the expanded source panel"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps detailed Takeout import progress in the expanded source panel"
+      ]
     },
     {
       "id": "SC-000064",
@@ -726,142 +738,178 @@
       "sourceHash": "2eadbaaeae05a32461592c6828bde963d444c566133e61c815c04d09aa488bb9",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps YouTube video duration visible in expanded source metadata. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps YouTube video duration visible in expanded source metadata.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps YouTube video duration visible in expanded source metadata. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps YouTube video duration visible in expanded source metadata"
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps YouTube video duration visible in expanded source metadata"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps YouTube video duration visible in expanded source metadata"
+      ]
     },
     {
       "id": "SC-000066",
       "sourceHash": "781fe56030e697861f9839e1d6595dc2c41bb73363ef655a52aae951708487f9",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps Telegram username and sync freshness visible in expanded source metadata. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps Telegram username and sync freshness visible in expanded source metadata.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps Telegram username and sync freshness visible in expanded source metadata. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps Telegram username and sync freshness visible in expanded source metadata"
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps Telegram username and sync freshness visible in expanded source metadata"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps Telegram username and sync freshness visible in expanded source metadata"
+      ]
     },
     {
       "id": "SC-000067",
       "sourceHash": "dbd228bf9af5a54c181df2222b23c044f7e63d51f6639582cd6cdb10a6ebfced",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source and group switching callback-based. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps source and group switching callback-based.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source and group switching callback-based. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps source and group switching callback-based"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based",
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based",
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based"
+      ]
     },
     {
       "id": "SC-000068",
       "sourceHash": "c91d4a41b254e143d433933ed0eb53ac25a48f4314d147566a6c17fe40de27cc",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Closes the expanded switcher after quick source or group selection. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > closes the expanded switcher after quick source or group selection.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Closes the expanded switcher after quick source or group selection. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > closes the expanded switcher after quick source or group selection"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > closes the expanded switcher after quick source or group selection"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > closes the expanded switcher after quick source or group selection"
+      ]
     },
     {
       "id": "SC-000069",
       "sourceHash": "87cce3cf2ecef81eeb8e9358357fce9b5fcd9a36bb502a205f3431875b4a6da8",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps destructive source deletion out of the compact rail but available in the expanded panel. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps destructive source deletion out of the compact rail but available in the expanded panel. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel",
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel",
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel"
+      ]
     },
     {
       "id": "SC-000070",
       "sourceHash": "52e3b2215fbaf9347501dc9e6c41bd9ec8275269e31a83da3fae91b7e30c554c",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps icon-only controls accessible without hover-only status. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps icon-only controls accessible without hover-only status. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status",
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status",
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status"
+      ]
     },
     {
       "id": "SC-000071",
       "sourceHash": "77656ba3d65278bedaa82eb237d338f0eb75027640c96534418780ebab212a1b",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Uses a compact mobile source context bar. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > uses a compact mobile source context bar.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Uses a compact mobile source context bar. The approved Task 9 correction partitions every frozen ordinal between truthful rendered behavior and any explicitly deleted non-observable CSS detail.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > uses a compact mobile source context bar"
+        "subgroups": [
+          {
+            "assertionOrdinals": [
+              1,
+              2
+            ],
+            "invariant": "The rendered compact rail exposes the current mobile context trigger and quick source choices.",
+            "disposition": "behavior",
+            "replacementIds": [
+              "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > uses a compact mobile source context bar"
+            ]
+          },
+          {
+            "assertionOrdinals": [
+              3
+            ],
+            "invariant": "The 720px media-query assertion is a non-normative CSS breakpoint detail.",
+            "disposition": "delete",
+            "deletionReason": "D3_NON_OBSERVABLE_VISUAL: The exact 720px media-query token is a non-normative CSS breakpoint detail with no truthful jsdom seam, and the approved correction adds no Playwright owner."
+          }
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > uses a compact mobile source context bar"
+      ]
     },
     {
       "id": "SC-000072",
       "sourceHash": "0cdfdbfb6e365c5c492ed2bba864728b2bdad0dca9d80b97751de9159f89bf3a",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Reduces rail chrome without widening the rail. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > reduces rail chrome without widening the rail.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Rail padding, border, shadow, z-index, and width tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > reduces rail chrome without widening the rail"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Rail padding, border, shadow, z-index, and width tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
       }
     },
     {
       "id": "SC-000073",
       "sourceHash": "5926a4eba78cb0ccfa5e4730d7e3d290ed77feb14da10497dfdc3289bc54422a",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Shows mini source logos without cropping them. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > shows mini source logos without cropping them.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Mini-logo dimensions, object-fit, and background tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-compact-source-rail.behavior.test.ts#compact analysis source rail > shows mini source logos without cropping them"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Mini-logo dimensions, object-fit, and background tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
       }
     },
     {
       "id": "SC-000074",
       "sourceHash": "6d4c9fa067b16380d5e996d86f9ab4478ee669ff03758238021a11c0f8c98613",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the desktop companion visible while preserving narrow stacking breakpoints. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > keeps the desktop companion visible while preserving narrow stacking breakpoints.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Desktop and narrow analysis grid breakpoint tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > keeps the desktop companion visible while preserving narrow stacking breakpoints"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Desktop and narrow analysis grid breakpoint tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
       }
     },
     {
       "id": "SC-000075",
       "sourceHash": "1fb4941d01f1e996500e73dfba41f0d6bf3916d220419c0a903bf68588b9aa6e",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Uses Evidence panel width, not viewport width, for trace list/detail columns. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > uses Evidence panel width, not viewport width, for trace list/detail columns.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Evidence trace container-query columns, padding, and border tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > uses Evidence panel width, not viewport width, for trace list/detail columns"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Evidence trace container-query columns, padding, and border tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
       }
     },
     {
@@ -869,13 +917,46 @@
       "sourceHash": "9feecb79fe7819496b19f4b299ebfc19de69a990e0b4595443108ad496fcb4df",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Does not add companion-width-specific inner layouts to Chat, Chunks, or Runs. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Does not add companion-width-specific inner layouts to Chat, Chunks, or Runs. The approved Task 9 correction partitions every frozen ordinal between truthful rendered behavior and any explicitly deleted non-observable CSS detail.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-companion-layout.behavior.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
+        "subgroups": [
+          {
+            "assertionOrdinals": [
+              1
+            ],
+            "invariant": "The rendered Chat leaf remains free of companion-width-only layout state.",
+            "disposition": "behavior",
+            "replacementIds": [
+              "test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
+            ]
+          },
+          {
+            "assertionOrdinals": [
+              2
+            ],
+            "invariant": "The rendered Chunks leaf remains free of companion-width-only layout state.",
+            "disposition": "behavior",
+            "replacementIds": [
+              "test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
+            ]
+          },
+          {
+            "assertionOrdinals": [
+              3
+            ],
+            "invariant": "The rendered Runs leaf remains free of companion-width-only layout state.",
+            "disposition": "behavior",
+            "replacementIds": [
+              "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
+            ]
+          }
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs",
+        "test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs",
+        "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs"
+      ]
     },
     {
       "id": "SC-000077",
@@ -1117,26 +1198,32 @@
       "sourceHash": "1c68b482323bdd493b8e0691d1749eb8757a697a3d9ffaf25cefd3cbbd8eb057",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Loads LLM profiles and provider models for the analysis controls. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-llm-run-controls.behavior.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Loads LLM profiles and provider models for the analysis controls. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-llm-run-controls.behavior.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls"
+          "test:vitest:src/routes/analysis/analysis-route-llm-controls.behavior.component.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/routes/analysis/analysis-route-llm-controls.behavior.component.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls"
+      ]
     },
     {
       "id": "SC-000098",
       "sourceHash": "a53ccb2fef6fd788eb4615457e8ffb248eb5d387062d679c22df7b84f403c7bb",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Uses profile and model selects instead of a plain model override field. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-llm-run-controls.behavior.test.ts#analysis LLM run controls > uses profile and model selects instead of a plain model override field.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Uses profile and model selects instead of a plain model override field. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-llm-run-controls.behavior.test.ts#analysis LLM run controls > uses profile and model selects instead of a plain model override field"
+          "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis LLM run controls > uses profile and model selects instead of a plain model override field"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis LLM run controls > uses profile and model selects instead of a plain model override field"
+      ]
     },
     {
       "id": "SC-000099",
@@ -1154,77 +1241,96 @@
       "sourceHash": "2a0d830c877416ffa1d29d878700d4634f33adca40e3ddd63aa2cf12fb02f015",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the report canvas top chrome compact and action-oriented. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the report canvas top chrome compact and action-oriented. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented"
+          "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+          "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+          "test:vitest:src/lib/components/analysis/report-workspace-tools.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+          "test:vitest:src/lib/components/analysis/source-reader-header.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+        "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+        "test:vitest:src/lib/components/analysis/report-workspace-tools.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented",
+        "test:vitest:src/lib/components/analysis/source-reader-header.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented"
+      ]
     },
     {
       "id": "SC-000101",
       "sourceHash": "a17a00eb9542b6f521622452ec3f2c24f10c112d91bf8e482feb1a6025964dac",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the source switcher primarily focused on source selection. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps the source switcher primarily focused on source selection.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the source switcher primarily focused on source selection. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps the source switcher primarily focused on source selection"
+          "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#analysis priority UX contract > keeps the source switcher primarily focused on source selection"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#analysis priority UX contract > keeps the source switcher primarily focused on source selection"
+      ]
     },
     {
       "id": "SC-000102",
       "sourceHash": "6e9a163068fb8aa35e80403697538956b88918aa39625c40fb05f9a9b163bdb1",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Makes source activity the visible home for source operations. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > makes source activity the visible home for source operations.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Makes source activity the visible home for source operations. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > makes source activity the visible home for source operations"
+          "test:vitest:src/lib/components/analysis/source-activity-view.behavior.component.test.ts#analysis priority UX contract > makes source activity the visible home for source operations"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/source-activity-view.behavior.component.test.ts#analysis priority UX contract > makes source activity the visible home for source operations"
+      ]
     },
     {
       "id": "SC-000103",
       "sourceHash": "e329fc29d1ae1480cb525659bbc5cd58d3cbb0c60c7de76ab555614cbebe326f",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Turns loaded items into a reader instead of a raw dump. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > turns loaded items into a reader instead of a raw dump.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Turns loaded items into a reader instead of a raw dump. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > turns loaded items into a reader instead of a raw dump"
+          "test:vitest:src/lib/components/analysis/universal-items-view.behavior.component.test.ts#analysis priority UX contract > turns loaded items into a reader instead of a raw dump"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/universal-items-view.behavior.component.test.ts#analysis priority UX contract > turns loaded items into a reader instead of a raw dump"
+      ]
     },
     {
       "id": "SC-000104",
       "sourceHash": "27fd91933f03deb2b50c6c83bbce4979f611ab462a27f9788f115a646d01bbed",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps run filters progressive when no runs exist. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps run filters progressive when no runs exist.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps run filters progressive when no runs exist. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps run filters progressive when no runs exist"
+          "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis priority UX contract > keeps run filters progressive when no runs exist"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis priority UX contract > keeps run filters progressive when no runs exist"
+      ]
     },
     {
       "id": "SC-000105",
       "sourceHash": "3de0383d6639da2f577e8cce0e83bfb038523aaf10b003952a50ff6506187081",
       "authorRunId": "redisposition-task-4-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps long source readers bounded while preserving desktop companion visibility. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps long source readers bounded while preserving desktop companion visibility.",
+      "class": "D3_NON_OBSERVABLE_VISUAL",
+      "reason": "D3_NON_OBSERVABLE_VISUAL: Reader max-height, overflow, scroll-margin, and companion-width tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-priority-ux-contract.behavior.test.ts#analysis priority UX contract > keeps long source readers bounded while preserving desktop companion visibility"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D3_NON_OBSERVABLE_VISUAL: Reader max-height, overflow, scroll-margin, and companion-width tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
       }
     },
     {
@@ -1232,26 +1338,57 @@
       "sourceHash": "b87e39f2ecd954049d0c36b0f980e02b2d395495035fdc92cb6390f2609eea6e",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Renders the approved three-zone analysis workspace. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > renders the approved three-zone analysis workspace.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Renders the approved three-zone analysis workspace. The approved Task 9 correction partitions every frozen ordinal between truthful rendered behavior and any explicitly deleted non-observable CSS detail.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > renders the approved three-zone analysis workspace"
+        "subgroups": [
+          {
+            "assertionOrdinals": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              11
+            ],
+            "invariant": "The real analysis route renders and wires the approved compact rail, report canvas, and companion zones.",
+            "disposition": "behavior",
+            "replacementIds": [
+              "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > renders the approved three-zone analysis workspace"
+            ]
+          },
+          {
+            "assertionOrdinals": [
+              9,
+              10
+            ],
+            "invariant": "The analysis-workspace selector and grid-template CSS tokens are non-normative layout details.",
+            "disposition": "delete",
+            "deletionReason": "D3_NON_OBSERVABLE_VISUAL: The exact analysis-workspace selector and grid-template CSS tokens are non-normative layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner."
+          }
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > renders the approved three-zone analysis workspace"
+      ]
     },
     {
       "id": "SC-000107",
       "sourceHash": "73627523b658878a3364bf22c1cb49d325f8d09ae53854b65dfd2258b74eda4c",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Does not render the legacy wide analysis workspace surfaces. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > does not render the legacy wide analysis workspace surfaces.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Does not render the legacy wide analysis workspace surfaces. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > does not render the legacy wide analysis workspace surfaces"
+          "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > does not render the legacy wide analysis workspace surfaces"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > does not render the legacy wide analysis workspace surfaces"
+      ]
     },
     {
       "id": "SC-000108",
@@ -1271,65 +1408,86 @@
       "sourceHash": "e58ab2a6685dc60e1fa9d171d6936336141d169394c5fbec3a3a14de140d2745",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the collapsed rail source-scoped and quiet. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps the collapsed rail source-scoped and quiet.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps the collapsed rail source-scoped and quiet. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps the collapsed rail source-scoped and quiet"
+          "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#analysis redesign final route contract > keeps the collapsed rail source-scoped and quiet"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#analysis redesign final route contract > keeps the collapsed rail source-scoped and quiet"
+      ]
     },
     {
       "id": "SC-000110",
       "sourceHash": "60b1c1452ad143ed892ace9152a2733d3b15aeed533dae569caacbc68e834a5a",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps ReportCanvas as the report/source mode owner. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps ReportCanvas as the report/source mode owner.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps ReportCanvas as the report/source mode owner. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps ReportCanvas as the report/source mode owner"
+          "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps ReportCanvas as the report/source mode owner"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps ReportCanvas as the report/source mode owner"
+      ]
     },
     {
       "id": "SC-000111",
       "sourceHash": "d2810fe2eec25ff94d944261512ff329b198025b6c87962b504451aa2b477c23",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps report setup out of the primary opened-run reading surface. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps report setup out of the primary opened-run reading surface. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface"
+          "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface",
+          "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface",
+          "test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface",
+        "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface",
+        "test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface"
+      ]
     },
     {
       "id": "SC-000112",
       "sourceHash": "5cd75820e76b78559fe59d68ce93e7cbfad898ceaceb6c085d57e09d34388c95",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Passes migrated historical scope opt-in through report setup. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Passes migrated historical scope opt-in through report setup. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup"
+          "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup",
+          "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup",
+        "test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup"
+      ]
     },
     {
       "id": "SC-000113",
       "sourceHash": "3ee63de87a8daaff558082b345391dc999d24a7c3cb00f95b9af9b9a60ab091f",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps companion tabs as Evidence, Chat, and Runs only. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps companion tabs as Evidence, Chat, and Runs only.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps companion tabs as Evidence, Chat, and Runs only. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps companion tabs as Evidence, Chat, and Runs only"
+          "test:vitest:src/lib/components/analysis/run-companion-tabs.behavior.component.test.ts#analysis redesign final route contract > keeps companion tabs as Evidence, Chat, and Runs only"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/run-companion-tabs.behavior.component.test.ts#analysis redesign final route contract > keeps companion tabs as Evidence, Chat, and Runs only"
+      ]
     },
     {
       "id": "SC-000114",
@@ -1412,13 +1570,18 @@
       "sourceHash": "4be4afb012125a1b64107b32beb3c2e44e22d92273b51dbe3822e0c2c09ed788",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source ingest activity out of analysis Runs. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source ingest activity out of analysis Runs. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs"
+          "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs",
+          "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs",
+        "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs"
+      ]
     },
     {
       "id": "SC-000121",
@@ -1439,26 +1602,36 @@
       "sourceHash": "806d2abe94c2aa8d178e059a46b5802305eccf748097c787a8ed8a434acb1fa0",
       "authorRunId": "redisposition-task-3-final-fix-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "The packet candidates do not completely prove timestamp copying, safe external-link attributes, player absence, and playlist callback boundaries; one focused jsdom reader test can cover the full behavior.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Renders YouTube source material as transcript and playlist readers without an embedded player. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player"
+          "test:vitest:src/lib/components/analysis/youtube-transcript-reader.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player",
+          "test:vitest:src/lib/components/analysis/youtube-playlist-videos-view.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/youtube-transcript-reader.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player",
+        "test:vitest:src/lib/components/analysis/youtube-playlist-videos-view.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player"
+      ]
     },
     {
       "id": "SC-000123",
       "sourceHash": "d73b58c0c1e7fc1184591ad6dbd4f5b8a9a9941bda16a2625a4144c6b6dc699f",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source groups grouped by source instead of merged into one pseudo-chat. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Keeps source groups grouped by source instead of merged into one pseudo-chat. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat"
+          "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat",
+          "test:vitest:src/lib/components/analysis/source-group-sources-view.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat",
+        "test:vitest:src/lib/components/analysis/source-group-sources-view.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat"
+      ]
     },
     {
       "id": "SC-000124",
@@ -1478,13 +1651,16 @@
       "sourceHash": "b951e042a60d427d8eeedff8fb4264074015fa2e66080064772627965e11c15f",
       "authorRunId": "redisposition-task-4-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "B2_NEW_CHEAP_BEHAVIOR: Surfaces saved Telegram historical scope instead of treating it as ordinary current history. The complete invariant has the frozen unresolved cheap owner test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > surfaces saved Telegram historical scope instead of treating it as ordinary current history.",
+      "reason": "B2_NEW_CHEAP_BEHAVIOR: Surfaces saved Telegram historical scope instead of treating it as ordinary current history. The approved Task 9 correction assigns the complete invariant to rendered component behavior at this exact owner set.",
       "resolution": {
         "disposition": "behavior",
         "replacementIds": [
-          "test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > surfaces saved Telegram historical scope instead of treating it as ordinary current history"
+          "test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final safety contract > surfaces saved Telegram historical scope instead of treating it as ordinary current history"
         ]
-      }
+      },
+      "ownerEvidence": [
+        "test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final safety contract > surfaces saved Telegram historical scope instead of treating it as ordinary current history"
+      ]
     },
     {
       "id": "SC-000126",
@@ -8445,22 +8621,22 @@
       "delete": 16
     },
     "afterByDisposition": {
-      "behavior": 289,
-      "delete": 146,
-      "mixed": 1
+      "behavior": 281,
+      "delete": 151,
+      "mixed": 4
     },
     "futureOwnersByMechanism": {
       "node": {
-      "rows": 174,
-      "assertionOrdinals": 1065
+        "rows": 139,
+        "assertionOrdinals": 787
       },
       "cargo": {
-      "rows": 19,
-      "assertionOrdinals": 161
+        "rows": 19,
+        "assertionOrdinals": 161
       },
       "jsdom": {
-        "rows": 94,
-        "assertionOrdinals": 634
+        "rows": 124,
+        "assertionOrdinals": 867
       },
       "playwright": {
         "rows": 3,

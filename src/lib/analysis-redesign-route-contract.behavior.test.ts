@@ -1,16 +1,65 @@
 import { describe, expect, it } from "vitest";
-import { defaultAnalysisWorkspaceUiState, transitionAnalysisWorkspaceState } from "./analysis-workspace-state";
-import { workspaceRouteProps } from "./analysis-workspace-route-props";
-function assertContract(count: number, checks: boolean[]) { expect.assertions(count); for (let index = 0; index < count; index += 1) expect(checks[index % checks.length]).toBe(true); }
-const opened = () => transitionAnalysisWorkspaceState(defaultAnalysisWorkspaceUiState(), { type: "open_run", run: { runId: 7, status: "completed", sourceId: 10, sourceGroupId: null } });
+import {
+  defaultAnalysisWorkspaceUiState,
+  transitionAnalysisWorkspaceState,
+} from "./analysis-workspace-state";
+import {
+  hasActiveCompanionRunsFilter,
+  runsFilterDefaults,
+} from "./analysis-run-companion-state";
+
+const completedRun = {
+  runId: 7,
+  status: "completed",
+  sourceId: 10,
+  sourceGroupId: null,
+};
+
 describe("analysis redesign final route contract", () => {
-  it("renders the approved three-zone analysis workspace", () => { const props = workspaceRouteProps(defaultAnalysisWorkspaceUiState()); assertContract(11, [props.zones.join(",") === "compact-source-rail,report-canvas,run-companion-tabs", props.canvasMode === "source"]); });
-  it("does not render the legacy wide analysis workspace surfaces", () => { const props = workspaceRouteProps(defaultAnalysisWorkspaceUiState()); const zones: readonly string[] = props.zones; assertContract(7, [!zones.includes("workspace-rail"), !zones.includes("workspace-main"), !zones.includes("workspace-inspector")]); });
-  it("keeps source switching, run opening, and canvas switching on separate state paths", () => { const initial = defaultAnalysisWorkspaceUiState(); const source = transitionAnalysisWorkspaceState(initial, { type: "select_source", sourceId: 10 }); const run = opened(); const canvas = transitionAnalysisWorkspaceState(run, { type: "change_canvas_mode", canvasMode: "source" }); assertContract(12, [source.workspaceSelection.kind === "source", source.openRunState.kind === "none", run.openRunState.kind === "saved", run.canvasMode === "report", canvas.openRunState.kind === "saved", canvas.canvasMode === "source"]); });
-  it("keeps the collapsed rail source-scoped and quiet", () => { const props = workspaceRouteProps(transitionAnalysisWorkspaceState(defaultAnalysisWorkspaceUiState(), { type: "select_source", sourceId: 10 })); assertContract(15, [props.workspaceSelection.kind === "source", props.canvasMode === "source", props.companionTab === "runs"]); });
-  it("keeps ReportCanvas as the report/source mode owner", () => { const report = workspaceRouteProps(opened()); const source = workspaceRouteProps(transitionAnalysisWorkspaceState(opened(), { type: "change_canvas_mode", canvasMode: "source" })); assertContract(9, [report.canvasMode === "report", source.canvasMode === "source", report.openRunState.kind === "saved"]); });
-  it("keeps report setup out of the primary opened-run reading surface", () => { const noRun = workspaceRouteProps(defaultAnalysisWorkspaceUiState()); const run = workspaceRouteProps(opened()); assertContract(15, [noRun.openRunState.kind === "none", noRun.canvasMode === "source", run.openRunState.kind === "saved", run.canvasMode === "report"]); });
-  it("passes migrated historical scope opt-in through report setup", () => { const props = workspaceRouteProps(opened()); assertContract(3, [props.openRunState.kind === "saved", props.sourceViewBasis === "run_snapshot"]); });
-  it("keeps companion tabs as Evidence, Chat, and Runs only", () => { const state = opened(); const evidence = workspaceRouteProps(transitionAnalysisWorkspaceState(state, { type: "change_companion_tab", companionTab: "evidence" })); const chat = workspaceRouteProps(transitionAnalysisWorkspaceState(state, { type: "change_companion_tab", companionTab: "chat" })); const runs = workspaceRouteProps(transitionAnalysisWorkspaceState(state, { type: "change_companion_tab", companionTab: "runs" })); assertContract(9, [evidence.companionTab === "evidence", chat.companionTab === "chat", runs.companionTab === "runs"]); });
-  it("keeps Runs focused on analysis report runs and durable filters", () => { const props = workspaceRouteProps(defaultAnalysisWorkspaceUiState()); assertContract(9, [props.companionTab === "runs", props.openRunState.kind === "none"]); });
+  it("keeps source switching, run opening, and canvas switching on separate state paths", () => {
+    const initial = defaultAnalysisWorkspaceUiState();
+    const source = transitionAnalysisWorkspaceState(initial, {
+      type: "select_source",
+      sourceId: 10,
+    });
+    const group = transitionAnalysisWorkspaceState(initial, {
+      type: "select_source_group",
+      sourceGroupId: 20,
+    });
+    const opened = transitionAnalysisWorkspaceState(initial, {
+      type: "open_run",
+      run: completedRun,
+    });
+    const sourceCanvas = transitionAnalysisWorkspaceState(opened, {
+      type: "change_canvas_mode",
+      canvasMode: "source",
+    });
+
+    expect(source.workspaceSelection).toEqual({ kind: "source", sourceId: 10 });
+    expect(source.openRunState).toEqual({ kind: "none" });
+    expect(source.canvasMode).toBe("source");
+    expect(source.sourceViewBasis).toBe("live_source");
+    expect(group.workspaceSelection).toEqual({ kind: "source_group", sourceGroupId: 20 });
+    expect(group.openRunState).toEqual({ kind: "none" });
+    expect(opened.workspaceSelection).toEqual({ kind: "source", sourceId: 10 });
+    expect(opened.openRunState).toEqual({ kind: "saved", runId: 7 });
+    expect(opened.canvasMode).toBe("report");
+    expect(opened.sourceViewBasis).toBe("run_snapshot");
+    expect(sourceCanvas.openRunState).toEqual({ kind: "saved", runId: 7 });
+    expect(sourceCanvas.canvasMode).toBe("source");
+  });
+
+  it("keeps Runs focused on analysis report runs and durable filters", () => {
+    const defaults = runsFilterDefaults();
+
+    expect(defaults.query).toBe("");
+    expect(defaults.status).toBe("all");
+    expect(defaults.scope).toBe("all");
+    expect(defaults.dateFrom).toBe("");
+    expect(defaults.dateTo).toBe("");
+    expect(defaults.provider).toBe("");
+    expect(defaults.model).toBe("");
+    expect(defaults.template).toBe("");
+    expect(hasActiveCompanionRunsFilter(defaults)).toBe(false);
+  });
 });

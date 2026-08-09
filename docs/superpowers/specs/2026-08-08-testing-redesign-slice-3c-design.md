@@ -18,14 +18,14 @@ decision gate.
 
 The scope is exactly 436 validator-open rows in 86 legacy files:
 
-- 289 behavior rows with exact future owner identities;
-- 1 mixed row with an exact architecture/behavior ordinal split;
-- 146 accepted deletion rows;
-- 174 Node/Vitest rows covering 1,065 assertion ordinals;
-- 94 jsdom/Vitest rows covering 634 assertion ordinals;
+- 281 behavior rows with exact future owner identities;
+- 4 mixed rows with exact ordinal subgroups;
+- 151 accepted deletion rows;
+- 139 Node/Vitest rows covering 787 assertion ordinals;
+- 124 jsdom/Vitest rows covering 867 assertion ordinals;
 - 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 71 Vitest target files, 20 Cargo identities, and 3 Playwright target files.
+- 86 Vitest target files, 20 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
@@ -45,21 +45,90 @@ moves SC-000025/435/552 to real route/component owners, and supplements
 SC-000464 with the application Cargo tail that exercises the actual spawned
 execution task.
 
+The Task 9 architecture correction below is also approved and exact. The
+legacy audit establishes `A=9 rows/63 ordinals`, `B=26/212`, `C=4/24`, and
+`D=5/42`, for `44 rows/341 ordinals`. The earlier `B=25`, `D=6` wording was a
+bookkeeping error: there is no sixth D row. None of these 44 IDs belongs to a
+sampled blind result, calibration set, or mandatory cohort, so every historical
+evidence byte remains unchanged. Categories mean: A retains a truthful
+unit-node reducer/API owner; B moves to a real component-project owner; C uses
+truthful component or route-composition ownership and an ordinal partition
+where necessary; D deletes pure non-observable CSS/visual evidence as
+`D3_NON_OBSERVABLE_VISUAL` without adding Playwright.
+
+## Task 9 Exact Redisposition Amendment
+
+Every range below is inclusive. An unsplit range inherits the frozen row
+invariant. The three split rows have no top-level disposition; their subgroups
+are exhaustive, non-overlapping, and each carries the exact invariant shown.
+All behavior identities include the required `.behavior.component.test.ts`
+component-project suffix where applicable. `id`, `sourceHash`, `authorityHash`,
+`assertionCount`, and `lineage` stay byte-for-byte unchanged.
+
+| Row | Category | Exact ordinal disposition / owner |
+| --- | --- | --- |
+| SC-000060 (14) | B | 1-14 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps the collapsed rail compact and source-scoped` |
+| SC-000061 (18) | B | 1-18 behavior → `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > puts full list, search, management, and detailed status in the expanded source panel` |
+| SC-000062 (4) | B | 1-4 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > passes migrated history action state through the compact rail` |
+| SC-000063 (9) | B | 1-9 behavior → `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps detailed Takeout import progress in the expanded source panel` |
+| SC-000065 (2) | B | 1-2 behavior → `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps YouTube video duration visible in expanded source metadata` |
+| SC-000066 (3) | B | 1-3 behavior → `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps Telegram username and sync freshness visible in expanded source metadata` |
+| SC-000067 (4) | B | 1-4 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based`; `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps source and group switching callback-based` |
+| SC-000068 (2) | B | 1-2 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > closes the expanded switcher after quick source or group selection` |
+| SC-000069 (7) | B | 1-7 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel`; `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps destructive source deletion out of the compact rail but available in the expanded panel` |
+| SC-000070 (7) | B | 1-7 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status`; `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#compact analysis source rail > keeps icon-only controls accessible without hover-only status` |
+| SC-000071 (3) | C | 1-2 behavior, invariant “The rendered compact rail exposes the current mobile context trigger and quick source choices.” → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#compact analysis source rail > uses a compact mobile source context bar`.<br>3 delete, invariant “The 720px media-query assertion is a non-normative CSS breakpoint detail.” → `D3_NON_OBSERVABLE_VISUAL: The exact 720px media-query token is a non-normative CSS breakpoint detail with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000072 (6) | D | 1-6 delete → `D3_NON_OBSERVABLE_VISUAL: Rail padding, border, shadow, z-index, and width tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000073 (8) | D | 1-8 delete → `D3_NON_OBSERVABLE_VISUAL: Mini-logo dimensions, object-fit, and background tokens are non-normative CSS/visual details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000074 (10) | D | 1-10 delete → `D3_NON_OBSERVABLE_VISUAL: Desktop and narrow analysis grid breakpoint tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000075 (10) | D | 1-10 delete → `D3_NON_OBSERVABLE_VISUAL: Evidence trace container-query columns, padding, and border tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000076 (3) | C | 1 behavior, invariant “The rendered Chat leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/run-chat-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs`.<br>2 behavior, invariant “The rendered Chunks leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/chunk-summaries.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs`.<br>3 behavior, invariant “The rendered Runs leaf remains free of companion-width-only layout state.” → `test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis companion layout > does not add companion-width-specific inner layouts to Chat, Chunks, or Runs` |
+| SC-000093 (5) | A | 1-5 behavior → `test:vitest:src/lib/analysis-evidence-source-navigation.behavior.test.ts#analysis evidence source navigation > detects selected traces in loaded snapshot and live source windows` |
+| SC-000094 (3) | A | 1-3 behavior → `test:vitest:src/lib/analysis-evidence-source-navigation.behavior.test.ts#analysis evidence source navigation > returns false when a successful focused load does not contain the selected trace` |
+| SC-000097 (6) | B | 1-6 behavior → `test:vitest:src/routes/analysis/analysis-route-llm-controls.behavior.component.test.ts#analysis LLM run controls > loads LLM profiles and provider models for the analysis controls` |
+| SC-000098 (6) | B | 1-6 behavior → `test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis LLM run controls > uses profile and model selects instead of a plain model override field` |
+| SC-000100 (19) | B | 1-19 behavior → `test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented`; `test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented`; `test:vitest:src/lib/components/analysis/report-workspace-tools.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented`; `test:vitest:src/lib/components/analysis/source-reader-header.behavior.component.test.ts#analysis priority UX contract > keeps the report canvas top chrome compact and action-oriented` |
+| SC-000101 (4) | B | 1-4 behavior → `test:vitest:src/lib/components/analysis/source-switcher-panel.behavior.component.test.ts#analysis priority UX contract > keeps the source switcher primarily focused on source selection` |
+| SC-000102 (4) | B | 1-4 behavior → `test:vitest:src/lib/components/analysis/source-activity-view.behavior.component.test.ts#analysis priority UX contract > makes source activity the visible home for source operations` |
+| SC-000103 (5) | B | 1-5 behavior → `test:vitest:src/lib/components/analysis/universal-items-view.behavior.component.test.ts#analysis priority UX contract > turns loaded items into a reader instead of a raw dump` |
+| SC-000104 (4) | B | 1-4 behavior → `test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis priority UX contract > keeps run filters progressive when no runs exist` |
+| SC-000105 (8) | D | 1-8 delete → `D3_NON_OBSERVABLE_VISUAL: Reader max-height, overflow, scroll-margin, and companion-width tokens are non-normative CSS/visual layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000106 (11) | C | 1-8,11 behavior, invariant “The real analysis route renders and wires the approved compact rail, report canvas, and companion zones.” → `test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > renders the approved three-zone analysis workspace`.<br>9-10 delete, invariant “The analysis-workspace selector and grid-template CSS tokens are non-normative layout details.” → `D3_NON_OBSERVABLE_VISUAL: The exact analysis-workspace selector and grid-template CSS tokens are non-normative layout details with no truthful jsdom seam, and the approved correction adds no Playwright owner.` |
+| SC-000107 (7) | C | 1-7 behavior → `test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > does not render the legacy wide analysis workspace surfaces` |
+| SC-000108 (12) | A | 1-12 behavior → `test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps source switching, run opening, and canvas switching on separate state paths` |
+| SC-000109 (15) | B | 1-15 behavior → `test:vitest:src/lib/components/analysis/compact-source-rail.behavior.component.test.ts#analysis redesign final route contract > keeps the collapsed rail source-scoped and quiet` |
+| SC-000110 (9) | B | 1-9 behavior → `test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps ReportCanvas as the report/source mode owner` |
+| SC-000111 (15) | B | 1-15 behavior → `test:vitest:src/lib/components/analysis/report-canvas.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface`; `test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface`; `test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final route contract > keeps report setup out of the primary opened-run reading surface` |
+| SC-000112 (3) | B | 1-3 behavior → `test:vitest:src/routes/analysis/analysis-route-composition.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup`; `test:vitest:src/lib/components/analysis/report-setup-panel.behavior.component.test.ts#analysis redesign final route contract > passes migrated historical scope opt-in through report setup` |
+| SC-000113 (9) | B | 1-9 behavior → `test:vitest:src/lib/components/analysis/run-companion-tabs.behavior.component.test.ts#analysis redesign final route contract > keeps companion tabs as Evidence, Chat, and Runs only` |
+| SC-000114 (9) | A | 1-9 behavior → `test:vitest:src/lib/analysis-redesign-route-contract.behavior.test.ts#analysis redesign final route contract > keeps Runs focused on analysis report runs and durable filters` |
+| SC-000117 (9) | A | 1-9 behavior → `test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps run snapshot and live source basis explicit in Source mode` |
+| SC-000119 (9) | A | 1-9 behavior → `test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > gates completed-run chat on saved run context instead of live source context` |
+| SC-000120 (14) | B | 1-14 behavior → `test:vitest:src/lib/components/analysis/run-companion-runs-tab.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs`; `test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source ingest activity out of analysis Runs` |
+| SC-000122 (16) | B | 1-16 behavior → `test:vitest:src/lib/components/analysis/youtube-transcript-reader.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player`; `test:vitest:src/lib/components/analysis/youtube-playlist-videos-view.behavior.component.test.ts#analysis redesign final safety contract > renders YouTube source material as transcript and playlist readers without an embedded player` |
+| SC-000123 (10) | B | 1-10 behavior → `test:vitest:src/lib/components/analysis/report-source-surface.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat`; `test:vitest:src/lib/components/analysis/source-group-sources-view.behavior.component.test.ts#analysis redesign final safety contract > keeps source groups grouped by source instead of merged into one pseudo-chat` |
+| SC-000124 (12) | A | 1-12 behavior → `test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > keeps missing or deleted run scope labeling visible in the run header` |
+| SC-000125 (3) | B | 1-3 behavior → `test:vitest:src/lib/components/analysis/report-run-header.behavior.component.test.ts#analysis redesign final safety contract > surfaces saved Telegram historical scope instead of treating it as ordinary current history` |
+| SC-000126 (2) | A | 1-2 behavior → `test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > does not hide completed chat persistence failures` |
+| SC-000127 (2) | A | 1-2 behavior → `test:vitest:src/lib/analysis-redesign-safety-contract.behavior.test.ts#analysis redesign final safety contract > uses stable run filter normalization instead of locale-sensitive casing` |
+
 ## Connected Closure Components
 
 The bipartite graph between legacy files and replacement targets is almost a
-forest. Its 84 connected components are the unit of closure and rollback:
+forest. Its 79 connected components are the unit of closure and rollback:
 
 | Graph shape `(legacy files, replacement targets)` | Components |
 | --- | ---: |
 | `(1, 0)` | 23 |
-| `(1, 1)` | 44 |
+| `(1, 1)` | 38 |
 | `(1, 2)` | 6 |
 | `(1, 3)` | 5 |
+| `(1, 4)` | 1 |
 | `(1, 5)` | 2 |
-| `(1, 6)` | 2 |
+| `(1, 6)` | 1 |
 | `(2, 2)` | 2 |
-| **Total** | **84** |
+| `(6, 21)` | 1 |
+| **Total** | **79** |
 
 No thematic wave creates a correctness dependency between disconnected
 components. Components may be implemented in parallel after checking that
@@ -198,6 +267,12 @@ source-shape ordinals from Node behavior ownership to architecture ownership,
 The final component-owner correction moves another four rows/36 ordinals from
 Node to jsdom, producing 174 Node rows/1,065 ordinals, 94 jsdom rows/634
 ordinals, and 19 Cargo rows/161 ordinals.
+The subsequent exact Task 9 correction moves 30 analysis rows' observable
+component/route-composition ownership to jsdom and deletes 45 non-observable
+visual ordinals across five D rows plus two mixed subgroups. The final forecast
+is therefore Node 139 rows/787 ordinals, jsdom 124/867, Cargo 19/161, and
+Playwright 3/21; proposed-new-jsdom remains 0/0 because every component path is
+an approved correction rather than an unreviewed proposal.
 SC-000464's exact owner is:
 
 - `test:cargo:extractum-prompt-packs::runtime::tests::start_service_preserves_idempotency_readiness_preflight_queue_and_execution_order`
@@ -342,8 +417,8 @@ Slice 3C is complete only when:
 
 - validator-open rows fall from 436 to 0;
 - all 86 legacy files are absent;
-- all 289 behavior rows and both subgroups of the one mixed row resolve through
-  their exact owners, and all 146 delete rows close through their accepted
+- all 281 behavior rows and all subgroups of the four mixed rows resolve
+  through their exact owners/dispositions, and all 151 delete rows close through their accepted
   deletion reasons;
 - the legacy Vitest project, census owner, npm script, and verify gate are
   absent;
