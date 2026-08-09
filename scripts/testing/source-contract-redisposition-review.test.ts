@@ -1040,6 +1040,50 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, currentLedger: partialLedger })).toContain("ledger: Task 9 resolutions must equal the exact pre-correction or corrected state");
   }, 30_000);
 
+  it("pins the exact Task 9 decision shapes including optional and subgroup fields", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, currentPresentPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadCurrentPresentTrackedPaths({ repoRoot }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const input: any = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      currentPresentPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    };
+    const mutations: Array<[string, (artifact: any) => void]> = [
+      ["inapplicable criticalityRef", (artifact) => {
+        artifact.decisions.find((item: any) => item.id === "SC-000060").criticalityRef = "TESTING_SOURCE_CONTRACT_REPLACEMENT";
+      }],
+      ["inapplicable lostBehavior", (artifact) => {
+        artifact.decisions.find((item: any) => item.id === "SC-000060").lostBehavior = [{ assertionOrdinals: [1], behavior: "invented loss" }];
+      }],
+      ["arbitrary decision field", (artifact) => {
+        artifact.decisions.find((item: any) => item.id === "SC-000060").arbitraryField = true;
+      }],
+      ["omitted required decision field", (artifact) => {
+        delete artifact.decisions.find((item: any) => item.id === "SC-000060").ownerEvidence;
+      }],
+      ["extra subgroup field", (artifact) => {
+        artifact.decisions.find((item: any) => item.id === "SC-000071").resolution.subgroups[0].arbitraryField = true;
+      }],
+      ["omitted required subgroup field", (artifact) => {
+        delete artifact.decisions.find((item: any) => item.id === "SC-000071").resolution.subgroups[0].invariant;
+      }],
+    ];
+
+    for (const [label, mutate] of mutations) {
+      const artifact = clone(reviewArtifact) as any;
+      mutate(artifact);
+      expect.soft(validateReview({ ...input, artifact }), label).toContain("Task 9: exact decision shape mismatch");
+    }
+  }, 30_000);
+
   it("recomputes final disposition forecasts and accepted loss from decisions", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths, loaded] = await Promise.all([

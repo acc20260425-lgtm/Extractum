@@ -57,6 +57,7 @@ const TASK9_AMENDMENT_IDS = [
 const TASK9_AMENDMENT_ID_SET = new Set(TASK9_AMENDMENT_IDS);
 const TASK9_MIXED_IDS = new Set(["SC-000071", "SC-000076", "SC-000106"]);
 const APPROVED_TASK9_AMENDMENT_DIGEST = "dd3cad5db8f8004008b08f61b040f745bb9b201021b19226911c31776bab0c15";
+const APPROVED_TASK9_DECISION_SHAPE_DIGEST = "448fa64a449014a5b38f64ac10c9ad40a7efc0bf3e672002beaa3f79b4448f81";
 const APPROVED_TASK9_PRE_CORRECTION_LEDGER_DIGEST = "8a6bedc1ea155a67e620205ee15e9e078a4adfdaba27c7190a5c3a1d054fff39";
 const APPROVED_SC_000515_SUBGROUPS = [
   {
@@ -418,6 +419,13 @@ function task9AmendmentDigest(decisions) {
       ...(own(decision, "ownerEvidence") ? { ownerEvidence: decision.ownerEvidence } : {}),
       resolution: decision.resolution,
     }));
+  return sha256Text(canonicalJson(snapshot));
+}
+
+function task9DecisionShapeDigest(decisions) {
+  const snapshot = (decisions ?? [])
+    .filter((decision) => TASK9_AMENDMENT_ID_SET.has(decision?.id))
+    .sort((left, right) => compareId(left.id, right.id));
   return sha256Text(canonicalJson(snapshot));
 }
 
@@ -1589,6 +1597,10 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     || task9AmendmentDigest(decisions) === APPROVED_TASK9_AMENDMENT_DIGEST;
   if (isApprovedTask4CorrectionScope && !approvedTask9Amendment) {
     issues.push("Task 9: approved amendment table digest mismatch");
+  }
+  if (isApprovedTask4CorrectionScope
+    && task9DecisionShapeDigest(decisions) !== APPROVED_TASK9_DECISION_SHAPE_DIGEST) {
+    issues.push("Task 9: exact decision shape mismatch");
   }
   for (const decision of decisions) {
     if (!decision || typeof decision !== "object") {
