@@ -227,6 +227,7 @@
     <button
       class="mobile-current-label"
       type="button"
+      aria-label={`Open source switcher for ${currentContextLabel}`}
       onclick={() => (sourceSwitcherOpen = true)}
     >
       <span>{currentContextLabel}</span>

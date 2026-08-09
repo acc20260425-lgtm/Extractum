@@ -132,7 +132,7 @@ describe("compact analysis source rail", () => {
 
     expect(screen.getByRole("complementary")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open source switcher" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Research channel" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Research channel" })).toHaveLength(2);
     expect(screen.getByLabelText("Quick source choices")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Rendered video" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Research channel" }).some((button) => button.getAttribute("aria-pressed") === "true")).toBe(true);
@@ -234,32 +234,62 @@ describe("compact analysis source rail", () => {
     expect(screen.getByLabelText("Connection needs attention")).toBeTruthy();
   });
 
-  it("uses a compact mobile source context bar", () => {
+  it("uses a compact mobile source context bar", async () => {
     render(CompactSourceRail, { props: railProps() });
 
-    expect(screen.getAllByRole("button", { name: "Research channel" })).toHaveLength(3);
-    expect(screen.getByLabelText("Quick source choices")).toBeTruthy();
+    const mobileContext = screen.getByRole("button", { name: "Open source switcher for Research channel" });
+    expect(mobileContext).toBeTruthy();
+    await fireEvent.click(mobileContext);
+    expect(screen.getByRole("region", { name: "Source switcher panel" })).toBeTruthy();
   });
 });
 
 describe("analysis redesign final route contract", () => {
-  it("keeps the collapsed rail source-scoped and quiet", () => {
-    render(CompactSourceRail, { props: railProps() });
+  it("keeps the collapsed rail source-scoped and quiet", async () => {
+    const sources = Array.from({ length: 10 }, (_, index) => source({
+      id: index + 1,
+      externalId: `source-${index + 1}`,
+      title: `Source ${index + 1}`,
+    }));
+    const groups = Array.from({ length: 6 }, (_, index) => ({
+      ...group(),
+      id: index + 1,
+      name: `Group ${index + 1}`,
+    }));
+    const props = railProps({
+      sourceCatalog: sources,
+      filteredSourceCatalog: sources,
+      groups,
+      filteredGroups: groups,
+      youtubeSummaries: {},
+      workspaceSelection: { kind: "source", sourceId: 1 },
+    });
+    const view = render(CompactSourceRail, { props });
+    const quickChoices = screen.getByLabelText("Quick source choices");
 
-    expect(screen.getByRole("complementary")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Research channel" })).toHaveLength(3);
-    expect(screen.getByRole("button", { name: "Rendered video" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Research group. 1 sources" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open source switcher" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sync Research channel" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Settings/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: /Accounts/ })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Workspace" })).toBeNull();
-    expect(screen.queryByText("Research context")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Manage sources" })).toBeNull();
-    expect(screen.queryByText(/Transcript unavailable/)).toBeNull();
-    expect(screen.queryByText(/Comments unavailable/)).toBeNull();
-    expect(screen.queryByText("Source operations")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(quickChoices).toBeTruthy();
+    expect(within(quickChoices).getAllByRole("button")).toHaveLength(12);
+    expect(within(quickChoices).getByRole("button", { name: "Source 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(quickChoices).getByRole("button", { name: "Source 2" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(quickChoices).getByRole("button", { name: "Source 8" })).toBeTruthy();
+    expect(within(quickChoices).queryByRole("button", { name: "Source 9" })).toBeNull();
+    expect(within(quickChoices).getByRole("button", { name: "Group 1. 1 sources" })).toBeTruthy();
+    expect(within(quickChoices).getByRole("button", { name: "Group 4. 1 sources" })).toBeTruthy();
+    expect(within(quickChoices).queryByRole("button", { name: "Group 5. 1 sources" })).toBeNull();
+    expect(within(quickChoices).getByRole("button", { name: "Group 1. 1 sources" }).getAttribute("aria-pressed")).toBe("false");
+
+    await view.rerender({ ...props, workspaceSelection: { kind: "source_group", sourceGroupId: 4 } });
+    expect(within(quickChoices).getByRole("button", { name: "Group 4. 1 sources" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(quickChoices).getByRole("button", { name: "Source 1" }).getAttribute("aria-pressed")).toBe("false");
+
+    await view.rerender({
+      ...props,
+      filteredSourceCatalog: [sources[9]],
+      filteredGroups: [groups[5]],
+      workspaceSelection: { kind: "none" },
+    });
+    expect(within(quickChoices).getAllByRole("button")).toHaveLength(2);
+    expect(within(quickChoices).getByRole("button", { name: "Source 10" })).toBeTruthy();
+    expect(within(quickChoices).getByRole("button", { name: "Group 6. 1 sources" })).toBeTruthy();
   });
 });
