@@ -778,7 +778,7 @@ src/lib/youtube-summary-launch-contract.test.ts
 src/lib/youtube-summary-result-view-contract.test.ts
 ```
 
-- [ ] **Batch-specific execution:** Closes exactly 65 rows. Run all Node paths in one `unit-node` command and all component paths in one `component` command; five connected components require both owner selections and remain in this single cutover. Use actual API adapters and accessible workflows. The import-boundary target uses only its approved structured seam. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2e`.
+- [ ] **Batch-specific execution:** Closes exactly 65 rows. Run all Node paths in one `unit-node` command and all component paths in one `component` command; four connected components require both owner selections and remain in this single cutover: `gemini-browser-provider-panel`, `project-runs-screen`, `research-projects-import-boundary`, and `source-access-placement`. Use actual API adapters and accessible workflows. The import-boundary target uses only its approved structured seam. Follow the Cutover Protocol and commit as `test: cut over source contracts wave 2e`.
 
 ### Task 13: Implement root `extractum` Cargo identities
 

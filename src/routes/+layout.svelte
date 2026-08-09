@@ -10,6 +10,7 @@
   import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
   import { apalisJobsNavigationItem } from "$lib/apalis-jobs-route";
+  import { sourceAccessNavigationItem } from "./accounts/source-access";
 
   const SIDEBAR_COLLAPSED_KEY = "extractum.sidebar.collapsed";
 
@@ -93,9 +94,7 @@
       active: (pathname: string) => pathname.startsWith("/analysis") || pathname === "/",
     },
     {
-      href: "/accounts",
-      label: "Accounts",
-      caption: "Source access",
+      ...sourceAccessNavigationItem(),
       icon: UserRound,
       active: (pathname: string) =>
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),

@@ -4,6 +4,11 @@
   import { browser } from "$app/environment";
   import ProjectsSettings from "$lib/components/settings/projects-settings.svelte";
   import { SETTINGS_FOCUS } from "./settings-focus";
+  import {
+    filterSettingsModels,
+    materializeSettingsProfile,
+    settingsProfileStatus,
+  } from "./settings-profiles";
   import { providerTestConsoleActions } from "$lib/provider-test-console";
   import ProviderTestConsole from "$lib/components/settings/ProviderTestConsole.svelte";
   // Retained legacy marker; runtime copy is owned by SETTINGS_FOCUS.description:
@@ -167,12 +172,9 @@
   }
 
   const filteredAvailableModels = $derived.by(() => {
-    const query = modelQuery.trim().toLowerCase();
-    if (!query) return availableModels;
-    return availableModels.filter((model) =>
-      `${model.display_name} ${model.model}`.toLowerCase().includes(query),
-    );
+    return filterSettingsModels(availableModels, modelQuery);
   });
+  const profileStatus = $derived(settingsProfileStatus(activeProfile, selectedProfileId, creatingProfile));
 
   function dedupeProviderModels(models: LlmProviderModel[]) {
     const unique: LlmProviderModel[] = [];
@@ -188,14 +190,15 @@
   }
 
   function applyProfile(profile: LlmProfile) {
-    selectedProfileId = profile.profile_id;
+    const materialized = materializeSettingsProfile(profile);
+    selectedProfileId = materialized.profileId;
     creatingProfile = false;
-    draftProfileId = profile.profile_id;
-    provider = profile.provider;
-    defaultModel = profile.default_model;
+    draftProfileId = materialized.profileId;
+    provider = materialized.provider;
+    defaultModel = materialized.defaultModel;
     apiKey = "";
-    apiKeyConfigured = profile.api_key_configured;
-    baseUrl = profile.base_url;
+    apiKeyConfigured = materialized.apiKeyConfigured;
+    baseUrl = materialized.baseUrl;
     clearModelCatalog();
     clearTestResult();
   }
@@ -600,11 +603,11 @@
         </div>
 
         <div class="profile-status-strip">
-          <MetaPill>Editing profile: {creatingProfile ? "new profile" : selectedProfileId}</MetaPill>
+          <MetaPill>{profileStatus.editingLabel}</MetaPill>
           <MetaPill tone={selectedProfileId === activeProfile && !creatingProfile ? "active" : "default"}>
-            Active profile: {activeProfile || "none"}
+            {profileStatus.activeLabel}
           </MetaPill>
-          {#if !creatingProfile && selectedProfileId !== activeProfile}
+          {#if profileStatus.showSetActiveAfterSave}
             <MetaPill>Set active after save</MetaPill>
           {/if}
         </div>

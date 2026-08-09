@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { PROJECT_ICON_RAIL_ROUTES, PROJECT_RUNS_PAGE } from "./project-runs-page";
 
 describe("project runs screen", () => {
   it("adds a dedicated project runs route to the icon rail", async () => {
-    const modulePath = "./project-runs-page";
-    const { PROJECT_ICON_RAIL_ROUTES, PROJECT_RUNS_PAGE } = await import(/* @vite-ignore */ modulePath);
-
     expect(PROJECT_RUNS_PAGE).toEqual({
       id: "project-runs",
       href: "/projects/runs",

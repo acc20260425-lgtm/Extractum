@@ -17,7 +17,6 @@
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
-  import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
@@ -26,6 +25,7 @@
     ACCOUNT_CREATION_MODAL,
     accountCreationModalActions,
   } from "$lib/accounts-route-add-account-modal";
+  import { ACCOUNT_SOURCE_ACCESS } from "./source-access";
   // Retained legacy marker; the live binding below remains the single source: title="New Telegram account"
 
   let accounts = $state<AccountRecord[]>([]);
@@ -177,10 +177,10 @@
 <section class="page-shell">
   <header class="page-hero">
     <div class="page-hero-copy">
-      <span class="page-eyebrow">Source access</span>
-      <h1>Accounts</h1>
+      <span class="page-eyebrow">{ACCOUNT_SOURCE_ACCESS.eyebrow}</span>
+      <h1>{ACCOUNT_SOURCE_ACCESS.pageTitle}</h1>
       <p>
-        Manage source identities and authentication used for sync and analysis. Telegram accounts
+        {ACCOUNT_SOURCE_ACCESS.description} Telegram accounts
         and YouTube auth stay here as workspace access.
       </p>
     </div>
@@ -197,7 +197,9 @@
   {/if}
 
   <div class="page-stack">
-    <section class="desk-panel account-catalog">
+    {#each ACCOUNT_SOURCE_ACCESS.sections as section (section.kind)}
+      <section class={section.shell} aria-labelledby={section.labelledBy}>
+      {#if section.kind === "telegram"}
         <div
           class="panel-header"
           data-modal-trigger-placement={ACCOUNT_CREATION_MODAL.triggerPlacement}
@@ -205,7 +207,7 @@
         >
           <div class="panel-header-copy">
           <span class="page-eyebrow">Telegram accounts</span>
-          <h2>Telegram accounts</h2>
+          <h2 id={section.labelledBy}>{section.heading}</h2>
           <p>Open Telegram auth, check runtime state, and keep sync-capable identities healthy.</p>
         </div>
         <div class="panel-header-actions">
@@ -265,18 +267,19 @@
           {/each}
         </ul>
       {/if}
-    </section>
-
-    <section class="desk-panel youtube-access-shell">
-      <div class="panel-header">
-        <div class="panel-header-copy">
-          <span class="page-eyebrow">YouTube access</span>
-          <h2>YouTube access</h2>
-          <p>Manage cookies and sync limits without mixing them into Telegram account identity.</p>
+      {:else}
+        {@const Panel = section.panel}
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">YouTube access</span>
+            <h2 id={section.labelledBy}>{section.heading}</h2>
+            <p>Manage cookies and sync limits without mixing them into Telegram account identity.</p>
+          </div>
         </div>
-      </div>
-      <YoutubeSettingsPanel embedded />
-    </section>
+        <Panel {...section.panelProps} />
+      {/if}
+      </section>
+    {/each}
   </div>
 
   <DesktopDialog

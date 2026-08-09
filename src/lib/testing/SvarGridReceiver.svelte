@@ -86,6 +86,7 @@
   const publicResponsive = $derived(responsive ?? {});
   const rowIds = $derived(data.map((row: Row) => String(row.id)));
   const columnIds = $derived(columns.map((column: Column) => String(column.id ?? "")));
+  const templateColumnIds = $derived(columns.filter((column: Column) => typeof column.template === "function").map((column: Column) => String(column.id ?? "")));
 </script>
 
 <div
@@ -96,6 +97,7 @@
   data-selected={JSON.stringify(selectedRows)}
   data-row-ids={JSON.stringify(rowIds)}
   data-column-ids={JSON.stringify(columnIds)}
+  data-template-column-ids={JSON.stringify(templateColumnIds)}
   data-data={JSON.stringify(data)}
   data-sort-marks={JSON.stringify(sortMarks)}
   data-row-style={rowStyle?.(data[0] ?? {}) ?? ""}
