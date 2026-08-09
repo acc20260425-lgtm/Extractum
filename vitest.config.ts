@@ -2,7 +2,6 @@ import { configDefaults, defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { svelteTesting } from "@testing-library/svelte/vite";
-import sourceContractLedger from "./testing/source-contract-ledger.json";
 
 const COMPONENT_TEST_PATTERN = "src/**/*.component.test.ts";
 const COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts";
@@ -23,22 +22,6 @@ const PLAYWRIGHT_TESTS = Object.freeze([
 ]);
 const DEFAULT_PROJECT_EXCLUDES = Object.freeze([...configDefaults.exclude]);
 
-function normalizeLedgerPath(path: string) {
-  return path.replaceAll("\\", "/").replace(/^\.\//, "");
-}
-
-const ledgerFiles = [...new Set(
-  sourceContractLedger.rows
-    .map((row) => normalizeLedgerPath(row.path))
-    .filter(Boolean),
-)].sort();
-
-export const LEGACY_TEST_FILES = Object.freeze(ledgerFiles.filter((path) =>
-  !path.endsWith(".component.test.ts")
-  && !OS_INTEGRATION_FILES.includes(path)
-  && !ARCHITECTURE_FILES.includes(path),
-));
-
 export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
   Object.freeze({
     name: "unit-node",
@@ -49,7 +32,6 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
       COMPONENT_BEHAVIOR_PATTERN,
       ...OS_INTEGRATION_FILES,
       ...ARCHITECTURE_FILES,
-      ...LEGACY_TEST_FILES,
       ...PLAYWRIGHT_TESTS,
     ]),
     environment: "node",
@@ -67,13 +49,6 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
   Object.freeze({
     name: "architecture",
     include: Object.freeze([...ARCHITECTURE_FILES]),
-    exclude: DEFAULT_PROJECT_EXCLUDES,
-    environment: "node",
-    pool: "threads",
-  }),
-  Object.freeze({
-    name: "legacy-contract",
-    include: Object.freeze([...LEGACY_TEST_FILES]),
     exclude: DEFAULT_PROJECT_EXCLUDES,
     environment: "node",
     pool: "threads",

@@ -12,6 +12,8 @@ Task 4 correction (2026-08-08): the user-approved follow-up replaces SC-000464's
 
 Final Task 4 owner correction (2026-08-08): the explicitly approved final wave keeps SC-000464's comprehensive service owner and adds the application Cargo owner that drives the actual execution-task builder and proves profile resolution is deferred until the spawned future is polled. SC-000515's 18 behavior ordinals move to a component owner rendering the real wrappers; SC-000025, SC-000435, and SC-000552 likewise move from helper-only Node owners to real route/component owners. The resulting execution forecast is Node `174 / 1,065`, jsdom `94 / 634`, Cargo `19 / 161`, and Playwright `3 / 21`. The SC-000515 architecture subgroup remains unchanged, and historical content-addressed evidence bytes remain unchanged.
 
+SC-000441 mixed adjudication (2026-08-09): class `B2_NEW_CHEAP_BEHAVIOR` and `AGENTS_SECURITY` remain fixed. Architecture ordinals `1, 2, 3, 6, 8, 9, 10, 11, 12, 13` move to `rule:extractum-llm-public-api-boundary`; behavior ordinals `4, 5, 7` retain the exact Cargo owner. Historical blind/candidate evidence bytes remain unchanged under the exact post-evidence user binding. Final counts are behavior `279`, delete `153`, mixed `4`; B2 `275`, D2 `123`; Node `139 / 787`, jsdom `123 / 864`, Cargo `18 / 147`, Playwright `3 / 21`; emerging mixed is `SC-000441`, `SC-000515`.
+
 ## Review pins and scope reconciliation
 
 - Review base: `a54507d63420bb870c3870c91d7e22b050abae3e`.
@@ -131,7 +133,7 @@ Total accepted D5 losses: **0 rows / 0 assertion ordinals**.
 | large contracts | `SC-000077`--`SC-000092`, `SC-000356`--`SC-000365` |
 | emerging B3 | `SC-000015`, `SC-000023`, `SC-000312`, `SC-000344`, `SC-000385`, `SC-000387`, `SC-000389`, `SC-000420` |
 | emerging D5 | zero rows |
-| emerging mixed | zero rows |
+| emerging mixed | `SC-000441`, `SC-000515` |
 | known browser five | `SC-000312`, `SC-000323`, `SC-000352`, `SC-000353`, `SC-000385` |
 
 Calibration covered D1 (`SC-000361`--`SC-000363`), D2 (`SC-000077`, `SC-000080`, `SC-000349`), D3 (`SC-000323`, `SC-000352`, `SC-000353`), D4 (`SC-000064`, `SC-000356`, `SC-000357`), B2 (`SC-000297`, `SC-000390`, `SC-000441`), and B3 (`SC-000312`, `SC-000344`, `SC-000385`). A1, T1, B1, and D5 recorded `no_match` with zero rows.

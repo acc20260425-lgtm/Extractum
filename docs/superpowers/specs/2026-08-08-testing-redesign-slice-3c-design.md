@@ -18,14 +18,14 @@ decision gate.
 
 The scope is exactly 436 validator-open rows in 86 legacy files:
 
-- 281 behavior rows with exact future owner identities;
-- 3 mixed rows with exact ordinal subgroups;
+- 279 behavior rows with exact future owner identities;
+- 4 mixed rows with exact ordinal subgroups;
 - 152 accepted deletion rows;
 - 139 Node/Vitest rows covering 787 assertion ordinals;
 - 123 jsdom/Vitest rows covering 864 assertion ordinals;
 - 19 Cargo-owned rows covering 161 assertion ordinals;
 - 3 Playwright owners covering 21 assertion ordinals;
-- 86 Vitest target files, 20 Cargo identities, and 3 Playwright target files.
+- 86 Vitest target files, 19 Cargo identities, and 3 Playwright target files.
 
 The decision artifact and the applied ledger are the source of truth. The
 implementation plan must derive its row-to-owner tables mechanically from
@@ -162,7 +162,7 @@ that wave.
 3. **Wave 2 -- multi-row Vitest targets.** Implement the remaining 42 Vitest
    target files. Large targets are independent batches rather than one
    analysis- or product-wide checkpoint.
-4. **Wave 3 -- Cargo.** Implement the remaining 18 exact Cargo identities,
+4. **Wave 3 -- Cargo.** Implement the remaining 17 exact Cargo identities,
    grouped by package and connected component.
 5. **Browser track.** Start the three Playwright targets after Wave 0 and
    implement them independently of Waves 1--3. A component containing both
@@ -271,7 +271,7 @@ ordinals, and 19 Cargo rows/161 ordinals.
 The subsequent exact Task 9 correction moves 29 analysis rows' observable
 component/route-composition ownership to jsdom and deletes 48 non-observable
 visual ordinals across six D rows plus two mixed subgroups. The final forecast
-is therefore Node 139 rows/787 ordinals, jsdom 123/864, Cargo 19/161, and
+is therefore Node 139 rows/787 ordinals, jsdom 123/864, Cargo 18/147, and
 Playwright 3/21; proposed-new-jsdom remains 0/0 because every component path is
 an approved correction rather than an unreviewed proposal.
 SC-000464's exact owner is:
@@ -337,7 +337,7 @@ leaked Vite or Playwright Chromium descendants by PID and command-line marker.
 
 ## Cargo Ownership
 
-Wave 3 implements the 18 exact Cargo identities in their frozen packages and
+Wave 3 implements the 17 exact Cargo identities in their frozen packages and
 modules. A Rust implementation task names its affected packages and uses
 the repository's focused Rust verification loop:
 
@@ -418,7 +418,7 @@ Slice 3C is complete only when:
 
 - validator-open rows fall from 436 to 0;
 - all 86 legacy files are absent;
-- all 281 behavior rows and all subgroups of the three mixed rows resolve
+- all 279 behavior rows and all subgroups of the four mixed rows resolve
   through their exact owners/dispositions, and all 152 delete rows close through their accepted
   deletion reasons;
 - the legacy Vitest project, census owner, npm script, and verify gate are

@@ -27,6 +27,76 @@ const PHASE_8_DESIGN_PATH = "docs/superpowers/specs/2026-07-26-telegram-crate-bo
 const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
 const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
 const GRID_SELECT_CELL_PATH = "src/lib/components/extractum-ui/GridSelectCell.svelte";
+const LLM_LIB_PATH = "src-tauri/crates/extractum-llm/src/lib.rs";
+const LLM_TYPES_PATH = "src-tauri/crates/extractum-llm/src/types.rs";
+const LLM_PROVIDER_PATH = "src-tauri/crates/extractum-llm/src/provider.rs";
+const LLM_RUNNER_PATH = "src-tauri/crates/extractum-llm/src/runner.rs";
+const LLM_SCHEDULER_PATH = "src-tauri/crates/extractum-llm/src/scheduler.rs";
+
+const llmPublicApiBoundarySources = {
+  [LLM_LIB_PATH]: `
+mod gemini;
+mod openai_compat;
+mod provider;
+mod runner;
+mod scheduler;
+mod streaming;
+mod types;
+pub use provider::{list_provider_models, normalize_base_url, resolve_model_input_token_limit, resolve_model_output_token_limit, ProviderKind};
+pub use runner::{resolve_effective_model, run_llm_collect_with_profile, run_llm_stream_with_profile, validate_request};
+pub use scheduler::{llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, LlmRequestControl, LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot, LlmRequestSnapshotState, LlmSchedulerState};
+pub use types::{LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderAccess, LlmProviderModel, LlmUsage, ResolvedLlmProfile};
+#[cfg(test)]
+mod public_api_tests { const SAMPLE: &str = r#"{ pub mod ignored; }"#; }
+`,
+  [LLM_TYPES_PATH]: `
+#[derive(Clone)]
+pub struct LlmProviderAccess { provider: ProviderKind, api_key: SecretString, base_url: String }
+impl LlmProviderAccess {
+  pub fn new(provider: ProviderKind, api_key: SecretString, base_url: String) -> Self { todo!() }
+  pub(super) fn provider(&self) -> ProviderKind { todo!() }
+  pub(super) fn api_key(&self) -> &SecretString { todo!() }
+  pub(super) fn base_url(&self) -> &str { todo!() }
+}
+trait CredentialTrait { fn credential_trait(&self); }
+impl CredentialTrait for LlmProviderAccess { fn credential_trait(&self) {} }
+#[derive(Clone)]
+pub struct ResolvedLlmProfile { profile_id: String, default_model: String, provider_access: LlmProviderAccess }
+impl ResolvedLlmProfile {
+  pub fn new(profile_id: String, default_model: String, provider_access: LlmProviderAccess) -> Self { todo!() }
+  pub fn profile_id(&self) -> &str { todo!() }
+  pub fn provider(&self) -> ProviderKind { todo!() }
+  pub fn default_model(&self) -> &str { todo!() }
+  pub fn base_url(&self) -> &str { todo!() }
+  pub(super) fn provider_access(&self) -> &LlmProviderAccess { todo!() }
+}
+`,
+  [LLM_PROVIDER_PATH]: `
+pub enum ProviderKind { Gemini, OpenAiCompatible }
+impl ProviderKind {
+  pub fn as_str(self) -> &'static str { todo!() }
+  pub fn parse(value: &str) -> AppResult<Self> { todo!() }
+  extern "C" fn private_ffi_probe() {}
+}
+`,
+  "src-tauri/crates/extractum-llm/src/gemini.rs": "",
+  "src-tauri/crates/extractum-llm/src/openai_compat.rs": "",
+  [LLM_RUNNER_PATH]: "fn runner_positive_control() { format!(\"runner\"); }",
+  [LLM_SCHEDULER_PATH]: `
+pub struct LlmRequestControl;
+impl LlmRequestControl { pub async fn run_cancellable(&self) { todo!() } }
+pub struct LlmSchedulerState;
+impl LlmSchedulerState {
+  pub fn new() -> Self { todo!() }
+  pub async fn cancel_request(&self) -> bool { todo!() }
+  pub async fn cancel_run_requests(&self) -> usize { todo!() }
+  pub async fn request_snapshots(&self) { todo!() }
+  pub async fn active_owner_run_ids(&self) { todo!() }
+  pub async fn run_request(&self) { todo!() }
+}
+`,
+  "src-tauri/crates/extractum-llm/src/streaming.rs": "",
+};
 
 const extractumGridBoundarySources = {
   [DATA_GRID_PATH]: `
@@ -103,6 +173,266 @@ const canonicalCompositionSources = {
 };
 
 const ruleFixtures: Record<string, RuleFixture> = {
+  "rule:extractum-llm-public-api-boundary": {
+    positive: llmPublicApiBoundarySources,
+    mutations: {
+      "publicizes an internal module": {
+        ...llmPublicApiBoundarySources,
+        [LLM_LIB_PATH]: llmPublicApiBoundarySources[LLM_LIB_PATH].replace("mod runner;", "pub mod runner;"),
+      },
+      "adds an uncurated root export": {
+        ...llmPublicApiBoundarySources,
+        [LLM_LIB_PATH]: `${llmPublicApiBoundarySources[LLM_LIB_PATH]}\npub use types::InternalCredential;`,
+      },
+      "adds a credential field": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace("api_key: SecretString", "pub api_key: SecretString"),
+      },
+      "removes Clone from LlmProviderAccess": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace("#[derive(Clone)]\npub struct LlmProviderAccess", "pub struct LlmProviderAccess"),
+      },
+      "removes Clone from ResolvedLlmProfile": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace("#[derive(Clone)]\npub struct ResolvedLlmProfile", "pub struct ResolvedLlmProfile"),
+      },
+      "adds a credential-returning accessor under a novel name": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace("pub(super) fn api_key", "pub fn credential_material"),
+      },
+      "leaks an internal helper": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace("pub(super) fn provider_access", "pub fn provider_access"),
+      },
+      "adds a credential accessor in a second inherent impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}\nimpl LlmProviderAccess { pub fn reveal_material(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a Cyrillic public credential method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+impl LlmProviderAccess { pub fn показать_секрет(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a qualified credential impl in a different production module": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}
+impl crate::LlmProviderAccess {
+  pub fn cross_module_credential(&self) -> &SecretString { todo!() }
+}`,
+      },
+      "adds an inherent impl through a credential type alias": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+type AccessAlias = LlmProviderAccess;
+impl AccessAlias { pub fn alias_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds an inherent impl through a raw credential type alias": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+type r#type = LlmProviderAccess;
+impl r#type { pub fn raw_alias_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds an inherent impl through a Unicode credential type alias": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+type Доступ = LlmProviderAccess;
+impl Доступ { pub fn материал(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds an inherent impl through a credential alias chain": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+type AccessAlias = LlmProviderAccess;
+type ChainedAccessAlias = AccessAlias;
+impl ChainedAccessAlias { pub fn chained_alias_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a credential alias with a pre-equals where clause": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+type WhereAccessAlias where LlmProviderAccess: Sized = LlmProviderAccess;
+impl WhereAccessAlias { pub fn where_alias_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a cross-module qualified credential alias impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}
+type RunnerAccessAlias = crate::LlmProviderAccess;
+impl RunnerAccessAlias { pub fn runner_alias_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds an unregistered production Rust module file": {
+        ...llmPublicApiBoundarySources,
+        "src-tauri/crates/extractum-llm/src/generated_access.rs": "pub fn generated_access() {}",
+      },
+      "adds a crate build script generation path": {
+        ...llmPublicApiBoundarySources,
+        "src-tauri/crates/extractum-llm/build.rs": "fn main() {}",
+      },
+      "generates a public credential accessor from an associated item macro": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+macro_rules! expose { () => { pub fn generated_credential(&self) -> &SecretString { todo!() } } }
+impl LlmProviderAccess { expose!(); }`,
+      },
+      "generates a whole credential impl from a module item macro": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+macro_rules! expose_impl {
+  () => { impl LlmProviderAccess { pub fn generated_module_credential(&self) -> &SecretString { todo!() } } }
+}
+expose_impl!();`,
+      },
+      "generates an owned impl from a function-local macro": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+fn local_impl_scope() {
+  macro_rules! expose_local_impl {
+    () => { impl LlmProviderAccess { pub fn local_generated_credential(&self) -> &SecretString { todo!() } } }
+  }
+  expose_local_impl!();
+}`,
+      },
+      "adds a self use-alias credential impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+use self::LlmProviderAccess as SelfAccessAlias;
+impl SelfAccessAlias { pub fn self_import_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a raw renamed credential import impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}
+use crate::LlmProviderAccess as r#type;
+impl r#type { pub fn raw_import_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds a Unicode renamed credential import impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}
+use crate::LlmProviderAccess as Доступ;
+impl Доступ { pub fn материал(&self) -> &SecretString { todo!() } }`,
+      },
+      "leaves a recognized fn without an identifier": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}\nimpl LlmProviderAccess { pub fn (&self) {} }`,
+      },
+      "leaves recognized type and use tokens without identifiers": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}\ntype = LlmProviderAccess;\nuse ;`,
+      },
+      "adds a grouped crate use-alias credential impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}
+use crate::{LlmProviderAccess as GroupAccessAlias};
+impl GroupAccessAlias { pub fn grouped_import_credential(&self) -> &SecretString { todo!() } }`,
+      },
+      "adds an owned impl inside a const block": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+const _: () = {
+  impl LlmProviderAccess { pub fn const_block_credential(&self) -> &SecretString { todo!() } }
+};`,
+      },
+      "invokes an unknown macro inside a function body": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+fn external_impl_scope() { foreign_impl_generator!(); }`,
+      },
+      "adds an unknown module item attribute": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace(
+          "#[derive(Clone)]\npub struct LlmProviderAccess",
+          "#[doc(hidden)]\n#[derive(Clone)]\npub struct LlmProviderAccess",
+        ),
+      },
+      "adds a cfg_attr module item transformer": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace(
+          "#[derive(Clone)]\npub struct LlmProviderAccess",
+          "#[cfg_attr(any(), derive(Debug))]\n#[derive(Clone)]\npub struct LlmProviderAccess",
+        ),
+      },
+      "includes generated module items": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}\ninclude!("generated_items.rs");`,
+      },
+      "adds an attribute to an otherwise exact credential method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: llmPublicApiBoundarySources[LLM_TYPES_PATH].replace(
+          "pub(super) fn api_key",
+          "#[doc(hidden)] pub(super) fn api_key",
+        ),
+      },
+      "adds a credential accessor in a multiline where-clause inherent impl": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+impl
+  LlmProviderAccess
+where
+  LlmProviderAccess: Clone,
+{
+  pub fn reveal_where_material(&self) -> &SecretString { todo!() }
+}`,
+      },
+      "adds an ambiguous crate glob import": {
+        ...llmPublicApiBoundarySources,
+        [LLM_RUNNER_PATH]: `${llmPublicApiBoundarySources[LLM_RUNNER_PATH]}\nuse crate::*;`,
+      },
+      "hides a novel accessor after a closing-brace char literal": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+impl LlmProviderAccess {
+  const QUOTE: char = '\\'';
+  const BYTE_MASK: u8 = b'}';
+  const MASK: char = '}';
+  pub fn reveal_after_char(&self) -> &SecretString { todo!() }
+}`,
+      },
+      "hides a novel accessor after an arbitrary-hash raw string": {
+        ...llmPublicApiBoundarySources,
+        [LLM_TYPES_PATH]: `${llmPublicApiBoundarySources[LLM_TYPES_PATH]}
+impl LlmProviderAccess {
+  const MASK: &str = r#################"embedded quote \" and }"#################;
+  pub fn reveal_after_raw(&self) -> &SecretString { todo!() }
+}`,
+      },
+      "drifts ProviderKind public methods": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub fn label(self) -> &'static str { todo!() } }`,
+      },
+      "drifts ProviderKind with a public const method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub const fn const_probe() {} }`,
+      },
+      "drifts ProviderKind with a public async method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub async fn async_probe() {} }`,
+      },
+      "drifts ProviderKind with a public unsafe method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub unsafe fn unsafe_probe() {} }`,
+      },
+      "drifts ProviderKind with a public extern method": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub extern "C" fn extern_probe() {} }`,
+      },
+      "drifts ProviderKind with ordered const unsafe extern qualifiers": {
+        ...llmPublicApiBoundarySources,
+        [LLM_PROVIDER_PATH]: `${llmPublicApiBoundarySources[LLM_PROVIDER_PATH]}\nimpl ProviderKind { pub const unsafe extern "C" fn qualified_probe() {} }`,
+      },
+      "drifts LlmRequestControl public methods": {
+        ...llmPublicApiBoundarySources,
+        [LLM_SCHEDULER_PATH]: `${llmPublicApiBoundarySources[LLM_SCHEDULER_PATH]}\nimpl LlmRequestControl { pub fn bypass(&self) {} }`,
+      },
+      "drifts LlmSchedulerState public methods": {
+        ...llmPublicApiBoundarySources,
+        [LLM_SCHEDULER_PATH]: `${llmPublicApiBoundarySources[LLM_SCHEDULER_PATH]}\nimpl LlmSchedulerState { pub fn queue_depth(&self) -> usize { 0 } }`,
+      },
+      "adds an indented public module after cfg(test)": {
+        ...llmPublicApiBoundarySources,
+        [LLM_LIB_PATH]: `${llmPublicApiBoundarySources[LLM_LIB_PATH]}\n   pub mod escaped_module;`,
+      },
+      "adds an indented public export after cfg(test)": {
+        ...llmPublicApiBoundarySources,
+        [LLM_LIB_PATH]: `${llmPublicApiBoundarySources[LLM_LIB_PATH]}\n   pub use types::EscapedCredential;`,
+      },
+    },
+  },
   "rule:extractum-grid-wrapper-boundary": {
     positive: extractumGridBoundarySources,
     mutations: {
@@ -739,6 +1069,21 @@ describe("analysis source-reader structured rules", () => {
   });
 });
 
+describe("extractum-llm public API structured rule", () => {
+  it("accepts the current repository snapshot and rejects every closed-surface mutation", () => {
+    const id = "rule:extractum-llm-public-api-boundary";
+    expect(evaluateRule({ id, index: realAuthorityIndex() })).toEqual({ id, violations: [] });
+    const uncaught: string[] = [];
+    const infrastructureFailures: string[] = [];
+    for (const [name, mutation] of Object.entries(ruleFixtures[id].mutations)) {
+      const violations = evaluateRule({ id, index: indexFor(mutation) }).violations;
+      if (violations.length === 0) uncaught.push(name);
+      if (violations.some((violation) => violation.startsWith("INFRA_ERROR:"))) infrastructureFailures.push(name);
+    }
+    expect({ uncaught, infrastructureFailures }).toEqual({ uncaught: [], infrastructureFailures: [] });
+  });
+});
+
 describe("repository rule registry", () => {
   const allowedRuleIds = new Set(
     sourceContractLedger.rows
@@ -749,7 +1094,7 @@ describe("repository rule registry", () => {
   );
 
   it("derives and registers the complete truthful ledger rule allowlist", () => {
-    expect(allowedRuleIds.size).toBe(10);
+    expect(allowedRuleIds.size).toBe(11);
     expect(registeredRuleIds).toEqual([
       "rule:analysis-evidence-highlight-token-styling",
       "rule:analysis-source-browser-canonical-composition",
@@ -758,6 +1103,7 @@ describe("repository rule registry", () => {
       "rule:analysis-source-group-tab-leaf-boundary",
       "rule:analysis-source-reader-surface-composition",
       "rule:extractum-grid-wrapper-boundary",
+      "rule:extractum-llm-public-api-boundary",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
       "rule:telegram-phase-8b-authority-integrity",

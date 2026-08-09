@@ -33,6 +33,69 @@ const FIRST_CORRECTION_SC_000464_CARGO_OWNERS = [
 ];
 const HISTORICAL_SC_000515_BEHAVIOR_OWNER = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
 const SC_000515_BEHAVIOR_OWNER = "test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const SC_000087_CARGO_OWNER = "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking";
+const SC_000087_ADJACENT_OWNER = "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps run snapshot reading bounded and snapshot-only";
+const SC_000087_DELETION_REASON = "D2 implementation-shape: The exact app-owned TauriAnalysisEventSink bodies and absence of waits, helpers, extra statements, and extra emits are refactor-sensitive body shape; AnalysisEventSink trait conformance is compiler-owned and retained runtime/chat tests cover event outcomes.";
+const APPROVED_SC_000087_DECISION = {
+  id: "SC-000087",
+  sourceHash: "7628287415527ca9e7f1c1a7c53169e3faaa9c7b0e7a21cc5fb8235a865e31b2",
+  authorRunId: "redisposition-task-3-final-fix-author-run",
+  class: "D2_IMPLEMENTATION_SHAPE",
+  reason: SC_000087_DELETION_REASON,
+  resolution: { disposition: "delete", deletionReason: SC_000087_DELETION_REASON },
+};
+const PRE_ADJUDICATION_SC_000087_RESOLUTION = {
+  disposition: "behavior",
+  replacementIds: [SC_000087_CARGO_OWNER],
+};
+const HISTORICAL_SC_000087_BLIND = {
+  id: "SC-000087",
+  sourceHash: APPROVED_SC_000087_DECISION.sourceHash,
+  class: "B2_NEW_CHEAP_BEHAVIOR",
+  reason: "The authoritative policy class retains the focused future Cargo owner; the resolved adjacent jsdom owner does not prove this complete invariant.",
+  ownerEvidence: [SC_000087_CARGO_OWNER],
+  reviewerRunId: "redisposition-task-3-final-complete-policy-binding",
+};
+const SC_000441_CARGO_OWNER = "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible";
+const SC_000441_AUTHOR_REASON = "The invariant is mixed: stable Cargo compilation truthfully proves the credential-bearing types' negative serialization/debug/secret-exposure traits and URL-userinfo rejection, while exhaustive absence of additional public modules, exports, fields, inherent accessors, and credential-returning routes is a closed architecture surface owned by the structured repository rule.";
+const SC_000441_ARCHITECTURE_INVARIANT = "The extractum-llm public architecture remains exactly curated: internal modules stay private, root exports and public type/method sets are closed, credential-bearing structs remain opaque with no public fields or credential-returning accessors, and internal helper names do not leak.";
+const SC_000441_BEHAVIOR_INVARIANT = "LlmProviderAccess and ResolvedLlmProfile do not implement Serialize, Deserialize, Debug, or ExposeSecret<String>, and OpenAI-compatible base URL normalization rejects embedded userinfo.";
+const APPROVED_SC_000441_SUBGROUPS = [
+  {
+    assertionOrdinals: [1, 2, 3, 6, 8, 9, 10, 11, 12, 13],
+    disposition: "architecture",
+    invariant: SC_000441_ARCHITECTURE_INVARIANT,
+    replacementIds: ["rule:extractum-llm-public-api-boundary"],
+  },
+  {
+    assertionOrdinals: [4, 5, 7],
+    disposition: "behavior",
+    invariant: SC_000441_BEHAVIOR_INVARIANT,
+    replacementIds: [SC_000441_CARGO_OWNER],
+  },
+];
+const APPROVED_SC_000441_DECISION = {
+  id: "SC-000441",
+  sourceHash: "093561de910b2cd887cc9a23796094020d13d9fa1c1d234af875a01276b58700",
+  authorRunId: "redisposition-task-3-final-fix-author-run",
+  class: "B2_NEW_CHEAP_BEHAVIOR",
+  reason: SC_000441_AUTHOR_REASON,
+  resolution: { subgroups: APPROVED_SC_000441_SUBGROUPS },
+  criticalityRef: "AGENTS_SECURITY",
+};
+const PRE_ADJUDICATION_SC_000441_RESOLUTION = {
+  disposition: "behavior",
+  replacementIds: [SC_000441_CARGO_OWNER],
+};
+const HISTORICAL_SC_000441_BLIND = {
+  id: "SC-000441",
+  sourceHash: APPROVED_SC_000441_DECISION.sourceHash,
+  class: "B2_NEW_CHEAP_BEHAVIOR",
+  reason: "Curated public API and credential visibility are covered by a focused future Cargo test; the security citation alone does not require an expensive runtime seam.",
+  ownerEvidence: [SC_000441_CARGO_OWNER],
+  criticalityRef: "AGENTS_SECURITY",
+  reviewerRunId: "redisposition-task-3-final-complete-policy-binding",
+};
 const FINAL_TASK4_OWNER_CORRECTIONS = new Map([
   ["SC-000025", {
     before: "test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
@@ -149,7 +212,7 @@ const APPROVED_CANDIDATE_BINDING_ADJUDICATIONS = {
   retainedClasses: [
     {
       rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
-      rowIds: ["SC-000087", "SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
+      rowIds: ["SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
       finalClass: "B2_NEW_CHEAP_BEHAVIOR",
     },
     {
@@ -158,6 +221,24 @@ const APPROVED_CANDIDATE_BINDING_ADJUDICATIONS = {
       finalClass: "D2_IMPLEMENTATION_SHAPE",
     },
   ],
+  postEvidenceUserAdjudications: {
+    rule: "Post-evidence user adjudication excludes only SC-000087 and SC-000441 from author/blind fingerprint equality while preserving their exact historical evidence and binding each final resolution fail-closed.",
+    rows: [{
+      id: "SC-000087",
+      historicalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      historicalOwnerEvidence: [SC_000087_CARGO_OWNER],
+      historicalCandidateOwnerIds: [SC_000087_ADJACENT_OWNER, SC_000087_CARGO_OWNER],
+      finalClass: "D2_IMPLEMENTATION_SHAPE",
+      deletionReason: SC_000087_DELETION_REASON,
+    }, {
+      id: "SC-000441",
+      historicalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      historicalOwnerEvidence: [SC_000441_CARGO_OWNER],
+      historicalCandidateOwnerIds: [SC_000441_CARGO_OWNER],
+      finalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      finalResolution: { subgroups: APPROVED_SC_000441_SUBGROUPS },
+    }],
+  },
   protectedCriticality: {
     rule: "Every protected author and blind fingerprint retains the exact mandatory criticalityRef.",
     rows: [
@@ -195,6 +276,7 @@ const APPROVED_PACKET_POLICY_BINDINGS = {
     ...APPROVED_RULE_ADJUDICATIONS.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
     ...APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rows.map(({ id }) => ({ id, finalClass: "D4_DUPLICATE_EVIDENCE", rule: APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.exactD4Owners.rule })),
     ...APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.retainedClasses.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    { id: "SC-000087", finalClass: "B2_NEW_CHEAP_BEHAVIOR", rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner." },
     { id: "SC-000323", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Exact focus/selection styling is a non-normative rendered visual affordance with no truthful non-browser seam." },
     { id: "SC-000333", finalClass: "D2_IMPLEMENTATION_SHAPE", rule: "The declaration pins the exact open-state selector string rather than independently observing the trigger's active state." },
     { id: "SC-000352", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam." },
@@ -547,6 +629,13 @@ export function validateCandidateBindingAdjudications({ candidateBindingAdjudica
       if (blindResults && blindsById.get(id)?.class !== group.finalClass) issues.push(`${id}: blind fingerprint must retain ${group.finalClass}`);
     }
   }
+  for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.postEvidenceUserAdjudications.rows) {
+    if (candidateOwnerInventory && canonicalJson(inventoryById.get(row.id)) !== canonicalJson(row.historicalCandidateOwnerIds)) issues.push(`${row.id}: post-evidence adjudication must retain the exact historical candidate inventory`);
+    const approvedDecision = row.id === "SC-000087" ? APPROVED_SC_000087_DECISION : APPROVED_SC_000441_DECISION;
+    const historicalBlind = row.id === "SC-000087" ? HISTORICAL_SC_000087_BLIND : HISTORICAL_SC_000441_BLIND;
+    if (decisions && canonicalJson(decisionsById.get(row.id)) !== canonicalJson(approvedDecision)) issues.push(`${row.id}: decision must equal the approved post-evidence user adjudication`);
+    if (blindResults && canonicalJson(blindsById.get(row.id)) !== canonicalJson(historicalBlind)) issues.push(`${row.id}: post-evidence adjudication must retain the exact historical blind fingerprint`);
+  }
   for (const row of APPROVED_CANDIDATE_BINDING_ADJUDICATIONS.protectedCriticality.rows) {
     if (decisions && decisionsById.get(row.id)?.criticalityRef !== row.criticalityRef) issues.push(`${row.id}: author fingerprint must retain exact protected criticalityRef`);
     if (blindResults && blindsById.get(row.id)?.criticalityRef !== row.criticalityRef) issues.push(`${row.id}: blind fingerprint must retain exact protected criticalityRef`);
@@ -608,7 +697,7 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues,
         else ownedOrdinals.add(ordinal);
       }
     }
-    const approvedMixedGridDisposition = decision.id === "SC-000515"
+    const approvedMixedGridDisposition = ["SC-000441", "SC-000515"].includes(decision.id)
       && isMixed
       && ["architecture", "behavior"].includes(subgroup.disposition);
     const approvedTask9MixedDisposition = approvedTask9Amendment
@@ -621,7 +710,9 @@ function validateResolution(decision, row, protectedIds, resolvedOwners, issues,
     if (subgroup.disposition === "delete") {
       if (own(subgroup, "replacementIds")) issues.push(`${prefix} delete resolution must not include replacementIds`);
       if (typeof subgroup.deletionReason !== "string" || !subgroup.deletionReason.trim()) issues.push(`${prefix} delete resolution requires a deletionReason`);
-      if (typeof subgroup.deletionReason === "string" && !approvedTask9MixedDisposition
+      const approvedSc000087Deletion = decision.id === "SC-000087"
+        && canonicalJson(decision) === canonicalJson(APPROVED_SC_000087_DECISION);
+      if (typeof subgroup.deletionReason === "string" && !approvedTask9MixedDisposition && !approvedSc000087Deletion
         && (subgroup.deletionReason.trim() === decision.class || (!subgroup.deletionReason.includes(decision.class) && !requiredD3Reason))) issues.push(`${prefix} deletion reason must contain row-specific text`);
       for (const ordinal of isMixed ? subgroup.assertionOrdinals ?? [] : Array.from({ length: row.assertionCount }, (_, index) => index + 1)) deletedOrdinals.add(ordinal);
     } else {
@@ -905,6 +996,7 @@ function expectedTailReviewPopulation(artifact) {
   const d5RowIds = (artifact.decisions ?? []).filter((decision) => decision.class === "D5_ACCEPTED_LOSS").map((decision) => decision.id).sort(compareId);
   const mixedRowIds = (artifact.decisions ?? [])
     .filter((decision) => Array.isArray(decision.resolution?.subgroups)
+      && decision.id !== "SC-000441"
       && decision.id !== "SC-000515"
       && !TASK9_MIXED_IDS.has(decision.id))
     .map((decision) => decision.id)
@@ -1048,7 +1140,8 @@ export function validateTailFingerprints({ tailReview, decisions, protectedIds =
       continue;
     }
     const task4Authored = decision.authorRunId === tailReview?.authorRunId;
-    if (reviewFingerprint(decision, protectedIds.has(id), task4Authored) !== reviewFingerprint(blind, protectedIds.has(id), task4Authored)) {
+    if (!isApprovedPostEvidencePair(decision, blind)
+      && reviewFingerprint(decision, protectedIds.has(id), task4Authored) !== reviewFingerprint(blind, protectedIds.has(id), task4Authored)) {
       mismatches.push(id);
       if (task4Authored) task4Mismatches.push(id);
     }
@@ -1305,6 +1398,17 @@ function validateTailIterationEvidence({ artifact, baseLedger, evidenceBytes, pr
     if (!finalBindingsAgree) issues.push("tailReview: final top-level state must equal the last fixed-point iteration");
     if ((tail.disagreements ?? []).length || finalEntry.task4Disagreements.length) issues.push("tailReview: fixed-point Task 4 disagreements must be empty");
   }
+}
+
+function isApprovedSc000087PostEvidencePair(decision, blind) {
+  return canonicalJson(decision) === canonicalJson(APPROVED_SC_000087_DECISION)
+    && canonicalJson(blind) === canonicalJson(HISTORICAL_SC_000087_BLIND);
+}
+
+function isApprovedPostEvidencePair(decision, blind) {
+  return isApprovedSc000087PostEvidencePair(decision, blind)
+    || (canonicalJson(decision) === canonicalJson(APPROVED_SC_000441_DECISION)
+      && canonicalJson(blind) === canonicalJson(HISTORICAL_SC_000441_BLIND));
 }
 
 function reviewFingerprint(item, protectedRow = false, includeFutureOwners = false) {
@@ -1621,6 +1725,14 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
     if (isApprovedTask4CorrectionScope && decision.id === "SC-000464" && canonicalJson(decision.resolution?.replacementIds) !== canonicalJson(APPROVED_SC_000464_CARGO_OWNERS)) {
       issues.push("SC-000464: replacementIds must equal the approved comprehensive Cargo owner");
     }
+    if (isApprovedTask4CorrectionScope && decision.id === "SC-000087"
+      && canonicalJson(decision) !== canonicalJson(APPROVED_SC_000087_DECISION)) {
+      issues.push("SC-000087: decision must equal the approved post-evidence user adjudication");
+    }
+    if (isApprovedTask4CorrectionScope && decision.id === "SC-000441"
+      && canonicalJson(decision) !== canonicalJson(APPROVED_SC_000441_DECISION)) {
+      issues.push("SC-000441: decision must equal the approved post-evidence user adjudication");
+    }
     if (isApprovedTask4CorrectionScope && decision.id === "SC-000515" && canonicalJson(decision.resolution) !== canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })) {
       issues.push("SC-000515: resolution must equal the approved architecture/behavior ordinal split");
     }
@@ -1637,6 +1749,40 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   const currentOpenResolutions = baseLedger.rows.filter((row) => baseOpenIds.has(row.id)).map((row) => resolutionOnly(currentById.get(row.id)));
   const fullyAppliedLedger = applyReview({ artifact, baseLedger, currentLedger: baseLedger, baseTrackedPaths: tracked }).ledger;
   const fullyAppliedOpenResolutions = fullyAppliedLedger.rows.filter((row) => baseOpenIds.has(row.id)).map(resolutionOnly);
+  const sc000087CurrentResolution = resolutionOnly(currentLedger.rows.find((row) => row?.id === "SC-000087"));
+  const sc000087CorrectedResolution = resolutionOnly(fullyAppliedLedger.rows.find((row) => row?.id === "SC-000087"));
+  const sc000087CurrentIsAllowed = canonicalJson(sc000087CurrentResolution) === canonicalJson(PRE_ADJUDICATION_SC_000087_RESOLUTION)
+    || canonicalJson(sc000087CurrentResolution) === canonicalJson(sc000087CorrectedResolution);
+  const sc000087NormalizedLedger = clone(currentLedger);
+  const sc000087NormalizedRow = sc000087NormalizedLedger.rows.find((row) => row?.id === "SC-000087");
+  if (sc000087NormalizedRow) {
+    for (const key of ["disposition", "replacementIds", "deletionReason", "subgroups"]) delete sc000087NormalizedRow[key];
+    Object.assign(sc000087NormalizedRow, APPROVED_SC_000087_DECISION.resolution);
+  }
+  const isApprovedSc000087TransitionLedger = isApprovedTask4CorrectionScope
+    && sc000087CurrentIsAllowed
+    && canonicalJson(sc000087NormalizedLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
+  if (isApprovedTask4CorrectionScope && !sc000087CurrentIsAllowed
+    && canonicalJson(sc000087NormalizedLedger.rows) === canonicalJson(fullyAppliedLedger.rows)) {
+    issues.push("ledger: SC-000087 resolution must equal the exact pre-adjudication or corrected state");
+  }
+  const sc000441CurrentResolution = resolutionOnly(currentLedger.rows.find((row) => row?.id === "SC-000441"));
+  const sc000441CorrectedResolution = resolutionOnly(fullyAppliedLedger.rows.find((row) => row?.id === "SC-000441"));
+  const sc000441CurrentIsAllowed = canonicalJson(sc000441CurrentResolution) === canonicalJson(PRE_ADJUDICATION_SC_000441_RESOLUTION)
+    || canonicalJson(sc000441CurrentResolution) === canonicalJson(sc000441CorrectedResolution);
+  const sc000441NormalizedLedger = clone(currentLedger);
+  const sc000441NormalizedRow = sc000441NormalizedLedger.rows.find((row) => row?.id === "SC-000441");
+  if (sc000441NormalizedRow) {
+    for (const key of ["disposition", "replacementIds", "deletionReason", "subgroups"]) delete sc000441NormalizedRow[key];
+    Object.assign(sc000441NormalizedRow, APPROVED_SC_000441_DECISION.resolution);
+  }
+  const isApprovedSc000441TransitionLedger = isApprovedTask4CorrectionScope
+    && sc000441CurrentIsAllowed
+    && canonicalJson(sc000441NormalizedLedger.rows) === canonicalJson(fullyAppliedLedger.rows);
+  if (isApprovedTask4CorrectionScope && !sc000441CurrentIsAllowed
+    && canonicalJson(sc000441NormalizedLedger.rows) === canonicalJson(fullyAppliedLedger.rows)) {
+    issues.push("ledger: SC-000441 resolution must equal the exact pre-adjudication or corrected state");
+  }
   const correctedCurrentLedger = clone(currentLedger);
   const correctionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000464");
   const gridCorrectionRow = correctedCurrentLedger.rows.find((row) => row?.id === "SC-000515");
@@ -1680,13 +1826,17 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
   if (canonicalJson(currentLedger.rows) !== canonicalJson(baseLedger.rows)
     && canonicalJson(currentLedger.rows) !== canonicalJson(fullyAppliedLedger.rows)
     && !isApprovedPreCorrectionLedger
-    && !isApprovedTask9PreCorrectionLedger) {
+    && !isApprovedTask9PreCorrectionLedger
+    && !isApprovedSc000087TransitionLedger
+    && !isApprovedSc000441TransitionLedger) {
     issues.push("ledger: rows changed outside approved review apply");
   }
   if (canonicalJson(currentOpenResolutions) !== canonicalJson(baseOpenResolutions)
     && canonicalJson(currentOpenResolutions) !== canonicalJson(fullyAppliedOpenResolutions)
     && !isApprovedPreCorrectionLedger
-    && !isApprovedTask9PreCorrectionLedger) {
+    && !isApprovedTask9PreCorrectionLedger
+    && !isApprovedSc000087TransitionLedger
+    && !isApprovedSc000441TransitionLedger) {
     issues.push("ledger: base-open resolutions must collectively equal either the review-base or fully-applied state");
   }
 
@@ -1771,12 +1921,13 @@ export function validateReview({ artifact, baseLedger, currentLedger, baseTracke
       if (!blind) { issues.push(`${id}: missing blind result`); continue; }
       if (blind.reviewerRunId !== reviewer?.reviewerRunId) issues.push(`${decision.id}: reviewerRunId differs from reviewer run`);
       if (blind.sourceHash !== decision.sourceHash) issues.push(`${decision.id}: blind sourceHash drift`);
-      if (blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
+      const approvedPostEvidenceAdjudication = isApprovedPostEvidencePair(decision, blind);
+      if (!approvedPostEvidenceAdjudication && blind.class !== decision.class) issues.push(`${decision.id}: author/blind class comparison is incorrect`);
       const protectedRow = protectedIds.has(id);
       const approvedSc000515Correction = id === "SC-000515"
         && canonicalJson(decision.resolution) === canonicalJson({ subgroups: APPROVED_SC_000515_SUBGROUPS })
         && canonicalJson(blind.ownerEvidence) === canonicalJson([HISTORICAL_SC_000515_BEHAVIOR_OWNER]);
-      fingerprintMatches.set(id, approvedSc000515Correction
+      fingerprintMatches.set(id, approvedPostEvidenceAdjudication || approvedSc000515Correction
         || reviewFingerprint(decision, protectedRow) === reviewFingerprint(blind, protectedRow));
     }
     const validIterations = independent.validIterations;

@@ -17,7 +17,6 @@ export function createVerifySteps({ npmExecPath = process.env.npm_execpath, plat
     npmStep("npm run test:unit", "test:unit", { npmExecPath, platform }),
     npmStep("npm run test:component", "test:component", { npmExecPath, platform }),
     npmStep("npm run test:architecture", "test:architecture", { npmExecPath, platform }),
-    npmStep("npm run test:legacy-contract", "test:legacy-contract", { npmExecPath, platform }),
     npmStep("npm run test:integration:os", "test:integration:os", { npmExecPath, platform }),
     npmStep("npm run test:e2e", "test:e2e", { npmExecPath, platform }),
     npmStep("npm run test:app:e2e", "test:app:e2e", { npmExecPath, platform }),

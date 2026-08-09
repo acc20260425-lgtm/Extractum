@@ -52,6 +52,25 @@ const firstCorrectionSc000464CargoOwners = [
 const preCorrectionSc000464Owner = "test:vitest:src/lib/prompt-packs/start-youtube-summary-run.behavior.test.ts#prompt pack application boundary > keeps start idempotency readiness preflight queued-event spawn and profile-resolution order";
 const historicalSc000515BehaviorOwner = "test:vitest:scripts/testing/extractum-grid-wrapper-boundary.behavior.test.ts#SVAR grid APIs stay inside Extractum wrappers";
 const sc000515BehaviorOwner = "test:vitest:src/lib/components/extractum-ui/extractum-grid-wrapper-boundary.behavior.component.test.ts#SVAR grid APIs stay inside Extractum wrappers";
+const sc000087DeletionReason = "D2 implementation-shape: The exact app-owned TauriAnalysisEventSink bodies and absence of waits, helpers, extra statements, and extra emits are refactor-sensitive body shape; AnalysisEventSink trait conformance is compiler-owned and retained runtime/chat tests cover event outcomes.";
+const sc000441CargoOwner = "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible";
+const sc000441AuthorReason = "The invariant is mixed: stable Cargo compilation truthfully proves the credential-bearing types' negative serialization/debug/secret-exposure traits and URL-userinfo rejection, while exhaustive absence of additional public modules, exports, fields, inherent accessors, and credential-returning routes is a closed architecture surface owned by the structured repository rule.";
+const sc000441ArchitectureInvariant = "The extractum-llm public architecture remains exactly curated: internal modules stay private, root exports and public type/method sets are closed, credential-bearing structs remain opaque with no public fields or credential-returning accessors, and internal helper names do not leak.";
+const sc000441BehaviorInvariant = "LlmProviderAccess and ResolvedLlmProfile do not implement Serialize, Deserialize, Debug, or ExposeSecret<String>, and OpenAI-compatible base URL normalization rejects embedded userinfo.";
+const approvedSc000441Subgroups = [
+  {
+    assertionOrdinals: [1, 2, 3, 6, 8, 9, 10, 11, 12, 13],
+    disposition: "architecture",
+    invariant: sc000441ArchitectureInvariant,
+    replacementIds: ["rule:extractum-llm-public-api-boundary"],
+  },
+  {
+    assertionOrdinals: [4, 5, 7],
+    disposition: "behavior",
+    invariant: sc000441BehaviorInvariant,
+    replacementIds: [sc000441CargoOwner],
+  },
+];
 const finalTask4OwnerCorrections = new Map([
   ["SC-000025", {
     before: "test:vitest:src/lib/accounts-route-add-account-modal.behavior.test.ts#accounts route add-account modal > keeps the account creation form behind a configured-accounts header action",
@@ -136,7 +155,7 @@ const approvedCandidateBindingAdjudications = {
   retainedClasses: [
     {
       rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
-      rowIds: ["SC-000087", "SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
+      rowIds: ["SC-000090", "SC-000130", "SC-000136", "SC-000192", "SC-000210", "SC-000289", "SC-000416", "SC-000423", "SC-000453", "SC-000511"],
       finalClass: "B2_NEW_CHEAP_BEHAVIOR",
     },
     {
@@ -145,6 +164,27 @@ const approvedCandidateBindingAdjudications = {
       finalClass: "D2_IMPLEMENTATION_SHAPE",
     },
   ],
+  postEvidenceUserAdjudications: {
+    rule: "Post-evidence user adjudication excludes only SC-000087 and SC-000441 from author/blind fingerprint equality while preserving their exact historical evidence and binding each final resolution fail-closed.",
+    rows: [{
+      id: "SC-000087",
+      historicalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      historicalOwnerEvidence: ["test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"],
+      historicalCandidateOwnerIds: [
+        "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps run snapshot reading bounded and snapshot-only",
+        "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking",
+      ],
+      finalClass: "D2_IMPLEMENTATION_SHAPE",
+      deletionReason: sc000087DeletionReason,
+    }, {
+      id: "SC-000441",
+      historicalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      historicalOwnerEvidence: [sc000441CargoOwner],
+      historicalCandidateOwnerIds: [sc000441CargoOwner],
+      finalClass: "B2_NEW_CHEAP_BEHAVIOR",
+      finalResolution: { subgroups: approvedSc000441Subgroups },
+    }],
+  },
   protectedCriticality: {
     rule: "Every protected author and blind fingerprint retains the exact mandatory criticalityRef.",
     rows: reviewArtifact.protectedRows.map(({ id, criticalityRef }) => ({ id, criticalityRef })),
@@ -162,6 +202,7 @@ const approvedPacketPolicyBindings = {
     ...approvedRuleAdjudications.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
     ...approvedCandidateBindingAdjudications.exactD4Owners.rows.map(({ id }) => ({ id, finalClass: "D4_DUPLICATE_EVIDENCE", rule: approvedCandidateBindingAdjudications.exactD4Owners.rule })),
     ...approvedCandidateBindingAdjudications.retainedClasses.flatMap(({ rule, rowIds, finalClass }) => rowIds.map((id) => ({ id, finalClass, rule }))),
+    { id: "SC-000087", finalClass: "B2_NEW_CHEAP_BEHAVIOR", rule: "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner." },
     { id: "SC-000323", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Exact focus/selection styling is a non-normative rendered visual affordance with no truthful non-browser seam." },
     { id: "SC-000333", finalClass: "D2_IMPLEMENTATION_SHAPE", rule: "The declaration pins the exact open-state selector string rather than independently observing the trigger's active state." },
     { id: "SC-000352", finalClass: "D3_NON_OBSERVABLE_VISUAL", rule: "Two-line title clipping is a non-normative rendered-layout detail with no truthful non-browser seam." },
@@ -942,6 +983,112 @@ describe("source-contract redisposition review", () => {
     expect(validateReview({ ...input, currentLedger: unapprovedLedger })).toContain("ledger: rows changed outside approved review apply");
   });
 
+  it("pins the exact SC-000087 post-evidence user adjudication and atomic ledger transition", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, currentPresentPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadCurrentPresentTrackedPaths({ repoRoot }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const decision = (reviewArtifact as any).decisions.find((item: any) => item.id === "SC-000087");
+    expect(decision).toMatchObject({
+      id: "SC-000087",
+      sourceHash: "7628287415527ca9e7f1c1a7c53169e3faaa9c7b0e7a21cc5fb8235a865e31b2",
+      class: "D2_IMPLEMENTATION_SHAPE",
+      reason: sc000087DeletionReason,
+      resolution: { disposition: "delete", deletionReason: sc000087DeletionReason },
+    });
+    expect(decision.ownerEvidence).toBeUndefined();
+    expect(decision.resolution.replacementIds).toBeUndefined();
+    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 279, delete: 153, mixed: 4 });
+    expect((reviewArtifact as any).forecast.futureOwnersByMechanism.cargo).toEqual({ rows: 18, assertionOrdinals: 147 });
+
+    const input: any = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      currentPresentPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    };
+    expect(validateReview(input)).toEqual([]);
+
+    for (const mutate of [
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000087").class = "B2_NEW_CHEAP_BEHAVIOR"; },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000087").resolution.replacementIds = ["test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"]; },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000087").resolution.deletionReason += " mutated"; },
+    ]) {
+      const artifact = clone(reviewArtifact) as any;
+      mutate(artifact);
+      expect(validateReview({ ...input, artifact })).toContain(
+        "SC-000087: decision must equal the approved post-evidence user adjudication",
+      );
+    }
+
+    const correctedLedger = applyReview(input).ledger;
+    expect(validateReview({ ...input, currentLedger: correctedLedger })).toEqual([]);
+    const partialLedger = clone(correctedLedger) as any;
+    partialLedger.rows.find((item: any) => item.id === "SC-000087").deletionReason += " mutated";
+    expect(validateReview({ ...input, currentLedger: partialLedger })).toContain(
+      "ledger: SC-000087 resolution must equal the exact pre-adjudication or corrected state",
+    );
+  }, 30_000);
+
+  it("pins the exact SC-000441 mixed post-evidence adjudication and atomic ledger transition", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const [realBaseLedger, realBaseTrackedPaths, currentPresentPaths, loaded] = await Promise.all([
+      loadBaseLedger({ repoRoot, commit: REVIEW_BASE }),
+      loadBaseTrackedPaths({ repoRoot, commit: REVIEW_BASE }),
+      loadCurrentPresentTrackedPaths({ repoRoot }),
+      loadReviewEvidence({ repoRoot, artifact: reviewArtifact }),
+    ]);
+    const decision = (reviewArtifact as any).decisions.find((item: any) => item.id === "SC-000441");
+    expect(decision).toEqual({
+      id: "SC-000441",
+      sourceHash: "093561de910b2cd887cc9a23796094020d13d9fa1c1d234af875a01276b58700",
+      authorRunId: "redisposition-task-3-final-fix-author-run",
+      class: "B2_NEW_CHEAP_BEHAVIOR",
+      reason: sc000441AuthorReason,
+      resolution: { subgroups: approvedSc000441Subgroups },
+      criticalityRef: "AGENTS_SECURITY",
+    });
+    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 279, delete: 153, mixed: 4 });
+    expect((reviewArtifact as any).forecast.futureOwnersByMechanism.cargo).toEqual({ rows: 18, assertionOrdinals: 147 });
+
+    const input: any = {
+      artifact: reviewArtifact,
+      baseLedger: realBaseLedger,
+      currentLedger,
+      baseTrackedPaths: realBaseTrackedPaths,
+      currentPresentPaths,
+      evidenceBytes: loaded.evidenceBytes,
+    };
+    expect(validateReview(input)).toEqual([]);
+
+    for (const mutate of [
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000441").class = "D2_IMPLEMENTATION_SHAPE"; },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000441").reason += " mutated"; },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000441").resolution.subgroups[0].assertionOrdinals.pop(); },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000441").resolution.subgroups[0].replacementIds = ["rule:llm-crate-boundary"]; },
+      (artifact: any) => { artifact.decisions.find((item: any) => item.id === "SC-000441").resolution.subgroups[1].invariant += " mutated"; },
+    ]) {
+      const artifact = clone(reviewArtifact) as any;
+      mutate(artifact);
+      expect(validateReview({ ...input, artifact })).toContain(
+        "SC-000441: decision must equal the approved post-evidence user adjudication",
+      );
+    }
+
+    const correctedLedger = applyReview(input).ledger;
+    expect(validateReview({ ...input, currentLedger: correctedLedger })).toEqual([]);
+    const partialLedger = clone(correctedLedger) as any;
+    partialLedger.rows.find((item: any) => item.id === "SC-000441").subgroups[0].replacementIds = ["rule:llm-crate-boundary"];
+    expect(validateReview({ ...input, currentLedger: partialLedger })).toContain(
+      "ledger: SC-000441 resolution must equal the exact pre-adjudication or corrected state",
+    );
+  }, 30_000);
+
   it("permits only the exact Task 9 truthful-owner amendment and its atomic ledger transition", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [realBaseLedger, realBaseTrackedPaths, currentPresentPaths, loaded] = await Promise.all([
@@ -1016,11 +1163,11 @@ describe("source-contract redisposition review", () => {
 
     expect((reviewArtifact as any).forecast.futureOwnersByMechanism).toEqual({
       node: { rows: 139, assertionOrdinals: 787 },
-      cargo: { rows: 19, assertionOrdinals: 161 },
+      cargo: { rows: 18, assertionOrdinals: 147 },
       jsdom: { rows: 123, assertionOrdinals: 864 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });
-    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 281, delete: 152, mixed: 3 });
+    expect((reviewArtifact as any).forecast.afterByDisposition).toEqual({ behavior: 279, delete: 153, mixed: 4 });
 
     const input: any = {
       artifact: reviewArtifact,
@@ -1143,10 +1290,10 @@ describe("source-contract redisposition review", () => {
       counts[item.class] = (counts[item.class] ?? 0) + 1;
       return counts;
     }, {})).toEqual({
-      B2_NEW_CHEAP_BEHAVIOR: 276,
+      B2_NEW_CHEAP_BEHAVIOR: 275,
       B3_PROTECTED_EXPENSIVE_BEHAVIOR: 8,
       D1_COMPLETED_HISTORY_ONLY: 6,
-      D2_IMPLEMENTATION_SHAPE: 122,
+      D2_IMPLEMENTATION_SHAPE: 123,
       D3_NON_OBSERVABLE_VISUAL: 16,
       D4_DUPLICATE_EVIDENCE: 8,
     });
@@ -1251,7 +1398,7 @@ describe("source-contract redisposition review", () => {
 
     expect(executionForecast).toEqual({
       node: { rows: 139, assertionOrdinals: 787 },
-      cargo: { rows: 19, assertionOrdinals: 161 },
+      cargo: { rows: 18, assertionOrdinals: 147 },
       jsdom: { rows: 123, assertionOrdinals: 864 },
       playwright: { rows: 3, assertionOrdinals: 21 },
     });

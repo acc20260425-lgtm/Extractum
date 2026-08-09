@@ -1781,7 +1781,7 @@ mod tests {
         assert_eq!(error.kind, extractum_core::error::AppErrorKind::Validation);
         assert_eq!(
             error.message,
-            "Unsupported prompt-pack runtime provider: unsupported"
+            "Invalid persisted runtime configuration for run 103: unsupported provider 'unsupported'"
         );
     }
 
@@ -1805,9 +1805,9 @@ mod tests {
 
         assert_eq!(error.kind, extractum_core::error::AppErrorKind::Internal);
         assert!(
-            error
-                .message
-                .starts_with("parse Browser Provider config snapshot:"),
+            error.message.starts_with(
+                "Invalid persisted runtime configuration for run 104: browser provider config:"
+            ),
             "unexpected error message: {}",
             error.message
         );

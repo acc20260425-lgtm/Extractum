@@ -1042,13 +1042,11 @@
       "id": "SC-000087",
       "sourceHash": "7628287415527ca9e7f1c1a7c53169e3faaa9c7b0e7a21cc5fb8235a865e31b2",
       "authorRunId": "redisposition-task-3-final-fix-author-run",
-      "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "Bounded nonblocking event publication is a durable behavior seam with an exact supplied future Cargo owner; the unrelated resolved canvas candidate is not used.",
+      "class": "D2_IMPLEMENTATION_SHAPE",
+      "reason": "D2 implementation-shape: The exact app-owned TauriAnalysisEventSink bodies and absence of waits, helpers, extra statements, and extra emits are refactor-sensitive body shape; AnalysisEventSink trait conformance is compiler-owned and retained runtime/chat tests cover event outcomes.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"
-        ]
+        "disposition": "delete",
+        "deletionReason": "D2 implementation-shape: The exact app-owned TauriAnalysisEventSink bodies and absence of waits, helpers, extra statements, and extra emits are refactor-sensitive body shape; AnalysisEventSink trait conformance is compiler-owned and retained runtime/chat tests cover event outcomes."
       }
     },
     {
@@ -4568,11 +4566,25 @@
       "sourceHash": "093561de910b2cd887cc9a23796094020d13d9fa1c1d234af875a01276b58700",
       "authorRunId": "redisposition-task-3-final-fix-author-run",
       "class": "B2_NEW_CHEAP_BEHAVIOR",
-      "reason": "Credential non-serializability and inaccessible public methods remain protected behavior with the exact curated public-API Cargo owner.",
+      "reason": "The invariant is mixed: stable Cargo compilation truthfully proves the credential-bearing types' negative serialization/debug/secret-exposure traits and URL-userinfo rejection, while exhaustive absence of additional public modules, exports, fields, inherent accessors, and credential-returning routes is a closed architecture surface owned by the structured repository rule.",
       "resolution": {
-        "disposition": "behavior",
-        "replacementIds": [
-          "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"
+        "subgroups": [
+          {
+            "assertionOrdinals": [1, 2, 3, 6, 8, 9, 10, 11, 12, 13],
+            "disposition": "architecture",
+            "invariant": "The extractum-llm public architecture remains exactly curated: internal modules stay private, root exports and public type/method sets are closed, credential-bearing structs remain opaque with no public fields or credential-returning accessors, and internal helper names do not leak.",
+            "replacementIds": [
+              "rule:extractum-llm-public-api-boundary"
+            ]
+          },
+          {
+            "assertionOrdinals": [4, 5, 7],
+            "disposition": "behavior",
+            "invariant": "LlmProviderAccess and ResolvedLlmProfile do not implement Serialize, Deserialize, Debug, or ExposeSecret<String>, and OpenAI-compatible base URL normalization rejects embedded userinfo.",
+            "replacementIds": [
+              "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"
+            ]
+          }
         ]
       },
       "criticalityRef": "AGENTS_SECURITY"
@@ -6972,6 +6984,7 @@
       {
         "name": "emerging-mixed",
         "rowIds": [
+          "SC-000441",
           "SC-000515"
         ],
         "comparison": "agree"
@@ -8264,7 +8277,6 @@
         {
           "rule": "A resolved adjacent owner does not make evidence duplicate; retain B2 when the exact complete invariant still requires the approved future owner.",
           "rowIds": [
-            "SC-000087",
             "SC-000090",
             "SC-000130",
             "SC-000136",
@@ -8288,6 +8300,51 @@
           "finalClass": "D2_IMPLEMENTATION_SHAPE"
         }
       ],
+      "postEvidenceUserAdjudications": {
+        "rule": "Post-evidence user adjudication excludes only SC-000087 and SC-000441 from author/blind fingerprint equality while preserving their exact historical evidence and binding each final resolution fail-closed.",
+        "rows": [
+          {
+            "id": "SC-000087",
+            "historicalClass": "B2_NEW_CHEAP_BEHAVIOR",
+            "historicalOwnerEvidence": [
+              "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"
+            ],
+            "historicalCandidateOwnerIds": [
+              "test:vitest:src/lib/analysis-report-canvas.behavior.component.test.ts#report canvas component contract > keeps run snapshot reading bounded and snapshot-only",
+              "test:cargo:extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking"
+            ],
+            "finalClass": "D2_IMPLEMENTATION_SHAPE",
+            "deletionReason": "D2 implementation-shape: The exact app-owned TauriAnalysisEventSink bodies and absence of waits, helpers, extra statements, and extra emits are refactor-sensitive body shape; AnalysisEventSink trait conformance is compiler-owned and retained runtime/chat tests cover event outcomes."
+          },
+          {
+            "id": "SC-000441",
+            "historicalClass": "B2_NEW_CHEAP_BEHAVIOR",
+            "historicalOwnerEvidence": [
+              "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"
+            ],
+            "historicalCandidateOwnerIds": [
+              "test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"
+            ],
+            "finalClass": "B2_NEW_CHEAP_BEHAVIOR",
+            "finalResolution": {
+              "subgroups": [
+                {
+                  "assertionOrdinals": [1, 2, 3, 6, 8, 9, 10, 11, 12, 13],
+                  "disposition": "architecture",
+                  "invariant": "The extractum-llm public architecture remains exactly curated: internal modules stay private, root exports and public type/method sets are closed, credential-bearing structs remain opaque with no public fields or credential-returning accessors, and internal helper names do not leak.",
+                  "replacementIds": ["rule:extractum-llm-public-api-boundary"]
+                },
+                {
+                  "assertionOrdinals": [4, 5, 7],
+                  "disposition": "behavior",
+                  "invariant": "LlmProviderAccess and ResolvedLlmProfile do not implement Serialize, Deserialize, Debug, or ExposeSecret<String>, and OpenAI-compatible base URL normalization rejects embedded userinfo.",
+                  "replacementIds": ["test:cargo:extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible"]
+                }
+              ]
+            }
+          }
+        ]
+      },
       "protectedCriticality": {
         "rule": "Every protected author and blind fingerprint retains the exact mandatory criticalityRef.",
         "rows": [
@@ -8586,9 +8643,9 @@
       "delete": 16
     },
     "afterByDisposition": {
-      "behavior": 281,
-      "delete": 152,
-      "mixed": 3
+      "behavior": 279,
+      "delete": 153,
+      "mixed": 4
     },
     "futureOwnersByMechanism": {
       "node": {
@@ -8596,8 +8653,8 @@
         "assertionOrdinals": 787
       },
       "cargo": {
-        "rows": 19,
-        "assertionOrdinals": 161
+        "rows": 18,
+        "assertionOrdinals": 147
       },
       "jsdom": {
         "rows": 123,

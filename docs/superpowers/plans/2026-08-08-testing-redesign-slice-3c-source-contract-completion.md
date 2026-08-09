@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement only the classes, dispositions, paths, declaration titles, invariants, deletion reasons, and criticality decisions frozen in `testing/source-contract-redisposition-review.json` and `testing/source-contract-ledger.json`.
-- The approved ownership corrections are exact: component behavior owners belong to `component`; SC-000464 belongs jointly to the comprehensive service Cargo owner and actual application execution-task owner listed in Task 4; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its real-wrapper component owner for the other 18 ordinals. SC-000025/435/552 also use real route/component owners. Task 9 additionally follows the exact 44-row amendment table in the approved design: A=9/63, B=26/212, C=3/21, D=6/45. SC-000076 is the sixth D row because its negative inner-layout constraint has no truthful jsdom seam. The final forecast is Node 139 rows/787 ordinals, jsdom 123/864, Cargo 19/161, and Playwright 3/21. Do not rewrite accepted blind-review bytes; none of the 44 Task 9 IDs is sampled, calibrated, or in a mandatory cohort, SC-000464 was not a sampled blind result, and SC-000515's prior blind packet remains historical evidence.
+- The approved ownership corrections are exact: component behavior owners belong to `component`; SC-000464 belongs jointly to the comprehensive service Cargo owner and actual application execution-task owner listed in Task 4; SC-000441 is mixed across `rule:extractum-llm-public-api-boundary` for ordinals 1/2/3/6/8/9/10/11/12/13 and its Cargo behavior owner for ordinals 4/5/7; and SC-000515 is mixed across the structured repository rule for ordinals 1/11/19 and its real-wrapper component owner for the other 18 ordinals. SC-000025/435/552 also use real route/component owners. Task 9 additionally follows the exact 44-row amendment table in the approved design: A=9/63, B=26/212, C=3/21, D=6/45. SC-000076 is the sixth D row because its negative inner-layout constraint has no truthful jsdom seam. The post-evidence user adjudications delete SC-000087 as D2 implementation shape and mixed-redisposition SC-000441 while preserving their historical blind bytes. The final forecast is Node 139 rows/787 ordinals, jsdom 123/864, Cargo 18/147, and Playwright 3/21. Do not rewrite accepted blind-review bytes; none of the 44 Task 9 IDs is sampled, calibrated, or in a mandatory cohort, SC-000464 was not a sampled blind result, and SC-000515's prior blind packet remains historical evidence.
 - Do not use `?raw`, `readFileSync`, or another direct production-source reader in a replacement test. Do not add a `sourceReaderExceptions` entry.
 - A small behavior-neutral pure-function or adapter extraction is allowed only when the frozen behavior has no truthful existing seam. Stop the connected component if path, title, mechanism, invariant, disposition, or criticality would need to change.
 - Do not add Nx, a migration scheduler, a second ledger, a subset transition validator, timing thresholds, warmups, medians, or benchmark artifacts.
@@ -36,7 +36,9 @@ const groups = new Map();
 const covered = new Set();
 for (const decision of artifact.decisions) {
   const row = rows.get(decision.id);
-  const ids = decision.resolution?.replacementIds ?? [];
+  const ids = decision.id === "SC-000441"
+    ? decision.resolution?.subgroups?.flatMap((group) => group.replacementIds ?? []) ?? []
+    : decision.resolution?.replacementIds ?? [];
   const keys = ids.length > 0
     ? [...new Set(ids.map((id) => id.split("#")[0]))]
     : [`delete:${row.path}`];
@@ -58,7 +60,7 @@ for (const decision of artifact.decisions) {
   covered.add(decision.id);
 }
 const targetGroups = [...groups.keys()].filter((key) => !key.startsWith("delete:"));
-if (covered.size !== 436 || groups.size !== 145 || targetGroups.length !== 97) {
+if (covered.size !== 436 || groups.size !== 158 || targetGroups.length !== 106) {
   throw new Error(`incomplete replacement map: ${covered.size}/${groups.size}/${targetGroups.length}`);
 }
 const body = [...groups.entries()]
@@ -150,7 +152,7 @@ Cargo package commands and `node scripts/validate-testing-transition.mjs` never 
 **Interfaces:**
 - Produces `COMPONENT_BEHAVIOR_PATTERN = "src/lib/components/**/*.behavior.test.ts"` in both component include and unit exclusion.
 - Preserves historical packet `mechanism` bytes while deriving the execution forecast from the new component-directory rule.
-- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; the first Task 4 corrections produce `178/1101`, `90/598`, `19/161`, `3/21`, the first real-component owner correction produces `174/1065`, `94/634`, `19/161`, `3/21`, and the Task 9 exact amendment produces the final `139/787`, `123/864`, `19/161`, `3/21`.
+- Produces the component-corrected intermediate forecast Node `179/1109`, jsdom `90/598`, Cargo `18/156`, Playwright `3/21`, proposed-new-jsdom `0/0`; the first Task 4 corrections produce `178/1101`, `90/598`, `19/161`, `3/21`, the first real-component owner correction produces `174/1065`, `94/634`, `19/161`, `3/21`, the Task 9 exact amendment produces `139/787`, `123/864`, `19/161`, `3/21`, the SC-000087 adjudication produces `139/787`, `123/864`, `18/157`, `3/21`, and the SC-000441 mixed adjudication produces the final `139/787`, `123/864`, `18/147`, `3/21`.
 
 - [ ] **Step 1: Generate the complete replacement map once**
 
@@ -802,7 +804,7 @@ SC-000559 extractum::security_config_tests::mcp_and_fixture_commands_are_localho
 SC-000560 extractum::security_config_tests::production_devtools_require_csp_verification
 ```
 
-**Interfaces:** This task is additive. It does not delete any of the nine Wave 3 legacy files because five extracted-package identities are still missing.
+**Interfaces:** This task is additive. It does not delete any of the nine Wave 3 legacy files because four extracted-package identities are still missing.
 
 - [ ] **Step 1: List and write exact REDs**
 
@@ -829,14 +831,13 @@ Expected: the Cargo tests pass, while open-row count is unchanged because the co
 **Exact identities:**
 
 ```text
-SC-000087 extractum-analysis::events::tests::event_adapter_is_bounded_and_nonblocking
 SC-000441 extractum-llm::public_api_tests::curated_api_keeps_credentials_non_serializable_and_inaccessible
 SC-000474 extractum-prompt-packs::public_api_tests::cancellation_smoke_services_remain_test_only
 SC-000484 extractum-prompt-packs::run_control::tests::terminal_events_clear_required_run_state
 SC-000492 extractum-prompt-packs::runtime_config::tests::invalid_persisted_runtime_configuration_is_reported
 ```
 
-**Delete exactly after the 18 Wave 3 Cargo identities, the comprehensive SC-000464 Cargo owner, and Task 4 Node companions are green:**
+**Delete exactly after the 17 Wave 3 Cargo identities, the comprehensive SC-000464 Cargo owner, and Task 4 Node companions are green:**
 
 ```text
 src/lib/analysis-crate-boundary-contract.test.ts
@@ -850,17 +851,15 @@ src/lib/prompt-pack-runtime-config-contract.test.ts
 src/lib/tauri-security-config-contract.test.ts
 ```
 
-**Interfaces:** Closes 9 files and 55 rows. Package ownership is `extractum-analysis` for SC-000087, `extractum-llm` for SC-000441, and `extractum-prompt-packs` for SC-000474/484/492.
+**Interfaces:** Closes 9 files and 55 rows. Package ownership is `extractum-llm` for SC-000441 and `extractum-prompt-packs` for SC-000474/484/492. SC-000087 is an exact D2 deletion with no replacement owner.
 
 - [ ] **Step 1: Add exact RED/GREEN tests per package**
 
-Use the Rust Verification Loops section. SC-000441 must prove the full curated public API plus non-serializable/inaccessible credentials, not only a narrow credential assertion. If a test-support feature is required, follow the producer feature-off and consumer feature-on rules from `AGENTS.md`.
+Use the Rust Verification Loops section. SC-000441's Cargo owner proves only the behavior ordinals: negative Serialize, Deserialize, Debug, and ExposeSecret traits plus URL-userinfo rejection; its external dependent-crate compile-pass/compile-fail probes remain supplementary. The exhaustive curated root/type/field/method boundary is owned by `rule:extractum-llm-public-api-boundary`. SC-000474 must combine real private seed/clear behavior with external feature-off compile failure and `dev-fixtures` feature-on compile success. If a test-support feature is required, follow the producer feature-off and consumer feature-on rules from `AGENTS.md`.
 
 - [ ] **Step 2: Run package checks and checkpoints sequentially**
 
 ```powershell
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets

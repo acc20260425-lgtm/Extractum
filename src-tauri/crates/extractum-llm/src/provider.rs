@@ -57,6 +57,11 @@ pub fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> App
                 .unwrap_or(DEFAULT_OPENAI_COMPAT_BASE_URL);
             let parsed = reqwest::Url::parse(candidate)
                 .map_err(|_| AppError::validation(format!("Invalid base URL '{candidate}'")))?;
+            if !parsed.username().is_empty() || parsed.password().is_some() {
+                return Err(AppError::validation(
+                    "Base URL must not contain embedded credentials",
+                ));
+            }
             if !matches!(parsed.scheme(), "http" | "https") {
                 return Err(AppError::validation("Base URL must use http or https"));
             }

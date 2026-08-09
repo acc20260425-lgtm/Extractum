@@ -46,7 +46,9 @@ impl PromptPackRunState {
 
     pub(crate) async fn finish(&self, run_id: i64) {
         self.active.lock().await.remove(&run_id);
-        self.cancellation_tokens.lock().await.remove(&run_id);
+        if let Some(token) = self.cancellation_tokens.lock().await.remove(&run_id) {
+            token.cancel();
+        }
     }
 
     pub(crate) async fn active_run_ids(&self) -> Vec<i64> {
@@ -104,6 +106,45 @@ mod tests {
 
     use super::PromptPackRunState;
     use crate::events::{PromptPackEvent, PromptPackEventSink};
+
+    fn terminal_event(run_id: i64, kind: &str) -> PromptPackEvent {
+        PromptPackEvent {
+            run_id,
+            request_id: format!("run-{run_id}-terminal"),
+            kind: kind.to_string(),
+            run_status: "terminal".to_string(),
+            phase: "terminal".to_string(),
+            stage_run_id: None,
+            stage_name: None,
+            source_snapshot_id: None,
+            queue_position: None,
+            progress_current: None,
+            progress_total: None,
+            message: None,
+            error: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn terminal_events_clear_required_run_state() {
+        let state = PromptPackRunState::new();
+
+        for (offset, kind) in ["completed", "partial", "failed", "cancelled", "interrupted"]
+            .into_iter()
+            .enumerate()
+        {
+            let run_id = 100 + offset as i64;
+            state.track(run_id).await.expect("track run");
+            let token = state.child_token(run_id).await.expect("run token");
+
+            state.apply_event(&terminal_event(run_id, kind)).await;
+
+            assert!(
+                !state.active_run_ids().await.contains(&run_id) && token.is_cancelled(),
+                "{kind} must clear active tracking and cancel the required run token"
+            );
+        }
+    }
 
     struct StateObservingSink {
         state: Arc<PromptPackRunState>,

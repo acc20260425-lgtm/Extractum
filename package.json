@@ -11,7 +11,6 @@
     "test:unit": "node scripts/run-vitest.mjs run --project unit-node",
     "test:component": "node scripts/run-vitest.mjs run --project component",
     "test:architecture": "node scripts/run-vitest.mjs run --project architecture",
-    "test:legacy-contract": "node scripts/run-vitest.mjs run --project legacy-contract",
     "test:integration:os": "node scripts/run-vitest.mjs run --project os-integration",
     "test:e2e": "npm.cmd run test:gemini-browser-adapter:e2e",
     "test:app:e2e": "playwright test -c e2e/playwright.config.ts",

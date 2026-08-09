@@ -11,7 +11,6 @@ describe("verify", () => {
       "test:unit",
       "test:component",
       "test:architecture",
-      "test:legacy-contract",
       "test:integration:os",
       "test:e2e",
       "test:app:e2e",
