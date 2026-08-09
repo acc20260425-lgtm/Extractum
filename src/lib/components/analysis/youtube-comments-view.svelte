@@ -17,8 +17,10 @@
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem, SourceJobRecord } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
+  import { youtubeReaderSearchLabel } from "$lib/youtube-source-view-model";
 
   type ViewMode = "threaded" | "flat";
+  const searchLabel = youtubeReaderSearchLabel("comments");
 
   let {
     items,
@@ -118,12 +120,12 @@
 
   <div class="comments-toolbar">
     <label class="search-field">
-      <span>Search comments</span>
+      <span>{searchLabel}</span>
       <Input
         type="search"
         value={search}
-        placeholder="Search comments"
-        ariaLabel="Search comments"
+        placeholder={searchLabel}
+        ariaLabel={searchLabel}
         oninput={(event) => (search = inputValue(event))}
       />
     </label>

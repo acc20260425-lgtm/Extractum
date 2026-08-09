@@ -11,7 +11,7 @@
     TakeoutImportRecoveryState,
   } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
-  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
+  import { youtubeDetailBoundaryState, youtubeEvidenceSectionLabels, type YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
   let {
     source,
@@ -46,6 +46,9 @@
     onStartMigratedHistoryImport: (sourceId: number) => void | Promise<void>;
     onCancelSourceJob: (jobId: string) => void | Promise<void>;
   } = $props();
+
+  const youtubeLabels = youtubeEvidenceSectionLabels();
+  const youtubeActivity = $derived(youtubeDetailBoundaryState(source, youtubeVideoDetail ?? youtubePlaylistDetail, youtubeDetailError).activity);
 
   const visibleJobs = $derived(
     [...jobs].sort((left, right) => right.started_at - left.started_at).slice(0, 8),
@@ -159,30 +162,29 @@
     </section>
   {/if}
 
-  {#if source.sourceType === "youtube"}
-    {@const youtubeSummary = youtubeVideoDetail?.summary ?? youtubePlaylistDetail?.summary ?? null}
-    <section class="activity-section" aria-label="YouTube provider steps">
+  {#if youtubeActivity.visible}
+    <section class="activity-section" aria-label={youtubeLabels.activityRole}>
       <div class="section-heading">
-        <span class="eyebrow">YouTube provider steps</span>
-        <Badge variant={youtubeDetailError?.sourceId === source.id ? "danger" : "neutral"}>
-          {youtubeDetailError?.sourceId === source.id ? "attention" : "current source"}
+        <span class="eyebrow">{youtubeLabels.activity}</span>
+        <Badge variant={youtubeActivity.errorMessage ? "danger" : "neutral"}>
+          {youtubeActivity.badgeLabel}
         </Badge>
       </div>
-      {#if youtubeDetailError?.sourceId === source.id}
-        <StatusMessage tone="error">{youtubeDetailError.message}</StatusMessage>
+      {#if youtubeActivity.errorMessage}
+        <StatusMessage tone="error">{youtubeActivity.errorMessage}</StatusMessage>
       {/if}
       <div class="provider-step-grid">
         <div class="provider-step">
           <strong>Metadata</strong>
-          <span>{youtubeSummary ? "Detail loaded" : "Detail not loaded"}</span>
+          <span>{youtubeActivity.metadataStatus}</span>
         </div>
         <div class="provider-step">
           <strong>Transcript</strong>
-          <span>{youtubeSummary ? `${youtubeSummary.captions.label} - ${youtubeSummary.captions.segmentCount} segments` : "Unknown"}</span>
+          <span>{youtubeActivity.transcriptStatus}</span>
         </div>
         <div class="provider-step">
           <strong>Comments</strong>
-          <span>{youtubeSummary ? `${youtubeSummary.comments.label} - ${youtubeSummary.comments.itemCount} comments` : "Unknown"}</span>
+          <span>{youtubeActivity.commentsStatus}</span>
         </div>
       </div>
     </section>

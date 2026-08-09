@@ -26,6 +26,7 @@
   import { liveSourceItemRef, youtubeSegmentRef, type SourceFilterOption, type SourceReaderItem } from "$lib/source-reader-model";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
   import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
+  import { youtubeDetailBoundaryState } from "$lib/youtube-source-view-model";
   import type {
     Source,
     SourceForumTopic,
@@ -135,6 +136,9 @@
   const groupSubject = $derived(subject && subject.kind === "source_group" ? subject.group : null);
   const snapshotSubject = $derived(subject && subject.kind === "run_snapshot" ? subject.snapshot : null);
   const sourceData = $derived(subject && subject.kind === "source" ? sourceBrowserData : null);
+  const youtubeBoundary = $derived(sourceSubject && sourceData
+    ? youtubeDetailBoundaryState(sourceSubject, sourceData.youtubeVideoDetail ?? sourceData.youtubePlaylistDetail, sourceData.youtubeDetailError)
+    : null);
   const groupData = $derived(subject && subject.kind === "source_group" ? groupBrowserData : null);
   const snapshotData = $derived(subject && subject.kind === "run_snapshot" ? snapshotBrowserData : null);
   const groupLoading = $derived(subject && subject.kind === "source_group" ? loadingItems : false);
@@ -439,7 +443,7 @@
       <YoutubePlaylistVideosView
         sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
         playlist={sourceData.youtubePlaylistDetail}
-        playlistDetailError={sourceData.youtubeDetailError?.sourceId === sourceSubject.id ? sourceData.youtubeDetailError.message : null}
+        playlistDetailError={youtubeBoundary?.sourceBrowserError?.message ?? null}
         loading={sourceData.loadingYoutubeDetail}
         {formatTimestamp}
         onOpenSource={sourceData.onOpenSource}
@@ -458,7 +462,7 @@
         sourceSyncDisabledReason={sourceData.sourceSyncDisabledReason}
         youtubeVideoDetail={sourceData.youtubeVideoDetail}
         youtubePlaylistDetail={sourceData.youtubePlaylistDetail}
-        youtubeDetailError={sourceData.youtubeDetailError}
+        youtubeDetailError={youtubeBoundary?.sourceBrowserError ?? null}
         {formatTimestamp}
         onSyncSource={() => sourceData.onSyncSource(sourceSubject.id)}
         onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}

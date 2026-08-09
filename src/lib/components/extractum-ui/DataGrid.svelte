@@ -41,6 +41,7 @@
     overlay = "Нет данных",
     columnStyle,
     responsive,
+    sortMarks = {},
     selectOnClick = true,
     activeRowId = null,
     rowHeight = 34,
@@ -57,6 +58,7 @@
     overlay?: string;
     columnStyle?: (column: ExtractumDataGridColumn) => string;
     responsive?: ExtractumDataGridResponsive;
+    sortMarks?: Record<string, { order: "asc" | "desc"; index?: number }>;
     selectOnClick?: boolean;
     activeRowId?: string | null;
     rowHeight?: number;
@@ -68,6 +70,7 @@
   // changes (its config effect re-runs), so object props must keep stable
   // references and selection must NOT flow through the reactive prop at all.
   const GRID_SIZES = { rowHeight: untrack(() => rowHeight), headerHeight: 34, columnWidth: 160 };
+  const GRID_SORT_MARKS = untrack(() => sortMarks);
 
   // Unique host marker for the active-row CSS rule below.
   const gridUid = Math.random().toString(36).slice(2, 10);
@@ -85,6 +88,7 @@
   // Internal changes (user clicks) flow out via onselectrow → emitSelection;
   // the diff below then sees equal sets and does nothing (no echo loop).
   const initialSelectedIds = untrack(() => extractumDataGridRuntime(selectedRowIds, rows, overlay).selectedRows);
+  let syncingExternalSelection = false;
   $effect(() => {
     const want = selectedRowIds.map(String);
     if (!api) return;
@@ -92,11 +96,16 @@
     const wantSet = new Set(want);
     const currentSet = new Set(current);
     if (want.length === currentSet.size && want.every((id) => currentSet.has(id))) return;
-    for (const id of current) {
-      if (!wantSet.has(id)) executeExtractumGridSelection(api, id, false);
-    }
-    for (const id of want) {
-      if (!currentSet.has(id)) executeExtractumGridSelection(api, id, true);
+    syncingExternalSelection = true;
+    try {
+      for (const id of current) {
+        if (!wantSet.has(id)) executeExtractumGridSelection(api, id, false);
+      }
+      for (const id of want) {
+        if (!currentSet.has(id)) executeExtractumGridSelection(api, id, true);
+      }
+    } finally {
+      syncingExternalSelection = false;
     }
   });
 
@@ -167,8 +176,8 @@
   }
 
   function emitSelection() {
-    if (!api) return;
-    onSelectedRowIdsChange(api.getState().selectedRows.map(String));
+    if (!api || syncingExternalSelection) return;
+    onSelectedRowIdsChange((api.getState().selectedRows ?? []).map(String));
   }
 </script>
 
@@ -196,6 +205,7 @@
         select={selectOnClick}
         responsive={enhancedResponsive}
         sizes={GRID_SIZES}
+        sortMarks={GRID_SORT_MARKS}
         onselectrow={emitSelection}
       />
     </Willow>

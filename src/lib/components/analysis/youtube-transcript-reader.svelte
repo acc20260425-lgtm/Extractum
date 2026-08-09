@@ -17,10 +17,13 @@
   import {
     youtubeContentStatusLine,
     youtubeProviderHeaderSummary,
+    youtubeReaderSearchLabel,
   } from "$lib/youtube-source-view-model";
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
+
+  const transcriptSearchLabel = youtubeReaderSearchLabel("transcript");
 
   let {
     detail,
@@ -181,7 +184,7 @@
   </div>
 
   <label class="search-field">
-    <span class="sr-only">Search transcript</span>
+    <span class="sr-only">{transcriptSearchLabel}</span>
     <div class="search-input-wrap">
       <span class="search-icon">
         <Search size={15} aria-hidden="true" />
@@ -189,8 +192,8 @@
       <Input
         type="search"
         value={transcriptSearch}
-        placeholder="Search transcript"
-        ariaLabel="Search transcript"
+        placeholder={transcriptSearchLabel}
+        ariaLabel={transcriptSearchLabel}
         oninput={(event) => onChangeTranscriptSearch(inputValue(event))}
       />
     </div>

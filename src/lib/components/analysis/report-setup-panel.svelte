@@ -21,7 +21,7 @@
   import type { Source } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
   import {
-    detailErrorForYoutubeSource,
+    youtubeDetailBoundaryState,
     youtubeCorpusOptionViews,
     type YoutubeDetailErrorState,
   } from "$lib/youtube-source-view-model";
@@ -160,7 +160,7 @@
   );
   const selectedYoutubeError = $derived(
     currentSource?.sourceType === "youtube"
-      ? detailErrorForYoutubeSource(youtubeDetailError, currentSource)
+      ? youtubeDetailBoundaryState(currentSource, youtubeVideoDetail ?? youtubePlaylistDetail, youtubeDetailError).reportSetupProblem
       : null,
   );
   const youtubeCorpusOptions = $derived(

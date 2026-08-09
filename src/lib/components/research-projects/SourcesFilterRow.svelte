@@ -59,6 +59,8 @@
 
 <div
   class="sources-filter-row"
+  role="search"
+  aria-label="Source filters"
   style={FILTER_ROW_STYLE}
 >
   <div></div>

@@ -20,6 +20,7 @@ vi.mock("@svar-ui/core-locales", () => ({ ru: {} }));
 vi.mock("@svar-ui/grid-locales", () => ({ en: {} }));
 
 import type { ApalisJobRow, ApalisJobsListResponse } from "$lib/types/apalis-jobs";
+import { formatDataGridDateTimeValue } from "$lib/components/extractum-ui/data-grid-date-format";
 import ApalisJobsPanel from "./ApalisJobsPanel.svelte";
 
 function job(overrides: Partial<ApalisJobRow> = {}): ApalisJobRow {
@@ -96,13 +97,14 @@ describe("apalis jobs panel", () => {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date("2026-08-08T09:02:00.000Z"));
-    expect(screen.getByLabelText("Formatted grid date").textContent).toBe(expected);
+    const publicRows = JSON.parse(screen.getByRole("grid").dataset.data ?? "[]") as Array<{ lastActivityAt: string }>;
+    expect({ raw: publicRows[0]?.lastActivityAt, formatted: formatDataGridDateTimeValue(publicRows[0]?.lastActivityAt, "datetime") }).toEqual({ raw: "2026-08-08T09:02:00.000Z", formatted: expected });
   });
 
   it("presents safe payload labels and preserves the selected job", async () => {
     render(ApalisJobsPanel);
     await screen.findByRole("heading", { name: "sync:video-1" });
-    await fireEvent.click(screen.getByRole("button", { name: "Select grid row job-2" }));
+    await fireEvent.click(screen.getByRole("row", { name: "job-2" }));
     expect(screen.getByRole("heading", { name: "sync:video-2" })).toBeTruthy();
 
     api.loadApalisJobs.mockResolvedValueOnce(response());

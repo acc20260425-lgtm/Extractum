@@ -20,6 +20,7 @@
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import { reportSourceCompatibility } from "$lib/analysis-report-leaf-compatibility";
+  import type { SourceReaderSurfaceBinding } from "$lib/analysis-source-readers-route-runtime";
   import {
     analysisRunMessageToReaderItem,
     sourceFilterOptionsFromGroupMembers,
@@ -44,17 +45,15 @@
   } from "$lib/types/analysis";
   import type {
     Source,
-    SourceForumTopic,
     SourceItem,
     SourceJobRecord,
     TakeoutImportRecoveryState,
     TelegramHistoryScope,
-    YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
   import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
-  type Props = {
+  type Props = SourceReaderSurfaceBinding & {
     sourceHeaderCompact?: boolean;
     sourceBrowserBounded?: boolean;
     currentRun: AnalysisRunDetail | null;
@@ -72,12 +71,7 @@
     currentSourceMetric: AnalysisSourceOption | null;
     sourceItems: SourceItem[];
     sourceItemsError: string | null;
-    sourceItemsHasMore: boolean;
     loadingItems: boolean;
-    sourceTopics: SourceForumTopic[];
-    loadingSourceTopics: boolean;
-    selectedTopicKey: string;
-    showTopicSelector: boolean;
     currentSourceContentLabel: string;
     telegramHistoryScope: TelegramHistoryScope;
     sourceJobs: SourceJobRecord[];
@@ -89,17 +83,12 @@
     highlightToken?: EvidenceHighlightToken | null;
     sourceReturnContext?: SourceReturnContext;
     currentScopeTitle?: string;
-    youtubeTranscriptSegments?: YoutubeTranscriptSegment[];
     loadingYoutubeTranscriptSegments?: boolean;
     youtubeTranscriptHasMore?: boolean;
     youtubeTranscriptSearch?: string;
-    groupLiveItemsBySource?: Record<number, SourceItem[]>;
-    groupLiveTranscriptSegmentsBySource?: Record<number, YoutubeTranscriptSegment[]>;
     groupLiveHasMoreBySource?: Record<number, boolean>;
-    selectedGroupSourceId?: number | null;
     selectedSnapshotSourceId?: number | null;
     formatTimestamp: (value: number | null) => string;
-    onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
     onOpenSource: (sourceId: number) => void | Promise<void>;
     onSyncSource: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
@@ -117,12 +106,8 @@
     onReturnToEvidenceReview?: () => void;
     sourceSyncDisabledReason?: (source: Source) => string | null;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
-    onLoadMoreSourceItems?: () => void | Promise<void>;
     onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
     onChangeTranscriptSearch?: (value: string) => void;
-    onLoadMoreYoutubeTranscriptSegments?: () => void | Promise<void>;
-    onLoadLiveGroupSourcePage?: (sourceId: number) => void | Promise<void>;
-    onChangeSelectedGroupSourceId?: (sourceId: number | null) => void;
     onChangeSelectedSnapshotSourceId?: (sourceId: number | null) => void;
   };
 

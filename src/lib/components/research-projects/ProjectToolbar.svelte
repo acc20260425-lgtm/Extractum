@@ -98,7 +98,7 @@
 <div class="project-toolbar" use:observeToolbarWidth>
   <div class="project-toolbar__heading">
     <span class="project-toolbar__eyebrow">Research project</span>
-    <strong class="project-toolbar__title">{title}</strong>
+    <h1 class="project-toolbar__title">{title}</h1>
   </div>
 
   {#if !narrow}

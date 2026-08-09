@@ -53,6 +53,7 @@
     YoutubeVideoDetail,
   } from "$lib/types/youtube";
   import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
+  import type { SourceReaderSurfaceBinding } from "$lib/analysis-source-readers-route-runtime";
 
   export type NotebookLmExportProgressState = {
     phase: NotebookLmExportEvent["phase"];
@@ -216,7 +217,7 @@
     onSaveGroupCopy,
     onSaveGroupChanges,
     onDeleteGroup,
-  }: {
+  }: SourceReaderSurfaceBinding & {
     workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
     takeoutRecovery?: TakeoutImportRecoveryState | null;
@@ -379,7 +380,6 @@
     onSaveGroupCopy: () => void;
     onSaveGroupChanges: () => void;
     onDeleteGroup: () => void;
-    [key: string]: unknown;
   } = $props();
 
   const setupRouteProps = $derived(reportSetupProps({

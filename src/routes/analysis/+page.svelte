@@ -73,6 +73,17 @@
     type YoutubeDetailErrorState,
   } from "$lib/youtube-source-view-model";
   import {
+    fetchLiveGroupReaderPage,
+    fetchFocusedLiveSourceData,
+    fetchBeforeReaderReveal,
+    fetchSourceItemsPage,
+    loadYoutubeTranscriptPage,
+    sourceActivityJobs,
+    sourceReaderSurfaceState,
+    type SourceReaderSurfaceBinding,
+  } from "$lib/analysis-source-readers-route-runtime";
+  import { resolveYoutubeDetailForSource } from "$lib/analysis-youtube-source-runtime";
+  import {
     exportSourceToNotebookLm,
     listenToNotebookLmExportEvents,
   } from "$lib/api/notebooklm-export";
@@ -195,7 +206,7 @@
   import {
     canonicalEvidenceTraceRef,
     focusedLiveSourceTargetForTrace,
-    loadedSourceDataContainsTraceRef,
+    sourceDataContainsTraceRef,
     sourceReturnContextIsActive,
     sourceScopeForEvidence,
     type EvidenceHighlightToken,
@@ -333,6 +344,7 @@
   let youtubeTranscriptRequestKey = "";
   let groupLiveItemsBySource = $state<Record<number, SourceItem[]>>({});
   let groupLiveTranscriptSegmentsBySource = $state<Record<number, YoutubeTranscriptSegment[]>>({});
+  let groupLiveTranscriptCursorsBySource = $state<Record<number, YoutubeTranscriptSegmentCursor | null>>({});
   let groupLiveCursorsBySource = $state<Record<number, number | null>>({});
   let groupLiveHasMoreBySource = $state<Record<number, boolean>>({});
   let groupLiveLoadingBySource = $state<Record<number, boolean>>({});
@@ -544,21 +556,7 @@
   function currentSourceJobs() {
     const source = currentSource();
     if (!source) return [];
-
-    const directJobs = sourceJobsBySource[source.id] ?? [];
-    const seenSourceJobIds = new Set(directJobs.map((job) => job.job_id));
-    const relatedJobs = Object.values(sourceJobsBySource)
-      .flat()
-      .filter((job) => {
-        if (job.related_source_id === source.id) {
-          if (seenSourceJobIds.has(job.job_id)) return false;
-          seenSourceJobIds.add(job.job_id);
-          return true;
-        }
-        return false;
-      });
-
-    return [...directJobs, ...relatedJobs].sort((left, right) => right.started_at - left.started_at);
+    return sourceActivityJobs(source.id, sourceJobsBySource);
   }
 
   function currentTakeoutRecovery() {
@@ -641,6 +639,25 @@
 
   function currentReportLaunchDisabledReason() {
     return getReportLaunchDisabledReason(currentReportLaunchState());
+  }
+
+  function currentSourceReaderProps(): SourceReaderSurfaceBinding {
+    return sourceReaderSurfaceState({
+      youtubeTranscriptSegments,
+      groupLiveItemsBySource,
+      groupLiveTranscriptSegmentsBySource,
+      selectedGroupSourceId,
+      sourceTopics,
+      loadingSourceTopics,
+      selectedTopicKey,
+      showTopicSelector: shouldShowTopicSelector(),
+      sourceItemsHasMore,
+      onLoadMoreSourceItems: () => void loadMoreSourceItems(),
+      onLoadMoreYoutubeTranscriptSegments: () => void loadMoreYoutubeTranscriptSegments(),
+      onLoadLiveGroupSourcePage: (sourceId: number) => void loadLiveGroupSourcePage(sourceId),
+      onChangeSelectedGroupSourceId: changeSelectedGroupSourceId,
+      onChangeSelectedTopicKey: (value: string) => void changeSelectedTopicKey(value),
+    });
   }
 
   $effect(() => {
@@ -1132,6 +1149,7 @@
   function resetGroupLiveReader() {
     groupLiveItemsBySource = {};
     groupLiveTranscriptSegmentsBySource = {};
+    groupLiveTranscriptCursorsBySource = {};
     groupLiveCursorsBySource = {};
     groupLiveHasMoreBySource = {};
     groupLiveLoadingBySource = {};
@@ -1570,7 +1588,7 @@
             selectedTraceRef: canonicalRef,
           }),
         );
-        const containsTarget = loadedSourceDataContainsTraceRef(
+        const containsTarget = sourceDataContainsTraceRef(
           { kind: "snapshot", items: snapshotItems },
           canonicalRef,
           sourceScope,
@@ -1593,157 +1611,67 @@
         completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
         return;
       }
-      const aroundItemId = liveTarget.kind === "source_item" ? liveTarget.aroundItemId : trace.item_id;
-      const aroundStartMs = liveTarget.kind === "youtube_transcript" ? liveTarget.aroundStartMs : null;
       const source = sourceCatalog.find((candidate) => candidate.id === trace.source_id);
       if (!source) {
         completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
         return;
       }
 
-      if (analysisScope === "source_group") {
-        groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: true };
-        if (liveTarget.kind === "youtube_transcript") {
-          if (source.sourceType !== "youtube" || source.sourceSubtype !== "video") {
-            completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
-            return;
-          }
-
-          const page = await listYoutubeTranscriptSegments({
-            sourceId: trace.source_id,
-            after: null,
-            limit: 80,
-            searchQuery: null,
-            aroundStartMs: liveTarget.aroundStartMs,
-          });
-          if (!currentFocusMatchesRequest(focusRequest)) {
-            return;
-          }
-          const containsTarget = loadedSourceDataContainsTraceRef(
-            { kind: "youtube_transcript", segments: page.segments },
-            canonicalRef,
-            sourceScope,
-          );
-          selectedGroupSourceId = trace.source_id;
-          groupLiveTranscriptSegmentsBySource = {
-            ...groupLiveTranscriptSegmentsBySource,
-            [trace.source_id]: page.segments,
-          };
-          groupLiveHasMoreBySource = {
-            ...groupLiveHasMoreBySource,
-            [trace.source_id]: false,
-          };
-          return handleFocusedSourceLoadResult({
-            traceSourceId: trace.source_id,
-            requestId,
-            sourceScope,
-            sourceViewBasis: decision.sourceViewBasis,
-            traceRef: canonicalRef,
-            containsTarget,
-          });
-        }
-
-        const items = await listSourceItems({
-          sourceId: trace.source_id,
-          limit: 40,
-          beforePublishedAt: null,
-          topicFilter: null,
-          aroundItemId,
-        });
-        if (!currentFocusMatchesRequest(focusRequest)) {
-          return;
-        }
-        const containsTarget = loadedSourceDataContainsTraceRef(
-          { kind: "source_items", items },
-          canonicalRef,
-          sourceScope,
-        );
-        selectedGroupSourceId = trace.source_id;
-        groupLiveItemsBySource = { ...groupLiveItemsBySource, [trace.source_id]: items };
-        groupLiveCursorsBySource = {
-          ...groupLiveCursorsBySource,
-          [trace.source_id]: items.at(-1)?.publishedAt ?? null,
-        };
-        groupLiveHasMoreBySource = {
-          ...groupLiveHasMoreBySource,
-          [trace.source_id]: items.length === 40,
-        };
-        return handleFocusedSourceLoadResult({
-          traceSourceId: trace.source_id,
-          requestId,
-          sourceScope,
-          sourceViewBasis: decision.sourceViewBasis,
-          traceRef: canonicalRef,
-          containsTarget,
-        });
-      }
-
-      if (liveTarget.kind === "source_item") {
-        loadingItems = true;
-        const items = await listSourceItems({
-          sourceId: trace.source_id,
-          limit: SOURCE_ITEMS_PAGE_LIMIT,
-          beforePublishedAt: null,
-          beforeCursor: null,
-          historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",
-          topicFilter: null,
-          aroundItemId,
-        });
-        if (!currentFocusMatchesRequest(focusRequest)) {
-          return;
-        }
-        const containsTarget = loadedSourceDataContainsTraceRef(
-          { kind: "source_items", items },
-          canonicalRef,
-          sourceScope,
-        );
-        applySourceItemsPage(items, false);
-        return handleFocusedSourceLoadResult({
-          traceSourceId: trace.source_id,
-          requestId,
-          sourceScope,
-          sourceViewBasis: decision.sourceViewBasis,
-          traceRef: canonicalRef,
-          containsTarget,
-        });
-      }
-
-      if (source.sourceType === "youtube" && source.sourceSubtype === "video") {
+      const groupFocus = analysisScope === "source_group";
+      if (groupFocus) groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: true };
+      else if (liveTarget.kind === "source_item") loadingItems = true;
+      else {
         youtubeTranscriptSearch = "";
-        const requestKey = `${trace.source_id}:`;
-        youtubeTranscriptRequestKey = requestKey;
+        youtubeTranscriptRequestKey = `${trace.source_id}:`;
         loadingYoutubeTranscriptSegments = true;
-        const page = await listYoutubeTranscriptSegments({
-          sourceId: trace.source_id,
-          after: null,
-          limit: 80,
-          searchQuery: null,
-          aroundStartMs,
-        });
-        if (!currentFocusMatchesRequest(focusRequest)) {
-          return;
-        }
-        if (youtubeTranscriptRequestKey !== requestKey) {
-          completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
-          return;
-        }
-        const containsTarget = loadedSourceDataContainsTraceRef(
-          { kind: "youtube_transcript", segments: page.segments },
-          canonicalRef,
-          sourceScope,
-        );
-        youtubeTranscriptSegments = page.segments;
-        youtubeTranscriptCursor = page.nextCursor;
-        youtubeTranscriptHasMore = page.hasMore;
-        return handleFocusedSourceLoadResult({
-          traceSourceId: trace.source_id,
-          requestId,
-          sourceScope,
-          sourceViewBasis: decision.sourceViewBasis,
-          traceRef: canonicalRef,
-          containsTarget,
-        });
       }
+
+      let revealed = false;
+      const focused = await fetchBeforeReaderReveal(
+        () => fetchFocusedLiveSourceData({
+          source,
+          target: liveTarget,
+          canonicalRef,
+          scope: sourceScope,
+          itemLimit: groupFocus ? 40 : SOURCE_ITEMS_PAGE_LIMIT,
+          historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",
+          listSourceItems,
+          listYoutubeTranscriptSegments,
+        }),
+        (result) => {
+          if (!currentFocusMatchesRequest(focusRequest) || result.kind === "unsupported") return;
+          revealed = true;
+          if (groupFocus && result.kind === "source_items") {
+            selectedGroupSourceId = trace.source_id;
+            groupLiveItemsBySource = { ...groupLiveItemsBySource, [trace.source_id]: result.page.items };
+            groupLiveCursorsBySource = { ...groupLiveCursorsBySource, [trace.source_id]: result.page.items.at(-1)?.publishedAt ?? null };
+            groupLiveHasMoreBySource = { ...groupLiveHasMoreBySource, [trace.source_id]: result.page.items.length === 40 };
+          } else if (groupFocus && result.kind === "youtube_transcript") {
+            selectedGroupSourceId = trace.source_id;
+            groupLiveTranscriptSegmentsBySource = { ...groupLiveTranscriptSegmentsBySource, [trace.source_id]: result.page.segments };
+            groupLiveTranscriptCursorsBySource = { ...groupLiveTranscriptCursorsBySource, [trace.source_id]: result.page.nextCursor };
+            groupLiveHasMoreBySource = { ...groupLiveHasMoreBySource, [trace.source_id]: result.page.hasMore };
+          } else if (result.kind === "source_items") {
+            applySourceItemsPage(result.page.items, false);
+          } else {
+            youtubeTranscriptSegments = result.page.segments;
+            youtubeTranscriptCursor = result.page.nextCursor;
+            youtubeTranscriptHasMore = result.page.hasMore;
+          }
+        },
+      );
+      if (!revealed || focused.kind === "unsupported") {
+        if (focused.kind === "unsupported") completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
+        return;
+      }
+      return handleFocusedSourceLoadResult({
+        traceSourceId: trace.source_id,
+        requestId,
+        sourceScope,
+        sourceViewBasis: decision.sourceViewBasis,
+        traceRef: canonicalRef,
+        containsTarget: focused.containsTarget,
+      });
     } catch (error) {
       failFocusedSourceLoad(trace.source_id, focusRequest, error);
     } finally {
@@ -1973,17 +1901,17 @@
     loadingItems = true;
     sourceItemsError = null;
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
-    const isTelegramSource = source?.sourceType === "telegram";
     try {
-      const items = await listSourceItems({
-        sourceId,
+      const page = await fetchSourceItemsPage({
+        source: source ?? { id: sourceId, sourceType: "unknown" },
         limit: SOURCE_ITEMS_PAGE_LIMIT,
         beforePublishedAt: null,
         beforeCursor: null,
-        historyScope: isTelegramSource ? telegramHistoryScope : "current",
+        historyScope: telegramHistoryScope,
         topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
+        listSourceItems,
       });
-      applySourceItemsPage(items, false);
+      applySourceItemsPage(page.items, false);
     } catch (error) {
       resetSourceItemsReader();
       sourceItemsError = formatAppError("loading source messages", error);
@@ -2006,15 +1934,16 @@
     loadingItems = true;
     sourceItemsError = null;
     try {
-      const items = await listSourceItems({
-        sourceId: source.id,
+      const page = await fetchSourceItemsPage({
+        source,
         limit: SOURCE_ITEMS_PAGE_LIMIT,
-        beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt,
-        beforeCursor: isTelegramSource ? sourceItemsCursor : null,
-        historyScope: isTelegramSource ? telegramHistoryScope : "current",
+        beforePublishedAt: sourceItemsBeforePublishedAt,
+        beforeCursor: sourceItemsCursor,
+        historyScope: telegramHistoryScope,
         topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
+        listSourceItems,
       });
-      applySourceItemsPage(items, true);
+      applySourceItemsPage(page.items, true);
     } catch (error) {
       sourceItemsError = formatAppError("loading more source messages", error);
       status = sourceItemsError;
@@ -2035,11 +1964,12 @@
     youtubeTranscriptRequestKey = requestKey;
     loadingYoutubeTranscriptSegments = true;
     try {
-      const page = await listYoutubeTranscriptSegments({
+      const page = await loadYoutubeTranscriptPage({
         sourceId,
         after: null,
         limit: 80,
         searchQuery: youtubeTranscriptSearch.trim() || null,
+        listYoutubeTranscriptSegments,
       });
       if (youtubeTranscriptRequestKey !== requestKey) {
         return;
@@ -2069,11 +1999,12 @@
     const requestKey = `${source.id}:${youtubeTranscriptSearch.trim()}`;
     loadingYoutubeTranscriptSegments = true;
     try {
-      const page = await listYoutubeTranscriptSegments({
+      const page = await loadYoutubeTranscriptPage({
         sourceId: source.id,
         after: youtubeTranscriptCursor,
         limit: 80,
         searchQuery: youtubeTranscriptSearch.trim() || null,
+        listYoutubeTranscriptSegments,
       });
       if (youtubeTranscriptRequestKey !== requestKey) {
         return;
@@ -2104,24 +2035,38 @@
     if (groupLiveLoadingBySource[sourceId]) return;
     groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [sourceId]: true };
     try {
-      const beforePublishedAt = groupLiveCursorsBySource[sourceId] ?? null;
-      const items = await listSourceItems({
-        sourceId,
-        limit: 40,
-        beforePublishedAt,
-        topicFilter: null,
+      const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+      if (!source) return;
+      const transcriptActive = groupLiveTranscriptSegmentsBySource[sourceId] !== undefined;
+      const result = await fetchLiveGroupReaderPage({
+        source,
+        transcriptActive,
+        transcriptCursor: groupLiveTranscriptCursorsBySource[sourceId] ?? null,
+        beforePublishedAt: groupLiveCursorsBySource[sourceId] ?? null,
+        listSourceItems,
+        listYoutubeTranscriptSegments,
       });
+      if (result.kind === "youtube_transcript") {
+        groupLiveTranscriptSegmentsBySource = {
+          ...groupLiveTranscriptSegmentsBySource,
+          [sourceId]: [...(groupLiveTranscriptSegmentsBySource[sourceId] ?? []), ...result.page.segments],
+        };
+        groupLiveTranscriptCursorsBySource = { ...groupLiveTranscriptCursorsBySource, [sourceId]: result.page.nextCursor };
+        groupLiveHasMoreBySource = { ...groupLiveHasMoreBySource, [sourceId]: result.page.hasMore };
+        return;
+      }
+      const page = result.page;
       groupLiveItemsBySource = {
         ...groupLiveItemsBySource,
-        [sourceId]: [...(groupLiveItemsBySource[sourceId] ?? []), ...items],
+        [sourceId]: [...(groupLiveItemsBySource[sourceId] ?? []), ...page.items],
       };
       groupLiveCursorsBySource = {
         ...groupLiveCursorsBySource,
-        [sourceId]: items.at(-1)?.publishedAt ?? beforePublishedAt,
+        [sourceId]: page.nextBeforePublishedAt,
       };
       groupLiveHasMoreBySource = {
         ...groupLiveHasMoreBySource,
-        [sourceId]: items.length === 40,
+        [sourceId]: page.hasMore,
       };
     } catch (error) {
       status = formatAppError("loading group source material", error);
@@ -2256,42 +2201,15 @@
     youtubeDetailError = null;
     loadingYoutubeDetail = true;
     try {
-      if (source.sourceSubtype === "playlist") {
-        const detail = await getYoutubePlaylistDetail(source.id);
-        if (!youtubeDetailRequestGate.isCurrent(request)) {
-          return;
-        }
-        youtubePlaylistDetail = detail;
-        youtubeVideoDetail = null;
-        youtubeSummaries = {
-          ...youtubeSummaries,
-          [source.id]: detail.summary,
-        };
-        youtubeDetailError = null;
-      } else {
-        const detail = await getYoutubeVideoDetail(source.id);
-        if (!youtubeDetailRequestGate.isCurrent(request)) {
-          return;
-        }
-        youtubeVideoDetail = detail;
-        youtubePlaylistDetail = null;
-        youtubeSummaries = {
-          ...youtubeSummaries,
-          [source.id]: detail.summary,
-        };
-        youtubeDetailError = null;
-      }
-    } catch (error) {
+      const outcome = await resolveYoutubeDetailForSource(source, { getYoutubeVideoDetail, getYoutubePlaylistDetail });
       if (!youtubeDetailRequestGate.isCurrent(request)) {
         return;
       }
-      youtubeVideoDetail = null;
-      youtubePlaylistDetail = null;
-      youtubeDetailError = {
-        sourceId: source.id,
-        sourceSubtype: source.sourceSubtype,
-        message: formatAppError("loading YouTube detail", error),
-      };
+      youtubeVideoDetail = outcome.videoDetail;
+      youtubePlaylistDetail = outcome.playlistDetail;
+      youtubeDetailError = outcome.error;
+      const summary = outcome.videoDetail?.summary ?? outcome.playlistDetail?.summary;
+      if (summary) youtubeSummaries = { ...youtubeSummaries, [source.id]: summary };
     } finally {
       if (youtubeDetailRequestGate.complete(request)) {
         loadingYoutubeDetail = false;
@@ -3171,14 +3089,11 @@
     {...reportCanvasRuntimeProps}
     {runSnapshotMessages}
     hasMoreRunSnapshotMessages={runSnapshotHasMore}
-    {youtubeTranscriptSegments}
     {loadingYoutubeTranscriptSegments}
     {youtubeTranscriptHasMore}
     {youtubeTranscriptSearch}
-    {groupLiveItemsBySource}
-    {groupLiveTranscriptSegmentsBySource}
     {groupLiveHasMoreBySource}
-    {selectedGroupSourceId}
+    {...currentSourceReaderProps()}
     {selectedSnapshotSourceId}
     {periodFrom}
     {periodTo}
@@ -3210,12 +3125,7 @@
     {canCancelCurrentRun}
     {sourceItems}
     {sourceItemsError}
-    {sourceItemsHasMore}
     {loadingItems}
-    {sourceTopics}
-    {loadingSourceTopics}
-    {selectedTopicKey}
-    showTopicSelector={shouldShowTopicSelector()}
     {telegramHistoryScope}
     {selectedTraceRef}
     highlightToken={transientSourceHighlight}
@@ -3253,13 +3163,8 @@
     {isGroupSourceSelected}
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
-    onLoadMoreSourceItems={() => void loadMoreSourceItems()}
     onChangeTelegramHistoryScope={changeTelegramHistoryScope}
-    onLoadMoreYoutubeTranscriptSegments={() => void loadMoreYoutubeTranscriptSegments()}
-    onLoadLiveGroupSourcePage={(sourceId) => void loadLiveGroupSourcePage(sourceId)}
-    onChangeSelectedGroupSourceId={changeSelectedGroupSourceId}
     onChangeSelectedSnapshotSourceId={changeSelectedSnapshotSourceId}
-    onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}
     onChangePeriodFrom={(value) => (periodFrom = value)}
     onChangePeriodTo={(value) => (periodTo = value)}
     onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}

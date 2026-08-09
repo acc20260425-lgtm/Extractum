@@ -32,8 +32,8 @@ it("library prototype contract > uses the TreeDataGrid wrapper for the collapsib
   expect(screen.getByRole("complementary", { name: "Library filters" })).toBeTruthy();
   expect(screen.getByTestId("svar-grid").dataset.tree).toBe("true");
   expect(JSON.parse(screen.getByTestId("svar-grid").dataset.selected ?? "[]")).toEqual(["all"]);
-  await fireEvent.click(screen.getByRole("button", { name: "Select first grid row" }));
-  expect(onSelectedFilterIdChange).toHaveBeenCalledWith("all");
+  await fireEvent.click(screen.getByRole("row", { name: "provider:youtube" }));
+  expect(onSelectedFilterIdChange).toHaveBeenCalledWith("provider:youtube");
   await fireEvent.click(screen.getByRole("button", { name: "Collapse Library filters" }));
   expect(onCollapsedChange).toHaveBeenCalledWith(true);
 });

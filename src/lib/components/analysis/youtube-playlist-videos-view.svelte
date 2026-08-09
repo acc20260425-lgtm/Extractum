@@ -5,6 +5,7 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import { isRetryableYoutubeAvailabilityStatus } from "$lib/youtube-source-policy";
+  import { youtubePlaylistProblemView } from "$lib/youtube-source-view-model";
   import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
 
   let {
@@ -33,6 +34,7 @@
 
   const summary = $derived(playlist?.summary ?? null);
   const items = $derived(playlist?.items ?? []);
+  const playlistProblem = $derived(youtubePlaylistProblemView(playlistDetailError));
 
   function availabilityLabel(value: string | null | undefined) {
     return value ? value.replaceAll("_", " ") : "unknown";
@@ -80,14 +82,14 @@
 
   {#if loading}
     <StatusMessage tone="muted" surface={false}>Loading YouTube playlist...</StatusMessage>
-  {:else if playlistDetailError}
+  {:else if playlistProblem}
     <StatusMessage tone="error" surface={false}>
-      <strong>Playlist metadata needs attention</strong>
-      <span>This is not an empty playlist. {playlistDetailError}</span>
+      <strong>{playlistProblem.heading}</strong>
+      <span>{playlistProblem.message}</span>
     </StatusMessage>
     <div class="playlist-actions">
       <Button size="sm" variant="secondary" onclick={onSyncPlaylist}>
-        <RefreshCw size={14} aria-hidden="true" /> Retry playlist sync
+        <RefreshCw size={14} aria-hidden="true" /> {playlistProblem.retryLabel}
       </Button>
     </div>
   {:else if !playlist || !summary}

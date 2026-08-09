@@ -34,11 +34,9 @@ it("SVAR grid APIs stay inside Extractum wrappers", async () => {
   expect(JSON.parse(dataGrid.dataset.selected ?? "[]")).toEqual(["1"]);
   expect(dataGrid.dataset.rowStyle).toBe("is-disabled is-connected status-ready");
   expect(dataGrid.dataset.overlay).toBe("");
-  expect(JSON.parse(dataGrid.dataset.columns ?? "[]")).toEqual([
-    { id: "createdAt", treetoggle: false, hasTemplate: true },
-  ]);
-  expect(screen.getByLabelText("Formatted grid date").textContent).not.toBe("");
-  await fireEvent.click(screen.getByRole("button", { name: "Select first grid row" }));
+  expect(JSON.parse(dataGrid.dataset.columnIds ?? "[]")).toEqual(["createdAt"]);
+  expect(JSON.parse(dataGrid.dataset.data ?? "[]")[0]).toMatchObject({ id: "row-1", createdAt: "2026-08-08T12:34:00Z" });
+  await fireEvent.click(screen.getByRole("row", { name: "row-1" }));
   expect(selected).toEqual([["row-1"]]);
 
   dataView.unmount();
@@ -48,21 +46,23 @@ it("SVAR grid APIs stay inside Extractum wrappers", async () => {
   emptyView.unmount();
   const treeSelected: Array<string | null> = [];
   const treeView = render(TreeDataGrid, {
-    rows: [{ id: "tree-1", label: "Tree" }],
+    rows: [{ id: "tree-1", label: "Tree" }, { id: "tree-disabled", label: "Disabled", disabled: true }, { id: "tree-2", label: "Other" }],
     selectedRowId: "tree-1",
     onSelectedRowIdChange: (id) => treeSelected.push(id),
   });
   const treeGrid = screen.getByTestId("svar-grid");
   expect(screen.getByTestId("svar-locale").dataset.words).toBe(JSON.stringify({ coreWord: "core", gridWord: "grid" }));
   expect(screen.getByTestId("svar-willow").dataset.fonts).toBe("false");
-  expect(treeGrid.dataset.tree).toBe("true");
-  expect(treeGrid.dataset.select).toBe("true");
-  expect(treeGrid.dataset.multiselect).toBe("false");
+  expect({ tree: treeGrid.dataset.tree, select: treeGrid.dataset.select, multiselect: treeGrid.dataset.multiselect }).toEqual({ tree: "true", select: "true", multiselect: "false" });
   expect(JSON.parse(treeGrid.dataset.selected ?? "[]")).toEqual(["tree-1"]);
   expect(JSON.parse(treeGrid.dataset.sizes ?? "{}")).toEqual({ rowHeight: 30, headerHeight: 30, columnWidth: 140 });
-  expect(JSON.parse(treeGrid.dataset.columns ?? "[]")[0]).toMatchObject({ id: "label", treetoggle: true });
-  await fireEvent.click(screen.getByRole("button", { name: "Select first grid row" }));
-  expect(treeSelected).toEqual(["tree-1"]);
+  expect(JSON.parse(treeGrid.dataset.columnIds ?? "[]")).toEqual(["label", "count"]);
+  expect(JSON.parse(treeGrid.dataset.rowIds ?? "[]")).toEqual(["tree-1", "tree-disabled", "tree-2"]);
+  await fireEvent.click(screen.getByRole("row", { name: "tree-1" }));
+  await fireEvent.click(screen.getByRole("row", { name: "tree-disabled" }));
+  expect({ selected: JSON.parse(treeGrid.dataset.selected ?? "[]"), callbacks: treeSelected }).toEqual({ selected: ["tree-1"], callbacks: [] });
+  await fireEvent.click(screen.getByRole("row", { name: "tree-2" }));
+  expect({ selected: JSON.parse(treeGrid.dataset.selected ?? "[]"), callbacks: treeSelected }).toEqual({ selected: ["tree-2"], callbacks: ["tree-2"] });
 
   treeView.unmount();
   const api = {

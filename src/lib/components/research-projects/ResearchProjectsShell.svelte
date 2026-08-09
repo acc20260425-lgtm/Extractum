@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ComponentProps } from "svelte";
+  import { flushSync, type ComponentProps } from "svelte";
   import Inspector from "./Inspector.svelte";
   import ProjectRailPanel from "./ProjectRailPanel.svelte";
   import ProjectTabs from "./ProjectTabs.svelte";
@@ -55,6 +55,17 @@
     onKeyboardEscape?: () => boolean;
   } = $props();
 
+  let constrainedLayout = $state(false);
+
+  function observeShellWidth(node: HTMLElement) {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      flushSync(() => { constrainedLayout = (entry?.contentRect.width ?? node.clientWidth) <= 1160; });
+    });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
   function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key !== "Escape" || !inspector || inspector.open === false) return;
     inspector.onToggle?.();
@@ -63,7 +74,7 @@
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
-<div class="research-projects-shell">
+<div class="research-projects-shell" role="application" aria-label="Research projects" data-constrained={constrainedLayout} use:observeShellWidth>
   <aside class="research-projects-shell__rail">
     <ProjectRailPanel {...railPanel} />
   </aside>
@@ -80,7 +91,7 @@
         <div class="research-projects-shell__section-placeholder">{sectionPlaceholder}</div>
       {:else}
         {#if filterBar}
-          <div class="research-projects-shell__statsbar">
+          <div class="research-projects-shell__statsbar" role="status" aria-label="Source statistics">
             <SourcesFilterBar {...filterBar} />
           </div>
         {/if}
@@ -116,7 +127,7 @@
   </main>
 
   {#if inspector}
-    {#if inspector.open !== false}
+    {#if inspector.open !== false && constrainedLayout}
       <button
         class="research-projects-shell__inspector-backdrop"
         data-slot="button"
@@ -127,6 +138,9 @@
     {/if}
     <aside
       class="research-projects-shell__inspector"
+      role={inspector.open !== false && constrainedLayout ? "dialog" : undefined}
+      aria-label={inspector.open !== false && constrainedLayout ? "Source inspector" : undefined}
+      aria-modal={inspector.open !== false && constrainedLayout ? "true" : undefined}
       class:research-projects-shell__inspector--open={inspector.open !== false}
       class:research-projects-shell__inspector--closed={inspector.open === false}
     >

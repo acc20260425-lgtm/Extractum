@@ -151,3 +151,46 @@ export function youtubeCorpusOptionViews(detail: YoutubeVideoDetail | null): You
     },
   ];
 }
+
+export function youtubePlaylistProblemView(error: string | null) {
+  if (!error) return null;
+  return {
+    heading: "Playlist metadata needs attention",
+    message: `This is not an empty playlist. ${error}`,
+    retryLabel: "Retry playlist sync",
+  };
+}
+
+export function youtubeReaderSearchLabel(reader: "comments" | "transcript") {
+  return reader === "comments" ? "Search comments" : "Search transcript";
+}
+
+export function youtubeEvidenceSectionLabels() {
+  return {
+    inventory: "Evidence inventory",
+    activity: "YouTube provider steps",
+    inventoryRole: "YouTube evidence inventory",
+    activityRole: "YouTube source activity",
+  };
+}
+
+export function youtubeDetailBoundaryState(
+  source: Pick<Source, "id" | "sourceType">,
+  detail: YoutubeVideoDetail | YoutubePlaylistDetail | null,
+  error: YoutubeDetailErrorState,
+) {
+  const summary = detail?.summary ?? null;
+  const scopedError = error?.sourceId === source.id ? error : null;
+  return {
+    reportSetupProblem: scopedError?.message ?? null,
+    sourceBrowserError: scopedError,
+    activity: {
+      visible: source.sourceType === "youtube",
+      errorMessage: scopedError?.message ?? null,
+      badgeLabel: scopedError ? "attention" : "current source",
+      metadataStatus: summary ? "Detail loaded" : "Detail not loaded",
+      transcriptStatus: summary ? `${summary.captions.label} - ${summary.captions.segmentCount} segments` : "Unknown",
+      commentsStatus: summary ? `${summary.comments.label} - ${summary.comments.itemCount} comments` : "Unknown",
+    },
+  };
+}

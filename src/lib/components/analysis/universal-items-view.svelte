@@ -18,6 +18,7 @@
   import { liveSourceItemRef } from "$lib/source-reader-model";
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem } from "$lib/types/sources";
+  import { youtubeEvidenceSectionLabels } from "$lib/youtube-source-view-model";
 
   const ALL_KINDS = "__all_source_item_kinds__";
   const KNOWN_ITEM_KINDS = new Set([
@@ -26,6 +27,7 @@
     "youtube_comment",
     "youtube_description",
   ]);
+  const youtubeLabels = youtubeEvidenceSectionLabels();
 
   let {
     items,
@@ -176,7 +178,7 @@
   {/if}
 
   {#if hasYoutubeEvidenceItems}
-    <div class="evidence-inventory-label">Evidence inventory</div>
+    <div class="evidence-inventory-label" aria-label={youtubeLabels.inventoryRole}>{youtubeLabels.inventory}</div>
   {/if}
 
   {#if !loading && items.length === 0}

@@ -160,7 +160,7 @@ export function focusedLiveSourceTargetForTrace(
   return { kind: "unsupported", reason: "Trace has no focusable source item or timestamp." };
 }
 
-export function loadedSourceDataContainsTraceRef(
+export function sourceDataContainsTraceRef(
   data: LoadedEvidenceSourceData,
   canonicalTraceRef: string,
   sourceScope: EvidenceSourceScope,

@@ -86,7 +86,7 @@ export function focusedSourceRequestMatches(request: FocusedSourceRequest, curre
 export function focusedSourceLoadExit(
   request: FocusedSourceRequest,
   current: FocusedSourceCurrent,
-  outcome: { kind: "missing_target"; reason?: string } | { kind: "failed"; error: unknown },
+  outcome: { kind: "success" } | { kind: "missing_target"; reason?: string } | { kind: "failed"; error: unknown },
 ) {
   if (!focusedSourceRequestMatches(request, current)) {
     return { accepted: false, clearPendingFocus: false, clearHighlight: false, clearLoading: false, status: "" };
@@ -94,9 +94,11 @@ export function focusedSourceLoadExit(
   return {
     accepted: true,
     clearPendingFocus: true,
-    clearHighlight: true,
+    clearHighlight: outcome.kind !== "success",
     clearLoading: true,
-    status: outcome.kind === "missing_target"
+    status: outcome.kind === "success"
+      ? ""
+      : outcome.kind === "missing_target"
       ? "Selected evidence was not found in the loaded source window."
       : formatAppError("loading selected source evidence", outcome.error),
   };
