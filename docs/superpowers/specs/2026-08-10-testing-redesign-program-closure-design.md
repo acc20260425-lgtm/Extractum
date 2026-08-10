@@ -2,7 +2,7 @@
 
 **If a closure goal requires a new mechanism, exclude the goal; do not add the mechanism.**
 
-**Status:** Design boundary approved; written specification awaiting user review.
+**Status:** Specification approved for implementation planning.
 
 **Baseline:** `c076c002a8debcce4a5bc71226077c03884367e7`, the clean commit that records Slice 3C completion.
 
@@ -31,10 +31,10 @@ schema.
 
 | Surface | Baseline | Required closure state |
 | --- | ---: | --- |
-| `testing/` | 29 files, 2,892,320 bytes, 30,043 physical lines | absent |
-| `scripts/testing/` | 21 files, 722,288 bytes, 13,349 physical lines | strictly fewer files and lines |
+| `testing/` | 29 files, 2,881,023 blob bytes, 30,043 physical lines | absent |
+| `scripts/testing/` | 21 files, 708,939 blob bytes, 13,349 physical lines | strictly fewer files and lines |
 | Registered RepositoryIndex rules | 11 | exactly 3 |
-| Active Testing Redesign corpus | 18 files, 527,699 bytes, 7,901 physical lines | absent from the repository |
+| Active Testing Redesign corpus | 18 files, 519,798 blob bytes, 7,901 physical lines | absent from the repository |
 | Final complete gate | PASS in 818.8 seconds | PASS; duration recorded, not used as a threshold |
 
 The categories are evaluated independently. Documentation deletion cannot
@@ -61,6 +61,13 @@ Every audited item receives one of two final outcomes:
    and evidence is insufficient to remove it safely. The closure may only
    subtract transition imports, branches, rules, or assertions from a retained
    file; it may not add or generalize its mechanism.
+
+One bounded ownership-preservation edit is explicit: when the transition
+validator is deleted, the existing real-tree RepositoryIndex test case may be
+retargeted from the six deleted analysis rules to `registeredRuleIds`. After
+the rule audit, that same case executes only the three retained rules. This
+does not authorize a new test case, file, evaluator, rule, runner, execution
+layer, or generalized engine ability.
 
 There is no deferred third state and no closure backlog. If improving,
 rewriting, or replacing an item would require a new mechanism, that improvement
@@ -310,11 +317,13 @@ with every named command checked against `package.json`.
 The current-state documentation must state the deliberately absent guarantees:
 
 - there is no 15-second fail-closed cross-stack selector;
-- changed/related Vitest selection does not cover Rust, Playwright, or OS
-  process surfaces and may under-select dynamic relationships;
-- there is no TestingManifest, NoTestAllowlist, runner census, source-contract
-  ledger, Nx integration, coverage ratchet, quarantine system, repeated
-  performance series, or stability-audit command;
+- changed/related selection stays inside Vitest, so it never covers Rust or
+  Playwright; it may select an OS-integration Vitest owner when statically
+  related, but does not guarantee complete OS-process coverage and may
+  under-select dynamic relationships;
+- the testing loop has no TestingManifest, NoTestAllowlist, runner census,
+  source-contract ledger, Nx integration, coverage ratchet, test-quarantine
+  system, repeated performance series, or stability-audit command;
 - an empty or unexpectedly small accelerated selection requires an explicit
   owner command or wider run;
 - dependency-cruiser is outside this program and may return only as a separate
