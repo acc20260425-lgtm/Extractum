@@ -147,7 +147,6 @@ fn main() {
     #[tokio::test]
     async fn cancellation_smoke_services_remain_test_only() {
         assert!(cfg!(test));
-        assert!(!cfg!(feature = "dev-fixtures"));
 
         let feature_off = external_fixture_probe("feature_off", false);
         assert!(

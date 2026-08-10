@@ -2,7 +2,7 @@
 
 ## Checkpoint status
 
-- Status: **BLOCKED / not complete**. The original final unsandboxed
+- Status: **COMPLETE**. The original final unsandboxed
   `npm.cmd run verify` exited 1 after 253.645 seconds at one component owner.
   After the bounded fix, the user explicitly amended Task 15 to permit exactly
   one corrective full run; it exited 1 after 460.9 seconds at `check:rustfmt`.
@@ -12,8 +12,12 @@
   After the isolated package passed, the user authorized one last full run;
   it reproduced exit 101 after 492.4 seconds at the same workspace Cargo-test
   package/binary boundary.
-- Consequently this record does not claim a successful workspace gate, Slice
-  3 completion, or readiness to begin Slice 4.
+- Subsequent exact feature-on diagnosis identified the deterministic Cargo
+  feature-unification cause. After the narrow owner correction, the user
+  authorized one completion run. A fresh process preflight found zero
+  competitors and `npm.cmd run verify` passed every gate with exit 0 after
+  818.8 seconds, including Cargo workspace tests and the final Git diff gate.
+- Slice 3 is complete and Slice 4 is ready to begin.
 - Environment: Windows PowerShell, Node.js 24.13.1, npm 11.12.1, rustc 1.95.0,
   and Cargo 1.95.0.
 
@@ -183,16 +187,87 @@ isolated random package failure. The truncated workspace output still does not
 identify the individual declaration, so this record does not claim a narrower
 root cause. Per authorization there is no retry or post-failure fix.
 
+Those statements describe the evidence available at that blocked checkpoint.
+The later exact feature-on reproduction below established the narrower cause
+before any correction was made.
+
+## Authorized blocker diagnosis and correction
+
+The workspace uses Cargo resolver v2. Its full test gate selects the root
+application and all workspace targets; the application's dev-dependency on
+`extractum-prompt-packs` enables the non-default `dev-fixtures` feature. Cargo
+therefore unified `dev-fixtures` into the prompt-pack library test binary. The
+isolated package command did not select that consumer edge and compiled the
+same binary feature-off, which explains the apparently contradictory results.
+
+The exact owner
+`public_api_tests::cancellation_smoke_services_remain_test_only` began with an
+unconditional assertion that `dev-fixtures` was disabled. It failed before
+either of its external Cargo probes whenever the workspace feature graph
+enabled the feature. An exact run of that owner with `--features dev-fixtures`
+selected one test and reproduced the panic at that assertion.
+
+The bounded correction removed only that invalid execution-context assertion.
+It did not change production exports or feature declarations. The same owner
+continues to prove all parts of SC-000474 through real external consumers and
+behavior:
+
+- a feature-off dependent crate cannot import the cancellation smoke services;
+- a `dev-fixtures` dependent crate can import them;
+- the real fixture seed/clear path tracks, cancels, and removes the run.
+
+Focused GREEN evidence was sequential:
+
+| Command | Result |
+| --- | --- |
+| Exact owner with `--features dev-fixtures` | PASS, 1/1. |
+| Exact owner with default/feature-off package selection | PASS, 1/1. |
+| `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features` | PASS. |
+| `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets` | PASS. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets` | PASS, 252/252. |
+
+## Successful completion verification
+
+A fresh unsandboxed PowerShell/CIM preflight enumerated `Win32_Process` with
+terminating error handling, filtered repository-owned Vitest, Playwright,
+Cargo, Rust, Vite, and Chromium processes by executable path or command line,
+and returned `Repository-owned competing process count: 0`. Bootstrap was not
+repeated because its prerequisite remained present and no sidecar-packaging
+input changed.
+
+The user then authorized exactly one complete `npm.cmd run verify`. It exited
+0 after 818.8 seconds:
+
+| Gate reached | Observation |
+| --- | --- |
+| sidecar prerequisite | PASS; 45,200,439-byte Windows binary present. |
+| transition validator | PASS; census 196/186/10, ledger 671/0. |
+| `test:unit` | PASS; 118 files and 989/989 tests. |
+| `test:component` | PASS; 62 files and 281/281 tests. |
+| `test:architecture` | PASS; 1 file and 2/2 tests. |
+| `test:integration:os` | PASS; 5 files and 44/44 tests. |
+| Gemini browser adapter Playwright | PASS; 79/79 tests. |
+| application Playwright | PASS; 3/3 tests. |
+| `npm.cmd run check` | PASS; 0 errors and 0 warnings. |
+| `npm.cmd run check:rustfmt` | PASS. |
+| Cargo workspace check | PASS. |
+| Cargo workspace test | PASS, including the feature-unified `extractum-prompt-packs` library binary. |
+| final Git diff gate | PASS. |
+
+This successful run is completion evidence, not a benchmark. No warmup,
+threshold, median, paired series, Nx decision, or performance conclusion was
+introduced.
+
 ## Handoff
 
 Nx remains unselected. This slice records no threshold, warmup, median,
 benchmark series, or performance conclusion. The retained wall-clock
 observations are the original 253.645-second failure and the explicitly
 authorized 460.9-second corrective failure, plus the explicitly authorized
-653.7-second final failure and 492.4-second last failure.
+653.7-second and 492.4-second failures, followed by the authorized 818.8-second
+successful completion run. These observations are historical correctness
+evidence and are not a timing series.
 
-Slice 4 remains the next planned slice, but it is not ready to begin from this
-checkpoint. Slice 3 requires a newly authorized completion path because all
-four retained full-gate observations failed and the last permitted run is
-spent. The prepared blocked checkpoint commit subject is
-`docs: record blocked slice 3c verification`.
+Slice 4 is the next planned slice and is ready to begin without Nx. The blocked
+checkpoint remains in history at `61c435f9`; the completion handoff subject is
+`docs: record slice 3c source-contract completion`.
