@@ -12,16 +12,37 @@ This document is the shortest current-state snapshot of the repository.
 
 ## Verification
 
-Run baseline full-project verification before committing or merging:
+Run complete local verification before committing or merging:
 
 ```bash
 npm.cmd run verify
 ```
 
-This command runs frontend tests, Svelte checks, Rust formatting, workspace
-Rust check/tests, and `git diff HEAD --check`. It is a baseline local gate; CI,
-Rust lint policy, and broader live Telegram/LLM event-flow validation remain
-separate stabilization work.
+The six JavaScript and browser owner commands are:
+
+```powershell
+npm.cmd run test:unit
+npm.cmd run test:component
+npm.cmd run test:architecture
+npm.cmd run test:integration:os
+npm.cmd run test:e2e
+npm.cmd run test:app:e2e
+```
+
+The first four commands own the `unit-node`, `component`, `architecture`, and
+`os-integration` Vitest projects. `test:e2e` owns the Gemini Browser adapter
+Playwright suite, and `test:app:e2e` owns the application Playwright suite.
+
+`npm.cmd run verify` runs, in order:
+
+1. `npm.cmd run check:gemini-browser-sidecar-binary`;
+2. all six owner commands above;
+3. `npm.cmd run check` and `npm.cmd run check:rustfmt`;
+4. `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
+5. `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
+6. `git diff HEAD --check`.
+
+The repository has no CI workflow; `verify` is the complete repository gate.
 
 Before the first `verify` in a fresh checkout or worktree, and after changing
 sidecar packaging, bootstrap its ignored Gemini Browser sidecar binary:
@@ -42,16 +63,29 @@ For the daily loop after a small change, choose the narrowest applicable command
 ```powershell
 npm.cmd run test:changed
 npm.cmd run test:changed:last
-npm.cmd run test:related -- src/lib/some-model.ts
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib runtime::tests::load_run_runtime_config_reads_api_and_browser_rows -- --exact
+npm.cmd run test:related -- src/lib/api/prompt-packs.ts
+npm.cmd run check
 ```
 
 The working-tree command sees uncommitted changes; the last-checkpoint command
 uses `HEAD~1`, which means the first parent after a merge. Use
 `npm.cmd run test -- --changed=<base>` when a different merge base is intended.
-Changed/related selection follows the module graph and may be empty or
-incomplete for dynamic relationships, so it is not a replacement for the full
-`npm.cmd run verify` gate.
+The changed and related accelerators run Vitest only; there is no cross-stack
+changed-file selection. Run `npm.cmd run check` for broad Svelte/TypeScript
+work.
+
+For a small Rust change, use the owning package explicitly while iterating:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact
+cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets
+cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets
+npm.cmd run test:rust:prompt-pack-runs
+```
+
+These changed, related, and focused Rust commands are accelerators. Use the six
+owner commands for their explicit surfaces and `npm.cmd run verify` as the
+completion gate.
 
 Canonical full Rust checks and tests use `--workspace --all-targets`. Focused
 root-package filters select `-p extractum` explicitly. Every workspace member
@@ -90,21 +124,6 @@ listening on the actual port before terminating it:
 netstat -ano | findstr ":<PORT>"
 Stop-Process -Id <LISTENING_PID> -Force
 ```
-
-For the YouTube Summary / Prompt Pack project-runs slice, use the narrower
-verification scripts while iterating:
-
-```bash
-npm run test:project-runs
-npm run test:rust:prompt-pack-runs
-npm run verify:project-runs
-```
-
-`test:project-runs` runs the focused Vitest contract/API tests.
-`test:rust:prompt-pack-runs` runs the focused Rust prompt-pack run tests.
-`verify:project-runs` composes those with the full Svelte/TypeScript check.
-The first Rust run after a clean target can be slow because Cargo warms the
-test target; subsequent runs are expected to be much faster.
 
 `src-tauri/crates/extractum-prompt-packs/src/` owns Prompt Pack lifecycle,
 YouTube Summary orchestration, validation, and prompt-pack-table persistence.

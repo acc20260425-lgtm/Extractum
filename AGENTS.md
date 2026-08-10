@@ -22,6 +22,8 @@
   - the most recent linear checkpoint: `npm.cmd run test:changed:last`;
   - a known frontend source: `npm.cmd run test:related -- <forward-or-backslash-path>`;
   - broad Svelte/TypeScript work: also run `npm.cmd run check`.
+- `test:changed`, `test:changed:last`, and `test:related` select Vitest tests
+  only; there is no cross-stack changed-file selection.
 - In a fresh checkout or worktree, and after sidecar-packaging changes, run
   `npm.cmd run bootstrap:testing` before `npm.cmd run verify`. The bootstrap
   may download the `pkg` runtime cache; `verify` only checks the sidecar
