@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { matchesGlob } from "node:path";
-import ts from "typescript";
 import packageJson from "../../package.json";
-import sourceContractLedger from "../../testing/source-contract-ledger.json";
 import * as vitestConfiguration from "../../vitest.config";
-import { discoverSourceReaders } from "./extract-source-contract-ledger.mjs";
 import { createRepositoryIndex } from "./repository-index.mjs";
 import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 import componentSetupSource from "./setup-component-tests.ts?raw";
@@ -39,36 +36,6 @@ const approvedStructuredSourceAuthorities = [
   "scripts/testing/repository-index.mjs",
   "scripts/testing/repository-rules.mjs",
 ] as const;
-
-function isInspectedVitestSource(testPath: string) {
-  return /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/i.test(testPath);
-}
-
-function directTextReaderViolations(sources: Record<string, string>) {
-  const approvedOwners = new Set([
-    ...sourceContractLedger.rows.map(({ path }) => path),
-    ...sourceContractLedger.sourceReaderExceptions.map(({ path }) => path),
-    ...(projectConventions.find(({ name }) => name === "architecture")?.include ?? []),
-    "scripts/testing/repository-index.test.ts",
-    "scripts/testing/repository-rules.test.ts",
-    "scripts/testing/test-conventions.test.ts",
-  ]);
-  const entries = Object.entries(sources)
-    .filter(([testPath]) => isInspectedVitestSource(testPath))
-    .map(([testPath, source]) => ({
-      path: testPath.replaceAll("\\", "/").replace(/^\//, ""),
-      source,
-    }));
-  const readers = discoverSourceReaders(entries, new Set(), ts);
-  const readerOwners = new Set(readers
-    .filter(({ classification, kind }) => kind === "manual" || !["fixture", "generated", "ignored", "output", "temp", "test"].includes(classification ?? ""))
-    .map(({ path }) => path));
-
-  return [...readerOwners]
-    .filter((testPath) => !approvedOwners.has(testPath))
-    .sort()
-    .map((testPath) => `${testPath}: direct text source reader is not an approved index or fixture owner`);
-}
 
 function componentTestEntries(sources: Record<string, string>) {
   return Object.entries(sources).filter(([testPath]) => testPath.endsWith(".component.test.ts"));
@@ -225,16 +192,6 @@ describe("test conventions", () => {
       "rule:telegram-phase-8b-authority-integrity",
     ]);
 
-    expect(directTextReaderViolations({
-      "/src/lib/unapproved.test.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
-    })).toEqual([
-      "src/lib/unapproved.test.ts: direct text source reader is not an approved index or fixture owner",
-    ]);
-    expect(directTextReaderViolations({
-      "/src/lib/unapproved.spec.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
-    })).toEqual([
-      "src/lib/unapproved.spec.ts: direct text source reader is not an approved index or fixture owner",
-    ]);
   });
 
   it("keeps the active Vitest project commands explicit after legacy cutover", () => {

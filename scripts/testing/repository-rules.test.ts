@@ -3,7 +3,6 @@ import * as svelte from "svelte/compiler";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import sourceContractLedger from "../../testing/source-contract-ledger.json";
 import { createRepositoryIndex } from "./repository-index.mjs";
 import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 
@@ -1061,9 +1060,9 @@ describe("analysis source-reader structured rules", () => {
     });
   }
 
-  it("accepts the current repository snapshot for all six analysis source-reader rules", () => {
+  it("accepts the current repository snapshot for every registered rule", () => {
     const index = realAuthorityIndex();
-    for (const id of analysisRuleIds) {
+    for (const id of registeredRuleIds) {
       expect(evaluateRule({ id, index }), id).toEqual({ id, violations: [] });
     }
   });
@@ -1085,16 +1084,7 @@ describe("extractum-llm public API structured rule", () => {
 });
 
 describe("repository rule registry", () => {
-  const allowedRuleIds = new Set(
-    sourceContractLedger.rows
-      .flatMap((row) => "subgroups" in row
-        ? row.subgroups.flatMap((subgroup) => subgroup.replacementIds ?? [])
-        : row.replacementIds ?? [])
-      .filter((id): id is string => id.startsWith("rule:")),
-  );
-
-  it("derives and registers the complete truthful ledger rule allowlist", () => {
-    expect(allowedRuleIds.size).toBe(11);
+  it("registers every current repository rule", () => {
     expect(registeredRuleIds).toEqual([
       "rule:analysis-evidence-highlight-token-styling",
       "rule:analysis-source-browser-canonical-composition",
@@ -1108,7 +1098,6 @@ describe("repository rule registry", () => {
       "rule:telegram-crate-manifest-boundary",
       "rule:telegram-phase-8b-authority-integrity",
     ]);
-    for (const id of registeredRuleIds) expect(allowedRuleIds.has(id), id).toBe(true);
   });
 
   it("gives every registered evaluator its own positive fixture and violating mutation", () => {

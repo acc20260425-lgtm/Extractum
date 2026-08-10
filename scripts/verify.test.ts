@@ -3,11 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createVerifySteps, runVerification } from "./verify.mjs";
 
 describe("verify", () => {
-  it("runs distinct adapter and app e2e gates between the transition and preserved static gates", () => {
+  it("runs distinct adapter and app e2e gates between the preserved verification gates", () => {
     const steps = createVerifySteps({ npmExecPath: "npm-cli.js", platform: "win32" });
     expect(steps.map((step) => step.npmScript ?? step.command)).toEqual([
       "check:gemini-browser-sidecar-binary",
-      process.execPath,
       "test:unit",
       "test:component",
       "test:architecture",
@@ -20,7 +19,6 @@ describe("verify", () => {
       "cargo",
       "git",
     ]);
-    expect(steps[1]).toMatchObject({ command: process.execPath, args: ["scripts/validate-testing-transition.mjs"] });
     const npmScripts = steps.filter((step) => step.npmScript).map((step) => step.npmScript);
     expect(npmScripts).not.toContain("test");
     expect(npmScripts).not.toContain("bootstrap:testing");

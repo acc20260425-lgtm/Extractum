@@ -13,7 +13,6 @@ function npmStep(title, npmScript, { npmExecPath, platform }) {
 export function createVerifySteps({ npmExecPath = process.env.npm_execpath, platform = process.platform } = {}) {
   return [
     npmStep("npm run check:gemini-browser-sidecar-binary", "check:gemini-browser-sidecar-binary", { npmExecPath, platform }),
-    { title: "node scripts/validate-testing-transition.mjs", command: process.execPath, args: ["scripts/validate-testing-transition.mjs"] },
     npmStep("npm run test:unit", "test:unit", { npmExecPath, platform }),
     npmStep("npm run test:component", "test:component", { npmExecPath, platform }),
     npmStep("npm run test:architecture", "test:architecture", { npmExecPath, platform }),

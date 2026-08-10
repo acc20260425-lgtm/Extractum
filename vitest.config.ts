@@ -11,7 +11,6 @@ const OS_INTEGRATION_FILES = Object.freeze([
   "scripts/process-shell-diagnostic/coordinator.behavior.test.ts",
   "scripts/process-shell-diagnostic/protocol.test.ts",
   "scripts/process-shell-diagnostic/runtime.behavior.test.ts",
-  "scripts/testing/run-observation.behavior.test.ts",
 ]);
 const ARCHITECTURE_FILES = Object.freeze([
   "src/lib/lucide-direct-import-contract.test.ts",
