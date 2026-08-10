@@ -199,9 +199,9 @@ The existing Rust compile/trait test in
 `src-tauri/crates/extractum-llm/src/lib.rs` continues to prove the curated
 external API, private credential fields and named accessors, and the absence of
 serialization, deserialization, debug, and secret-exposure traits. Closure
-explicitly stops promising fail-closed detection of an arbitrarily newly named
-future credential accessor. This is a documented limitation of the current
-test loop, not a resurrected `D5` ledger disposition.
+stops promising fail-closed detection of an arbitrarily newly named future
+credential accessor without promoting that transient caveat into current-state
+documentation or resurrecting a `D5` ledger disposition.
 
 ## Coupled Artifact Inventory
 
@@ -314,25 +314,19 @@ verification section of `docs/project.md` so it alone describes:
 Keep the corresponding daily frontend and focused Rust loops in `AGENTS.md`,
 with every named command checked against `package.json`.
 
-The current-state documentation must state the deliberately absent guarantees:
+The current-state documentation must state only the operational boundaries a
+reader can act on:
 
-- there is no 15-second fail-closed cross-stack selector;
-- changed/related selection stays inside Vitest, so it never covers Rust or
-  Playwright; it may select an OS-integration Vitest owner when statically
-  related, but does not guarantee complete OS-process coverage and may
-  under-select dynamic relationships;
-- the testing loop has no TestingManifest, NoTestAllowlist, runner census,
-  source-contract ledger, Nx integration, coverage ratchet, test-quarantine
-  system, repeated performance series, or stability-audit command;
+- there is no cross-stack changed-file selection;
+- changed/related selection stays inside Vitest;
+- the repository has no CI workflow;
 - an empty or unexpectedly small accelerated selection requires an explicit
   owner command or wider run;
-- dependency-cruiser is outside this program and may return only as a separate
-  decision that replaces a larger custom mechanism rather than adding one.
 
 ## Execution Order
 
-1. Reconfirm the clean baseline OID and derive baseline counts from Git without
-   adding a script.
+1. Reconfirm clean status and baseline ancestry; use the approved design counts
+   without recalculating them.
 2. Remove transition validation from `verify` and sever ledger, census,
    extractor, review, and evidence imports from retained tests.
 3. Delete the transition apparatus and the complete `testing/` tree.
