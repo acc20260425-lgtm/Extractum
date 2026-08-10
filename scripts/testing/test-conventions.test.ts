@@ -144,7 +144,6 @@ describe("test conventions", () => {
     expect(unitNodeProject?.exclude).toContain(componentBehaviorPattern);
     expectProjectOwners(projectConventions, "src/lib/components/example.behavior.test.ts", ["component"]);
     expectProjectOwners(projectConventions, "src/lib/telegram-checkpoint-2.behavior.test.ts", ["unit-node"]);
-    expectProjectOwners(projectConventions, "src/lib/telegram-contract-paths.behavior.test.ts", ["unit-node"]);
   });
 
   it("rejects component behavior ownership when another project overlaps it", () => {
@@ -179,17 +178,9 @@ describe("test conventions", () => {
     expect(typeof createRepositoryIndex).toBe("function");
     expect(typeof evaluateRule).toBe("function");
     expect(registeredRuleIds).toEqual([
-      "rule:analysis-evidence-highlight-token-styling",
-      "rule:analysis-source-browser-canonical-composition",
-      "rule:analysis-source-browser-explicit-subject-contract",
-      "rule:analysis-source-group-activity-boundary",
-      "rule:analysis-source-group-tab-leaf-boundary",
-      "rule:analysis-source-reader-surface-composition",
       "rule:extractum-grid-wrapper-boundary",
-      "rule:extractum-llm-public-api-boundary",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
-      "rule:telegram-phase-8b-authority-integrity",
     ]);
 
   });

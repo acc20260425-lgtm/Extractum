@@ -11,5 +11,3 @@ src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-tr
 src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json text eol=crlf
 src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json text eol=crlf
 src/lib/telegram-grammers-feature-baseline.json text eol=lf
-src/lib/telegram-8b-test-identities.json text eol=lf
-src/lib/telegram-8b-symbol-map.json text eol=lf

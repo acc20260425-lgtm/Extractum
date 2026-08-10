@@ -77,34 +77,6 @@ Use this checklist when adding or changing values:
 | `presentation` | Visual-only value. |
 | `taxonomy` | Domain classification rather than lifecycle. |
 
-## Telegram crate-preparation agent lifecycle
-
-These values are transitional test and agent-workflow selectors owned by
-`src/lib/telegram-contract-paths.ts`. They are not product, database, event,
-API, persisted UI, or user-facing statuses. Their persistence/API/UI impact is
-none.
-
-| Value | Type | Meaning | Source of truth | Lifecycle | Stable? | Persistence/API/UI impact | Current usage |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `8b-checkpoint-1` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 1 authority with the application-owned pre-staging layout. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-2` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 2 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-3` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 3 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-4` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 4 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-5` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 5 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-6` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 6 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-7` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 7 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8b-checkpoint-8` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 8 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 1 retained` | agent-workflow status input | Maps the roadmap Checkpoint 1 retained status to `8b-checkpoint-1`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 2 retained` | agent-workflow status input | Maps the roadmap Checkpoint 2 retained status to `8b-checkpoint-2`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 3 retained` | agent-workflow status input | Maps the roadmap Checkpoint 3 retained status to `8b-checkpoint-3`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 4 retained` | agent-workflow status input | Maps the roadmap Checkpoint 4 retained status to `8b-checkpoint-4`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 5 retained` | agent-workflow status input | Maps the roadmap Checkpoint 5 retained status to `8b-checkpoint-5`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 6 retained` | agent-workflow status input | Maps the roadmap Checkpoint 6 retained status to `8b-checkpoint-6`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 7 retained` | agent-workflow status input | Maps the roadmap Checkpoint 7 retained status to `8b-checkpoint-7`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8B preparation Checkpoint 8 retained` | agent-workflow status input | Maps the roadmap Checkpoint 8 retained status to `8b-checkpoint-8`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
-| `8c-extracted` | agent-workflow lifecycle | Selects the retained Phase 8C `extractum-telegram` package layout. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |
-| `done: retained` | agent-workflow status input | Maps the terminal Phase 8 roadmap disposition to `8c-extracted`. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |
-
 ## Analysis run statuses
 
 Representative sources:
@@ -954,43 +926,16 @@ Recommended review phrase: `Value registry checked: owner, persistence, API mirr
 
 ## Vitest testing project names
 
-These stable tooling-only values select the five Vitest owners. They are owned
+These stable tooling-only values select the four Vitest owners. They are owned
 by `vitest.config.ts`, persisted only in checked-in configuration, and have no
 product database, API, UI, or fixture impact.
 
 | Value | Type | Meaning | Owner | Persistence/API/UI/fixture impact | Current usage |
 | --- | --- | --- | --- | --- | --- |
-| `unit-node` | Vitest project name | Pure Node and TypeScript tests. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:unit`, runner census |
-| `component` | Vitest project name | Svelte Testing Library tests in jsdom. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:component`, runner census |
-| `architecture` | Vitest project name | Structured architecture rules. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:architecture`, runner census |
-| `legacy-contract` | Vitest project name | Frozen source-contract migration inventory. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:legacy-contract`, runner census |
-| `os-integration` | Vitest project name | Tests that own real operating-system resources. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:integration:os`, runner census |
-
-## Testing tooling decision evidence
-
-These values exist only as the terminal heading/value in the committed Slice
-2C Markdown evidence. They are not runtime states, are not stored in the
-database, are not exposed through an API or UI, and do not authorize Nx
-configuration to remain in main by themselves.
-
-| Value | Type | Meaning | Source of truth | Lifecycle | Stable? | Persistence/API/UI impact | Current usage |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `ADOPT_NX` | tooling decision | The disposable spike satisfied every adoption condition and authorizes a follow-up specification amendment before Slice 3. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
-| `REJECT_NX` | tooling decision | The spike failed, was incomplete, or did not reduce orchestration complexity; original Slice 3–5 architecture continues. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
-
-## Source-contract migration ledger dispositions
-
-These tooling-only values classify a reviewed source-contract migration row.
-They are persisted only in the checked-in migration ledger. They have no
-product, database, API, UI, or fixture impact, and leave the active workflow
-when the completed ledger becomes historical evidence.
-
-| Value | Type | Meaning | Owner | Persistence/API/UI impact | Current usage |
-| --- | --- | --- | --- | --- | --- |
-| `behavior` | ledger disposition | Preserve the invariant with behavior-level replacement evidence. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
-| `architecture` | ledger disposition | Preserve the invariant with an architecture rule or boundary check. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
-| `tool_owned` | ledger disposition | Preserve the invariant through a named, owned tooling rule. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
-| `delete` | ledger disposition | Retire an assertion only with its exact, reviewed deletion reason. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
+| `unit-node` | Vitest project name | Pure Node and TypeScript tests. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:unit` |
+| `component` | Vitest project name | Svelte Testing Library tests in jsdom. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:component` |
+| `architecture` | Vitest project name | Structured architecture rules. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:architecture` |
+| `os-integration` | Vitest project name | Tests that own real operating-system resources. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:integration:os` |
 
 ## Process-shell diagnostic artifact classifications
 
