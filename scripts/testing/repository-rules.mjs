@@ -46,6 +46,7 @@ function evaluateExtractumGridWrapperBoundary(index) {
     && /\.(?:svelte|[cm]?[jt]sx?)$/.test(file)
     && !/\.(?:test|spec)\./.test(file));
   for (const file of productionFiles) {
+    if (!index.getText(file).includes("@svar-ui/")) continue;
     const facts = file.endsWith(".svelte") ? index.getSvelte(file) : index.getTypeScript(file);
     const svarImports = facts.imports.filter(({ source }) => source.startsWith("@svar-ui/"));
     if (svarImports.length && !APPROVED_SVAR_GRID_PATHS.has(file)) {

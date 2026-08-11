@@ -314,6 +314,22 @@ describe("repository rule registry", () => {
     15_000,
   );
 
+  it("skips production files without the @svar-ui/ marker", () => {
+    const index = indexFor({
+      ...extractumGridBoundarySources,
+      // Invalid syntax is a parse detector, not a supported repository state.
+      "src/lib/unrelated-without-marker.ts": "export const = ;",
+    });
+
+    expect(evaluateRule({
+      id: "rule:extractum-grid-wrapper-boundary",
+      index,
+    })).toEqual({
+      id: "rule:extractum-grid-wrapper-boundary",
+      violations: [],
+    });
+  });
+
   it("registers every current repository rule", () => {
     expect(registeredRuleIds).toEqual([
       "rule:extractum-grid-wrapper-boundary",
