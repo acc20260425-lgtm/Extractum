@@ -38,37 +38,26 @@ Adapt the existing `TelegramSession`, live, avatar, and Takeout adapters in
 place, preserving their current responsibilities and public interfaces unless
 fallible session access requires an internal `AppResult` return.
 
-Update all four direct grammers dependencies to the same upstream revision.
-Do not mix registry and Git variants or split the dependency line across
-revisions.
-
 ## Error Policy
 
-Session state is fail-closed. Every `MemorySessionError` from reading or
-writing the home DC, DC options, update state, or peer cache is converted to an
-`AppError` and propagated to the owning operation. Production code must not use
-`expect`, `unwrap`, fabricated defaults, or silent logging to hide these
-errors.
+Session access is fail-closed: convert `MemorySessionError` to `AppError` and
+use `?` at every owning operation. Avatar loading retains its existing
+best-effort outer boundary.
 
-`TelegramSession::cache_peer_infos` becomes fallible. Its live-message caller
-must stop and return the error when the peer cache cannot be updated, because
-continuing could make peer identity and access-hash behavior inconsistent.
+| Location | Before | After |
+| --- | --- | --- |
+| `memory_session_to_saved` | `async fn(...) -> SavedSession` | `async fn(...) -> AppResult<SavedSession>` |
+| `TelegramSession::cache_peer_infos` | `async fn(...)` | `async fn(...) -> AppResult<()>`; its single caller uses `?` |
+| `peer_photo_bytes` | `Peer::photo(...).await -> Option<_>` | unwrap `Result` with `?`; the timeout wrapper still suppresses the resulting `AppError` |
+| `prepare_export_dc_alias` | session reads/writes are infallible | propagate `home_dc_id`, `dc_option`, and `set_dc_option` failures with `?` |
 
-Avatar loading remains the sole explicit best-effort boundary. A failure from
-`Peer::photo` is converted to `AppError`, then the existing timeout/best-effort
-wrapper suppresses it and returns no avatar.
-
-The new `InvocationError::Session` variant is not a local transport error and
-must not trigger export-DC fallback. It follows the ordinary non-fallback error
-path. Existing fallback behavior remains limited to invalid DC, I/O,
-transport, authentication, and dropped-connection failures.
+`InvocationError::Session` is not an export-DC fallback condition.
 
 ## Telegram TL Layer 227
 
-Update raw TL test fixtures for fields introduced by layer 227, including
-`Message::rich_message`, `User::bot_guard`, and
-`MessageReplyHeader::reply_to_ephemeral`. Use absent/false values so fixtures
-continue to describe the same messages and peers.
+Set every new required layer-227 field in raw TL test fixtures to its neutral
+absent/false value so fixtures continue to describe the same messages and
+peers. The compiler supplies the authoritative field list.
 
 Production parsing continues to extract the existing text, media, reaction,
 reply, peer, and topic fields. It must compile against layer 227 without
@@ -98,15 +87,14 @@ that session failures propagate and that avatar failures remain best-effort.
 Raw TL fixture compilation supplies the RED signal for schema additions, then
 the fixtures receive only the new neutral field values.
 
-Focused verification covers the `extractum-telegram` package and its exact
-affected tests. The package checkpoint is
-`cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
-The focused check is
-`cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
-The producer production-surface check is
-`cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`.
+Use exact tests and
+`cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`
+inside the RED/GREEN loop. The slice gates are:
 
-The slice ends with `npm.cmd run verify`, as required for every Rust slice.
+- `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
+- `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`;
+- `npm.cmd run verify`.
+
 After automated verification, run live Telegram sync and Takeout smoke checks
 against available test sources and record only sanitized identifiers, counts,
 states, and warnings. Credentials, session material, API hashes, and raw
@@ -114,24 +102,11 @@ private payloads must not be committed.
 
 ## Compatibility and Rollback
 
-No database migration, frontend API change, or new persisted value is
-introduced. Existing encrypted session JSON retains the same Extractum schema;
-only access to its in-memory grammers representation becomes fallible.
-
-Rollback consists of reverting the isolated dependency slice: code adapters,
-fixtures, four Git pins, lockfile, baseline, repository rules, and dependency
-documentation move together back to the `0.9.0` revision.
+No migration or API change is introduced; rollback is a revert of the isolated
+dependency-slice commit.
 
 ## Completion Criteria
 
-- All four grammers crates resolve from revision
-  `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` at version `0.10.0`.
-- No production session error is unwrapped, ignored, or replaced with a
-  default.
-- Avatar lookup remains best-effort and export-DC fallback excludes session
-  failures.
-- `extractum-telegram` compiles and all of its targets pass.
-- The feature baseline and repository rules pass with the new revision.
+- All four grammers pins resolve revision `5c6d44f` at version `0.10.0`.
 - `npm.cmd run verify` passes.
-- Live Telegram sync and Takeout smoke evidence is recorded separately without
-  sensitive data.
+- Sanitized live Telegram sync and Takeout smoke evidence is recorded.
