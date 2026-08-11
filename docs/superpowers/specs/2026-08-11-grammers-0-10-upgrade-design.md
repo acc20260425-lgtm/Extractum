@@ -30,13 +30,18 @@ The slice does not add product support for rich messages, guard bots, or other
 new layer-227 capabilities. New optional TL fields are accepted and otherwise
 ignored by existing extraction behavior.
 
+Any other breaking `grammers 0.10` API changes found by compilation are
+adapted in this slice without expanding product behavior.
+
 ## Architecture
 
 Keep `grammers-*` isolated in the existing `extractum-telegram` package. Do not
 add a second session wrapper or expose grammers types across package boundaries.
 Adapt the existing `TelegramSession`, live, avatar, and Takeout adapters in
-place, preserving their current responsibilities and public interfaces unless
-fallible session access requires an internal `AppResult` return.
+place, preserving their current responsibilities. Internal return types may
+become `AppResult` where fallible session access requires propagation.
+All affected functions are private or `pub(super)`; the public interface of
+`extractum-telegram` does not change.
 
 ## Error Policy
 
@@ -44,14 +49,17 @@ Session access is fail-closed: convert `MemorySessionError` to `AppError` and
 use `?` at every owning operation. Avatar loading retains its existing
 best-effort outer boundary.
 
-| Location | Before | After |
+| Location | Signature | Internal adaptation |
 | --- | --- | --- |
-| `memory_session_to_saved` | `async fn(...) -> SavedSession` | `async fn(...) -> AppResult<SavedSession>` |
-| `TelegramSession::cache_peer_infos` | `async fn(...)` | `async fn(...) -> AppResult<()>`; its single caller uses `?` |
-| `peer_photo_bytes` | `Peer::photo(...).await -> Option<_>` | unwrap `Result` with `?`; the timeout wrapper still suppresses the resulting `AppError` |
-| `prepare_export_dc_alias` | session reads/writes are infallible | propagate `home_dc_id`, `dc_option`, and `set_dc_option` failures with `?` |
+| `memory_session_to_saved` | change `SavedSession` to `AppResult<SavedSession>` | propagate `home_dc_id`, `updates_state`, and `dc_option` failures |
+| `TelegramSession::cache_peer_infos` | change `()` to `AppResult<()>` | propagate `cache_peer` failure; its single caller uses `?` |
+| `peer_photo_bytes` | unchanged: `AppResult<Option<Vec<u8>>>` | propagate the new `Peer::photo` result; the timeout wrapper still suppresses the resulting `AppError` |
+| `prepare_export_dc_alias` | unchanged: `AppResult<(i32, i32)>` | use `?` for session errors, then preserve `ok_or_else` for a missing DC option before propagating `set_dc_option` |
 
-`InvocationError::Session` is not an export-DC fallback condition.
+Replace the export-DC `matches!` allowlist with an exhaustive `match` and make
+`InvocationError::Session` an explicit non-fallback branch. Extend the existing
+fallback unit test with a `Session` assertion so the policy has both compile-
+time exhaustiveness and runtime coverage.
 
 ## Telegram TL Layer 227
 
@@ -71,7 +79,7 @@ Update:
 - `src/lib/telegram-grammers-feature-baseline.json`;
 - `scripts/telegram-grammers-feature-baseline.mjs`;
 - the grammers revision fixture in `scripts/testing/repository-rules.test.ts`;
-- the current dependency-policy revision and validation note in
+- the current dependency-policy version, revision, and validation note in
   `docs/project.md`.
 
 Preserve the current requested feature policy: client default features remain
@@ -82,10 +90,13 @@ updates out of the slice where Cargo permits.
 
 ## Testing Strategy
 
-Use test-driven development for behavior changes. Tests must first demonstrate
-that session failures propagate and that avatar failures remain best-effort.
-Raw TL fixture compilation supplies the RED signal for schema additions, then
-the fixtures receive only the new neutral field values.
+Use test-driven development for behavior changes. `MemorySessionError` has no
+production failure-injection seam, so its propagation is enforced by return
+types and compilation rather than a new mock abstraction. Tests cover avatar
+best-effort behavior and export-DC fallback; an exhaustive `InvocationError`
+match provides a compile-time RED signal for the new `Session` variant. Raw TL
+fixture compilation supplies the RED signal for schema additions, then the
+fixtures receive only the new neutral field values.
 
 Use exact tests and
 `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`
@@ -107,6 +118,7 @@ dependency-slice commit.
 
 ## Completion Criteria
 
-- All four grammers pins resolve revision `5c6d44f` at version `0.10.0`.
+- All four grammers pins resolve revision
+  `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` at version `0.10.0`.
 - `npm.cmd run verify` passes.
 - Sanitized live Telegram sync and Takeout smoke evidence is recorded.
