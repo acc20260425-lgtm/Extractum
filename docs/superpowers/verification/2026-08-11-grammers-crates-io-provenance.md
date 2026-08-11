@@ -18,6 +18,20 @@ Cargo populated these cache locations before comparison:
 - Codeberg checkout:
   `~/.cargo/git/checkouts/grammers-*/5c6d44f`.
 
+Toolchain used:
+
+```text
+cargo 1.95.0 (f2d3ce0bd 2026-03-21)
+rustc 1.95.0 (59807616e 2026-04-14)
+```
+
+Recorded with:
+
+```powershell
+cargo --version
+rustc --version
+```
+
 The eight registry artifacts were fetched with:
 
 ```powershell
@@ -45,8 +59,8 @@ Observed output:
 5c6d44ff30e02d6c9295bcf1fcb51403ad77c981
 ```
 
-Each artifact identity was read from
-`grammers-*-0.10.0/.cargo_vcs_info.json`:
+Each artifact identity was read from its
+`<crate-name>-<resolved-version>/.cargo_vcs_info.json`:
 
 ```powershell
 Get-Content <registry-crate>/.cargo_vcs_info.json
@@ -68,6 +82,12 @@ Observed for all eight crates:
 This PowerShell procedure discovers the populated cache roots, excludes
 normalized or generated Cargo packaging files, and compares every remaining
 shared file by relative path and SHA-256 hash:
+
+Published `Cargo.toml` files differ by design: Cargo normalizes manifests and
+rewrites path dependencies into registry version requirements during packaging.
+The procedure therefore excludes normalized `Cargo.toml` and the retained
+`Cargo.toml.orig` rather than treating this expected transformation as source
+drift.
 
 ```powershell
 $provenancePin = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981"

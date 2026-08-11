@@ -72,12 +72,14 @@ while retaining the eight-package resolved-version policy.
 
 The existing generator and repository rule enforce the direct four-package
 inventory, canonical source, feature universe, and enabled-feature closure.
-This slice extends resolved-graph ownership to all eight packages while keeping
-direct feature ownership unchanged:
+This slice upgrades the artifact schema from version 1 to version 2 and extends
+resolved-graph ownership to all eight packages while keeping direct feature
+ownership unchanged:
 
-- The generator replaces `revision` with `version: "0.10.0"`, replaces its
-  Git `exactSource` with the canonical crates.io registry source, and keeps the
-  existing direct-package feature records.
+- The generator removes `revision`, increments `schemaVersion` to `2`, replaces
+  its Git `exactSource` with the canonical crates.io registry source, and keeps
+  the existing direct-package feature records. There is no top-level release
+  version; `resolvedPackages` is the sole resolved-release identity.
 - The generator adds a canonical `resolvedPackages` inventory derived from all
   `grammers-*` entries in Cargo metadata. It records seven packages at `0.10.0`
   plus `grammers-tl-parser` at `1.2.2`, rejects any non-canonical source, and
@@ -89,6 +91,12 @@ direct feature ownership unchanged:
   source comparison.
 - Repository-rule fixtures move from Git package identities to registry
   identities.
+
+The synthetic Cargo-metadata builder in `repository-rules.test.ts` must expand
+from four direct Grammers package records to all eight resolved packages and
+their dependency/resolve edges. This is the main fixture change and makes
+transitive source and version mutations observable without changing the four
+direct feature records.
 
 Negative coverage needs two policy classes: non-canonical source and release
 drift. Source coverage must exercise a transitive package; release-drift
