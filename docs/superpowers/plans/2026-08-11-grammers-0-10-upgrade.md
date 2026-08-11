@@ -41,6 +41,8 @@
 
 **Narrow compatibility tests:**
 
+Run these only after Task 4 makes the shared library test target compile:
+
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure -- --exact`
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib takeout::export_dc::tests::export_dc_fallback_is_only_for_local_transport_errors -- --exact`
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib session::tests::saving_session_writes_encrypted_envelope_not_plaintext -- --exact`
@@ -122,10 +124,14 @@ Add this helper in `session.rs`. It is generic because grammers 0.10 does not
 re-export the concrete `MemorySessionError` type from `storages`:
 
 ```rust
-pub(super) fn session_error(error: impl std::fmt::Display) -> AppError {
+pub(crate) fn session_error(error: impl std::fmt::Display) -> AppError {
     AppError::internal(error.to_string())
 }
 ```
+
+Use this broad `Display` signature only for errors returned by `MemorySession`.
+Do not pass `InvocationError`, serde errors, or other error classes through it;
+`Peer::photo` remains mapped to `AppError::network` in Step 4.
 
 Import it from `takeout/export_dc.rs` with:
 
@@ -225,40 +231,16 @@ session
     .map_err(session_error)?;
 ```
 
-- [ ] **Step 6: Adapt all session-facing tests in one pass**
-
-Update test-only direct calls in `session.rs` with explicit success
-expectations:
-
-```rust
-let saved = memory_session_to_saved(&session)
-    .await
-    .expect("save memory session");
-```
-
-```rust
-assert_eq!(
-    loaded_memory_session
-        .home_dc_id()
-        .expect("read loaded home DC"),
-    2
-);
-```
-
-In `live/messages.rs`, use `.await.expect("read cached peer")` before each
-existing `.is_some()` or `.is_none()` assertion on `Session::peer(...)`.
-
-- [ ] **Step 7: Run the production GREEN checks**
+- [ ] **Step 6: Run the production GREEN check**
 
 Run:
 
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure -- --exact
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib session::tests::saving_session_writes_encrypted_envelope_not_plaintext -- --exact
 ```
 
-Expected: PASS with no unused-`Result` warning.
+Expected: PASS with no unused-`Result` warning. Do not run `cargo test --lib`
+yet: it compiles every intra-crate `#[cfg(test)]` fixture, which Task 4 adapts.
 
 ---
 
@@ -303,30 +285,32 @@ assert!(!should_fallback_export_dc_error(&InvocationError::Session(
 )));
 ```
 
-- [ ] **Step 2: Run the fallback characterization test**
+- [ ] **Step 2: Check the production target**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib takeout::export_dc::tests::export_dc_fallback_is_only_for_local_transport_errors -- --exact
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib
 ```
 
-Expected: PASS. The assertion characterizes the already-correct allowlist
-behavior; the exhaustive `match` supplies future compile-time protection.
+Expected: PASS. The assertion cannot run until Task 4 makes the shared test
+target compile; the exhaustive `match` already supplies future compile-time
+protection.
 
 ---
 
-### Task 4: Adapt Layer-227 Test Fixtures
+### Task 4: Make the 0.10 Test Target Compile
 
 **Files:**
 - Modify: `src-tauri/crates/extractum-telegram/src/live/messages.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/live/topics.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/session.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/pagination.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs`
 
 **Interfaces:**
-- Consumes: layer-227 generated raw structs.
+- Consumes: layer-227 generated raw structs and fallible test-facing `Session` methods.
 - Produces: semantically unchanged test fixtures that compile against `grammers 0.10.0`.
 
 - [ ] **Step 1: Run the fixture compiler RED**
@@ -337,7 +321,8 @@ Run:
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets
 ```
 
-Expected: FAIL only on missing neutral fields in raw test fixtures. Session-facing test assertions were already adapted in Task 2.
+Expected: FAIL in the shared library test target on missing neutral raw fields
+and assertions that still treat session `Result` values as direct values.
 
 - [ ] **Step 2: Add neutral values required by the generated structs**
 
@@ -351,16 +336,51 @@ reply_to_ephemeral: false,
 
 Do not read or map these fields into product payloads.
 
-- [ ] **Step 3: Run fixture and behavior GREEN checks**
+- [ ] **Step 3: Adapt all session-facing tests in one pass**
+
+Update test-only direct calls in `session.rs` with explicit success
+expectations:
+
+```rust
+let saved = memory_session_to_saved(&session)
+    .await
+    .expect("save memory session");
+```
+
+```rust
+assert_eq!(
+    loaded_memory_session
+        .home_dc_id()
+        .expect("read loaded home DC"),
+    2
+);
+```
+
+In `live/messages.rs`, use `.await.expect("read cached peer")` before each
+existing `.is_some()` or `.is_none()` assertion on `Session::peer(...)`.
+
+- [ ] **Step 4: Run the test-target compiler GREEN check**
 
 Run:
 
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule -- --exact
 ```
 
 Expected: PASS with no compile warnings.
+
+- [ ] **Step 5: Run all four narrow compatibility tests**
+
+Run only after Step 4 proves that the shared library test target compiles:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib takeout::export_dc::tests::export_dc_fallback_is_only_for_local_transport_errors -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib session::tests::saving_session_writes_encrypted_envelope_not_plaintext -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule -- --exact
+```
+
+Expected: all four exact tests PASS.
 
 ---
 
@@ -474,7 +494,7 @@ npm.cmd run verify
 
 Expected: PASS. On failure, report the exact failing command and do not claim completion.
 
-- [ ] **Step 5: Review the final dependency diff**
+- [ ] **Step 5: Review the pre-evidence migration diff**
 
 Run:
 
@@ -498,15 +518,11 @@ Expected: no whitespace errors, no source pin left at the old revision in live f
 - Consumes: a verified application build and existing local Telegram accounts/sources.
 - Produces: sanitized runtime evidence required by the dependency policy.
 
-- [ ] **Step 1: Start the MCP-enabled Tauri application**
+- [ ] **Step 1: Start the MCP-enabled Tauri application with the project workflow**
 
-Run:
-
-```powershell
-npm.cmd run tauri dev
-```
-
-Use the actual Vite URL printed by the command. Do not use direct `npx tauri dev`.
+Follow Mode B in `.claude/skills/run-app/SKILL.md`. That project workflow owns
+the launch command, MCP-overlay requirement, readiness wait, and shutdown
+ordering; do not duplicate or bypass it with a direct Tauri invocation.
 
 - [ ] **Step 2: Exercise one live-sync source**
 
@@ -561,9 +577,13 @@ Add one sentence under the current pin linking the verification record and summa
 
 - [ ] **Step 1: Commit the verified migration slice**
 
-Stage the reviewed migration files and run:
+Review the post-evidence diff, stage the explicit migration set, and commit:
 
 ```powershell
+git diff --check
+git status --short
+git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram scripts/telegram-grammers-feature-baseline.mjs src/lib/telegram-grammers-feature-baseline.json scripts/testing/repository-rules.test.ts docs/project.md docs/superpowers/verification/2026-08-11-grammers-0-10-upgrade.md
+git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram/src/session.rs src-tauri/crates/extractum-telegram/src/error.rs src-tauri/crates/extractum-telegram/src/live/avatar.rs src-tauri/crates/extractum-telegram/src/live/messages.rs src-tauri/crates/extractum-telegram/src/live/topics.rs src-tauri/crates/extractum-telegram/src/takeout/export_dc.rs src-tauri/crates/extractum-telegram/src/takeout/operations.rs src-tauri/crates/extractum-telegram/src/takeout/pagination.rs src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs scripts/telegram-grammers-feature-baseline.mjs src/lib/telegram-grammers-feature-baseline.json scripts/testing/repository-rules.test.ts docs/project.md docs/superpowers/verification/2026-08-11-grammers-0-10-upgrade.md
 git diff --cached --check
 git diff --cached --stat
 git commit -m "build: upgrade grammers to 0.10"
