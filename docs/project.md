@@ -218,6 +218,11 @@ The older GitHub lock rev
 `fa7692e49f301f16dc671c2f305ac1a32cad1a8e` was not available from the
 Codeberg repository during migration.
 
+Sanitized evidence for the current pin is recorded in
+[`2026-08-11-grammers-0-10-upgrade.md`](superpowers/verification/2026-08-11-grammers-0-10-upgrade.md):
+the observed live Telegram sync and Takeout/export-DC import both completed
+without warnings, and the Takeout path did not use its fallback.
+
 Migration validation evidence recorded on 2026-06-01: the Codeberg-pinned
 `grammers-*` line passed focused live Telegram sync smoke checks through the
 running Tauri app on source `119` / `СтатусБанк` (`inserted = 0`,
