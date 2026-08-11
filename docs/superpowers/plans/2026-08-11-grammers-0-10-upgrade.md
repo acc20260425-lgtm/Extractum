@@ -18,6 +18,7 @@
 - Preserve the public `extractum-telegram` API and the encrypted session JSON schema.
 - Baseline JSON is generated. Edit only the revision constant, run the generator, accept `universe`/`forbidden` drift as upstream fact, and stop for review if `required` changes.
 - Use `npm.cmd`, not `npm`, on Windows.
+- Under Subagent-Driven execution, Tasks 1-7 each produce their own reviewed task commit; Task 8 commits only remaining verification records and plan-progress bookkeeping.
 
 ## File Structure
 
@@ -569,18 +570,18 @@ Add one sentence under the current pin linking the verification record and summa
 
 ---
 
-### Task 8: Commit and Report the Migration
+### Task 8: Commit Remaining Evidence and Report the Migration
 
 **Files:**
 - Inspect: complete working-tree diff
 
 **Interfaces:**
 - Consumes: automated and live verification evidence.
-- Produces: a reviewable migration commit and evidence-backed handoff.
+- Produces: a final documentation/evidence commit and evidence-backed handoff over the reviewed task commits.
 
-- [ ] **Step 1: Commit the verified migration slice**
+- [ ] **Step 1: Commit the remaining verified evidence**
 
-Review the post-evidence diff, stage the complete migration areas, and commit.
+Review the post-evidence diff, stage any remaining migration areas, and commit.
 The `docs` path intentionally includes this plan's Subagent-Driven checkbox
 progress as well as the verification record:
 
@@ -591,9 +592,9 @@ git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum
 git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram scripts src/lib/telegram-grammers-feature-baseline.json docs
 git diff --cached --check
 git diff --cached --stat
-git commit -m "build: upgrade grammers to 0.10"
+git commit -m "docs: record grammers 0.10 verification"
 ```
 
 - [ ] **Step 2: Report completion evidence**
 
-Report the exact target revision, changed adapters, package-test result, feature-off result, workspace-verify result, live-smoke status, and whether implementation changes were committed.
+Report the exact target revision, changed adapters, package-test result, feature-off result, workspace-verify result, live-smoke status, and the reviewed task-commit range.
