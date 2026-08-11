@@ -16,7 +16,6 @@
 - Session access is fail-closed; avatar loading retains its existing best-effort outer boundary.
 - `InvocationError::Session` is an explicit non-fallback export-DC error.
 - Preserve the public `extractum-telegram` API and the encrypted session JSON schema.
-- Preserve user-owned working-tree changes. Several target files are already modified; do not revert them and do not stage or commit an entire overlapping file without reviewing its pre-existing diff.
 - Baseline JSON is generated. Edit only the revision constant, run the generator, accept `universe`/`forbidden` drift as upstream fact, and stop for review if `required` changes.
 - Use `npm.cmd`, not `npm`, on Windows.
 
@@ -24,7 +23,7 @@
 
 - `src-tauri/Cargo.toml`: owns the four coordinated Git pins.
 - `src-tauri/Cargo.lock`: records the resolved `0.10.0` dependency graph.
-- `src-tauri/crates/extractum-telegram/src/session.rs`: converts fallible `MemorySession` reads/writes into internal `AppResult` values.
+- `src-tauri/crates/extractum-telegram/src/session.rs`: owns the shared session-error conversion and converts fallible `MemorySession` reads/writes into internal `AppResult` values.
 - `src-tauri/crates/extractum-telegram/src/live/messages.rs`: propagates peer-cache failures and updates session assertions in tests.
 - `src-tauri/crates/extractum-telegram/src/live/avatar.rs`: adapts fallible `Peer::photo` while retaining best-effort suppression.
 - `src-tauri/crates/extractum-telegram/src/error.rs`: makes export-DC fallback classification exhaustive.
@@ -40,7 +39,7 @@
 
 **Affected package:** `extractum-telegram`. The root application consumes it but its public interface does not change, so no immediate dependent-package checkpoint is required before the end-of-slice workspace gate.
 
-**Narrow RED/GREEN tests:**
+**Narrow compatibility tests:**
 
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure -- --exact`
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib takeout::export_dc::tests::export_dc_fallback_is_only_for_local_transport_errors -- --exact`
@@ -115,27 +114,39 @@ Expected: all `grammers-*` sources use the new revision and versions are `0.10.0
 
 **Interfaces:**
 - Consumes: `MemorySession` methods returning `Result<_, MemorySessionError>` and `Peer::photo` returning `Result<Option<ChatPhoto>, InvocationError>`.
-- Produces: `memory_session_to_saved(...) -> AppResult<SavedSession>` and `cache_peer_infos(...) -> AppResult<()>`; public interfaces remain unchanged.
+- Produces: `session_error(...) -> AppError`, `memory_session_to_saved(...) -> AppResult<SavedSession>`, and `cache_peer_infos(...) -> AppResult<()>`; public interfaces remain unchanged.
 
-- [ ] **Step 1: Adapt the session serialization boundary**
+- [ ] **Step 1: Add the shared session-error conversion**
+
+Add this helper in `session.rs`. It is generic because grammers 0.10 does not
+re-export the concrete `MemorySessionError` type from `storages`:
+
+```rust
+pub(super) fn session_error(error: impl std::fmt::Display) -> AppError {
+    AppError::internal(error.to_string())
+}
+```
+
+Import it from `takeout/export_dc.rs` with:
+
+```rust
+use crate::session::session_error;
+```
+
+- [ ] **Step 2: Adapt the session serialization boundary**
 
 Change the private helper and its public caller to propagate every session read:
 
 ```rust
 async fn memory_session_to_saved(session: &TelegramSession) -> AppResult<SavedSession> {
     let session = session.clone_memory_session();
-    let home_dc = session
-        .home_dc_id()
-        .map_err(|error| AppError::internal(error.to_string()))?;
-    let updates_state = session
-        .updates_state()
-        .await
-        .map_err(|error| AppError::internal(error.to_string()))?;
+    let home_dc = session.home_dc_id().map_err(session_error)?;
+    let updates_state = session.updates_state().await.map_err(session_error)?;
     let mut dc_options = HashMap::new();
     for dc_id in 1..=5i32 {
         if let Some(dc) = session
             .dc_option(dc_id)
-            .map_err(|error| AppError::internal(error.to_string()))?
+            .map_err(session_error)?
         {
             dc_options.insert(dc_id, dc);
         }
@@ -154,9 +165,7 @@ In `encode_session_json`, use:
 let saved = memory_session_to_saved(session).await?;
 ```
 
-Test-only direct calls use `.await.expect("save memory session")`; production code does not unwrap session errors.
-
-- [ ] **Step 2: Make peer caching fail closed**
+- [ ] **Step 3: Make peer caching fail closed**
 
 Change the method and its single caller:
 
@@ -167,7 +176,7 @@ pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) -> AppResul
             self.inner
                 .cache_peer(peer_info)
                 .await
-                .map_err(|error| AppError::internal(error.to_string()))?;
+                .map_err(session_error)?;
         }
     }
     Ok(())
@@ -178,7 +187,7 @@ pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) -> AppResul
 session.cache_peer_infos(&peer_infos).await?;
 ```
 
-- [ ] **Step 3: Preserve avatar best-effort behavior**
+- [ ] **Step 4: Preserve avatar best-effort behavior**
 
 Adapt only the inner fallible operation:
 
@@ -194,18 +203,16 @@ else {
 
 The existing `best_effort_avatar_with_timeout` remains unchanged and continues to suppress both timeout and `AppError`.
 
-- [ ] **Step 4: Preserve the missing-DC diagnostic**
+- [ ] **Step 5: Preserve the missing-DC diagnostic**
 
 Use separate `Result` and `Option` handling:
 
 ```rust
-let home_dc_id = session
-    .home_dc_id()
-    .map_err(|error| AppError::internal(error.to_string()))?;
+let home_dc_id = session.home_dc_id().map_err(session_error)?;
 let export_dc_id = export_dc_id_for_home_dc(home_dc_id);
 let mut export_option = session
     .dc_option(home_dc_id)
-    .map_err(|error| AppError::internal(error.to_string()))?
+    .map_err(session_error)?
     .ok_or_else(|| {
         AppError::internal(format!(
             "Home DC option {home_dc_id} is missing from session"
@@ -215,10 +222,33 @@ export_option.id = export_dc_id;
 session
     .set_dc_option(&export_option)
     .await
-    .map_err(|error| AppError::internal(error.to_string()))?;
+    .map_err(session_error)?;
 ```
 
-- [ ] **Step 5: Run the production GREEN checks**
+- [ ] **Step 6: Adapt all session-facing tests in one pass**
+
+Update test-only direct calls in `session.rs` with explicit success
+expectations:
+
+```rust
+let saved = memory_session_to_saved(&session)
+    .await
+    .expect("save memory session");
+```
+
+```rust
+assert_eq!(
+    loaded_memory_session
+        .home_dc_id()
+        .expect("read loaded home DC"),
+    2
+);
+```
+
+In `live/messages.rs`, use `.await.expect("read cached peer")` before each
+existing `.is_some()` or `.is_none()` assertion on `Session::peer(...)`.
+
+- [ ] **Step 7: Run the production GREEN checks**
 
 Run:
 
@@ -242,30 +272,7 @@ Expected: PASS with no unused-`Result` warning.
 - Consumes: all `grammers_mtsender::InvocationError` variants from `0.10.0`.
 - Produces: exhaustive `should_fallback_export_dc_error(&InvocationError) -> bool` classification.
 
-- [ ] **Step 1: Create the compile-time RED**
-
-Replace `matches!` with an exhaustive `match`, initially omitting `InvocationError::Session(_)`:
-
-```rust
-match error {
-    InvocationError::InvalidDc
-    | InvocationError::Io(_)
-    | InvocationError::Transport(_)
-    | InvocationError::Authentication(_)
-    | InvocationError::Dropped => true,
-    InvocationError::Rpc(_) | InvocationError::Deserialize(_) => false,
-}
-```
-
-Run:
-
-```powershell
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib
-```
-
-Expected: FAIL with non-exhaustive pattern coverage for `InvocationError::Session(_)`.
-
-- [ ] **Step 2: Add the explicit non-fallback branch and runtime assertion**
+- [ ] **Step 1: Add the explicit non-fallback branch and runtime assertion**
 
 Use the complete implementation:
 
@@ -286,7 +293,9 @@ pub(super) fn should_fallback_export_dc_error(error: &InvocationError) -> bool {
 }
 ```
 
-Extend `export_dc_fallback_is_only_for_local_transport_errors`:
+Extend `export_dc_fallback_is_only_for_local_transport_errors`. Construct the
+payload according to the resolved 0.10 variant signature; for the inspected
+target revision it is a boxed `Error + Send + Sync`:
 
 ```rust
 assert!(!should_fallback_export_dc_error(&InvocationError::Session(
@@ -294,7 +303,7 @@ assert!(!should_fallback_export_dc_error(&InvocationError::Session(
 )));
 ```
 
-- [ ] **Step 3: Run the fallback GREEN test**
+- [ ] **Step 2: Run the fallback characterization test**
 
 Run:
 
@@ -302,7 +311,8 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib takeout::export_dc::tests::export_dc_fallback_is_only_for_local_transport_errors -- --exact
 ```
 
-Expected: PASS.
+Expected: PASS. The assertion characterizes the already-correct allowlist
+behavior; the exhaustive `match` supplies future compile-time protection.
 
 ---
 
@@ -311,13 +321,12 @@ Expected: PASS.
 **Files:**
 - Modify: `src-tauri/crates/extractum-telegram/src/live/messages.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/live/topics.rs`
-- Modify: `src-tauri/crates/extractum-telegram/src/session.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/pagination.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs`
 
 **Interfaces:**
-- Consumes: layer-227 generated raw structs and fallible test-facing `Session` methods.
+- Consumes: layer-227 generated raw structs.
 - Produces: semantically unchanged test fixtures that compile against `grammers 0.10.0`.
 
 - [ ] **Step 1: Run the fixture compiler RED**
@@ -328,7 +337,7 @@ Run:
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets
 ```
 
-Expected: FAIL only in tests. The probe found 15 errors: missing neutral raw fields and assertions still treating session `Result` values as direct values.
+Expected: FAIL only on missing neutral fields in raw test fixtures. Session-facing test assertions were already adapted in Task 2.
 
 - [ ] **Step 2: Add neutral values required by the generated structs**
 
@@ -342,29 +351,7 @@ reply_to_ephemeral: false,
 
 Do not read or map these fields into product payloads.
 
-- [ ] **Step 3: Unwrap successful session operations only in tests**
-
-Change test assertions from direct `Result` use to explicit successful setup expectations:
-
-```rust
-Session::peer(memory_session.as_ref(), peer_id)
-    .await
-    .expect("read cached peer")
-    .is_some()
-```
-
-Use `.expect("read cached peer")` before every existing `.is_some()`/`.is_none()` assertion, and use:
-
-```rust
-assert_eq!(
-    loaded_memory_session
-        .home_dc_id()
-        .expect("read loaded home DC"),
-    2
-);
-```
-
-- [ ] **Step 4: Run fixture and behavior GREEN checks**
+- [ ] **Step 3: Run fixture and behavior GREEN checks**
 
 Run:
 
@@ -382,7 +369,7 @@ Expected: PASS with no compile warnings.
 **Files:**
 - Modify: `scripts/telegram-grammers-feature-baseline.mjs:11`
 - Regenerate: `src/lib/telegram-grammers-feature-baseline.json`
-- Modify: `scripts/testing/repository-rules.test.ts:84`
+- Modify: `scripts/testing/repository-rules.test.ts:91`
 - Modify: `docs/project.md:201-239`
 
 **Interfaces:**
@@ -432,7 +419,6 @@ Run:
 
 ```powershell
 npm.cmd run test:related -- scripts/testing/repository-rules.test.ts
-node scripts/telegram-grammers-feature-baseline.mjs --check
 ```
 
 Expected: PASS.
@@ -456,7 +442,7 @@ Run:
 cargo fmt --manifest-path src-tauri/Cargo.toml -p extractum-telegram
 ```
 
-Expected: exit 0. Review the diff so formatting does not rewrite unrelated user-owned work unexpectedly.
+Expected: exit 0.
 
 - [ ] **Step 2: Run the package checkpoint**
 
@@ -486,7 +472,7 @@ Run:
 npm.cmd run verify
 ```
 
-Expected: PASS. If it fails in an unrelated dirty area, report the exact failing command and distinguish pre-existing failures from migration failures; do not claim completion.
+Expected: PASS. On failure, report the exact failing command and do not claim completion.
 
 - [ ] **Step 5: Review the final dependency diff**
 
@@ -564,22 +550,18 @@ Add one sentence under the current pin linking the verification record and summa
 
 ---
 
-### Task 8: Prepare the Migration Handoff
+### Task 8: Commit and Report the Migration
 
 **Files:**
 - Inspect: complete working-tree diff
 
 **Interfaces:**
 - Consumes: automated and live verification evidence.
-- Produces: a reviewable migration handoff without absorbing unrelated user changes.
+- Produces: a reviewable migration commit and evidence-backed handoff.
 
-- [ ] **Step 1: Separate migration changes from pre-existing dirty work**
+- [ ] **Step 1: Commit the verified migration slice**
 
-Compare the final status with the pre-migration dirty-file list. For overlapping files (`runtime.rs`, `media.rs`, Takeout files, and any others), describe which hunks belong to the migration. Do not stage the whole file merely because it contains a migration hunk.
-
-- [ ] **Step 2: Commit only with an approved clean staging set**
-
-If the migration hunks can be staged without including user-owned changes, stage the exact reviewed set and run:
+Stage the reviewed migration files and run:
 
 ```powershell
 git diff --cached --check
@@ -587,8 +569,6 @@ git diff --cached --stat
 git commit -m "build: upgrade grammers to 0.10"
 ```
 
-If they cannot be separated safely, leave implementation changes uncommitted and report that constraint instead of committing mixed ownership.
-
-- [ ] **Step 3: Report completion evidence**
+- [ ] **Step 2: Report completion evidence**
 
 Report the exact target revision, changed adapters, package-test result, feature-off result, workspace-verify result, live-smoke status, and whether implementation changes were committed.
