@@ -305,6 +305,7 @@ protection.
 - Modify: `src-tauri/crates/extractum-telegram/src/live/messages.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/live/topics.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/session.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/takeout/export_dc.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/pagination.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs`
@@ -322,7 +323,9 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-tar
 ```
 
 Expected: FAIL in the shared library test target on missing neutral raw fields
-and assertions that still treat session `Result` values as direct values.
+and assertions that still treat session `Result` values as direct values. It may
+also expose a payload-shape mismatch in the new `InvocationError::Session`
+assertion; adapt that constructor to the actual 0.10 signature before proceeding.
 
 - [ ] **Step 2: Add neutral values required by the generated structs**
 
@@ -431,7 +434,7 @@ Expected: changes to `universe` or `forbidden` reflect upstream feature declarat
 
 - [ ] **Step 4: Update the dependency policy record**
 
-In `docs/project.md`, replace the active pin with version `0.10.0` and revision `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981`. State that the update introduces fallible session access and TL layer 227, affecting live sync, Takeout, session handling, and source identity adapters. Keep prior `0.9.0` validation evidence as historical evidence; append the new sanitized evidence only after Task 7.
+In `docs/project.md`, replace the active pin with version `0.10.0` and revision `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981`. State that the update introduces fallible session access and TL layer 227, affecting live sync, Takeout, session handling, and source identity adapters. Keep prior `0.9.0` validation evidence as historical evidence; append the new sanitized evidence only after Task 7. Do not edit the neighboring historical paragraph about the archived GitHub repository or its old lock revision `fa7692e49f...`.
 
 - [ ] **Step 5: Run repository-rule GREEN checks**
 
@@ -577,13 +580,15 @@ Add one sentence under the current pin linking the verification record and summa
 
 - [ ] **Step 1: Commit the verified migration slice**
 
-Review the post-evidence diff, stage the explicit migration set, and commit:
+Review the post-evidence diff, stage the complete migration areas, and commit.
+The `docs` path intentionally includes this plan's Subagent-Driven checkbox
+progress as well as the verification record:
 
 ```powershell
 git diff --check
 git status --short
-git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram scripts/telegram-grammers-feature-baseline.mjs src/lib/telegram-grammers-feature-baseline.json scripts/testing/repository-rules.test.ts docs/project.md docs/superpowers/verification/2026-08-11-grammers-0-10-upgrade.md
-git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram/src/session.rs src-tauri/crates/extractum-telegram/src/error.rs src-tauri/crates/extractum-telegram/src/live/avatar.rs src-tauri/crates/extractum-telegram/src/live/messages.rs src-tauri/crates/extractum-telegram/src/live/topics.rs src-tauri/crates/extractum-telegram/src/takeout/export_dc.rs src-tauri/crates/extractum-telegram/src/takeout/operations.rs src-tauri/crates/extractum-telegram/src/takeout/pagination.rs src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs scripts/telegram-grammers-feature-baseline.mjs src/lib/telegram-grammers-feature-baseline.json scripts/testing/repository-rules.test.ts docs/project.md docs/superpowers/verification/2026-08-11-grammers-0-10-upgrade.md
+git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram scripts src/lib/telegram-grammers-feature-baseline.json docs
+git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/crates/extractum-telegram scripts src/lib/telegram-grammers-feature-baseline.json docs
 git diff --cached --check
 git diff --cached --stat
 git commit -m "build: upgrade grammers to 0.10"
