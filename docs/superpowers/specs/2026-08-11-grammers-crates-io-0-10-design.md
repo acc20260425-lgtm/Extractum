@@ -77,26 +77,26 @@ resolved-graph ownership to all eight packages while keeping direct feature
 ownership unchanged:
 
 - The generator removes `revision`, increments `schemaVersion` to `2`, replaces
-  its Git `exactSource` with the canonical crates.io registry source, and keeps
-  the existing direct-package feature records. There is no top-level release
-  version; `resolvedPackages` is the sole resolved-release identity.
+  `packages` with `directPackages`, and keeps those four existing feature-policy
+  records. There is no top-level release version.
 - The generator adds a canonical `resolvedPackages` inventory derived from all
-  `grammers-*` entries in Cargo metadata. It records seven packages at `0.10.0`
-  plus `grammers-tl-parser` at `1.2.2`, rejects any non-canonical source, and
-  makes inventory or version drift change the generated baseline.
+  `grammers-*` entries in Cargo metadata. Each entry records `name`, `version`,
+  and `source`; together these entries are the sole resolved-release identity.
+  The canonical artifact records seven packages at `0.10.0` plus
+  `grammers-tl-parser` at `1.2.2`, all with the crates.io registry source.
 - The repository rule requires every direct Grammers dependency in
   `extractum-telegram` metadata to have manifest requirement `=0.10.0`. It
-  relies on canonical baseline generation plus `sameJson` for the complete
-  resolved inventory, versions, and sources, and removes its redundant second
-  source comparison.
+  uses `sameJson` against the canonical baseline for the complete resolved
+  inventory, versions, and sources, and removes its redundant second source
+  comparison.
 - Repository-rule fixtures move from Git package identities to registry
   identities.
 
-The synthetic Cargo-metadata builder in `repository-rules.test.ts` must expand
-from four direct Grammers package records to all eight resolved packages and
-their dependency/resolve edges. This is the main fixture change and makes
-transitive source and version mutations observable without changing the four
-direct feature records.
+The synthetic Cargo-metadata builder in `repository-rules.test.ts` must rename
+its four feature-policy records to `directPackages`, then expand its package
+records and dependency/resolve edges to all eight `resolvedPackages`. This is
+the main fixture change and makes transitive source and version mutations
+observable without changing the direct feature policy.
 
 Negative coverage needs two policy classes: non-canonical source and release
 drift. Source coverage must exercise a transitive package; release-drift
@@ -112,8 +112,10 @@ feature-policy change and stops the slice for investigation.
 ## Documentation Policy
 
 Update only the current-state dependency-policy text in `docs/project.md` to
-name crates.io and exact version `0.10.0`; retain the surrounding historical
-narrative and verification evidence.
+state that the four direct dependencies require crates.io `=0.10.0` and that
+the complete resolved graph, including `grammers-tl-parser 1.2.2`, is fixed by
+the generated baseline. Retain the surrounding historical narrative and
+verification evidence.
 
 ## Rust Verification Loops
 
