@@ -6,137 +6,123 @@
 
 ## Goal
 
-Move Extractum's complete direct `grammers-*` dependency line from the
-Codeberg Git revision
-`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` to the crates.io releases at the
-exact version `0.10.0`, while preserving the feature selection, resolved
-behavior, and `extractum-telegram` public interface established by the
-previous `grammers 0.10` upgrade.
-
-The crates.io releases of `grammers-client`, `grammers-mtsender`,
-`grammers-session`, and `grammers-tl-types` at `0.10.0` are available and
-publish the feature flags currently requested by Extractum.
+Move Extractum's four direct `grammers-*` dependencies from Codeberg revision
+`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` to their crates.io releases at the
+exact version `0.10.0`, preserving the feature selection, resolved behavior,
+and `extractum-telegram` public interface established by the previous upgrade.
 
 ## Scope
 
-The slice owns all active project state that declares or enforces the current
+The slice owns the active project state that declares or enforces the current
 Grammers dependency source:
 
-- the four workspace dependency declarations and `Cargo.lock`;
-- the Grammers feature-baseline generator and generated JSON artifact;
+- the four workspace declarations and `Cargo.lock`;
+- the feature-baseline generator and generated JSON artifact;
 - the repository rule and its current-state fixtures;
 - the active dependency-policy description in `docs/project.md`;
-- focused Rust and repository-rule verification plus the final workspace gate.
+- focused Rust, policy, and workspace verification.
 
-Historical specifications, plans, verification records, archived migration
-notes, and diagnostic snapshots remain unchanged. They continue to describe
-the source and evidence that applied when they were recorded.
+Historical specifications, plans, verification records, migration notes, and
+diagnostic snapshots remain unchanged. No product behavior, Telegram schema,
+session or persistence format, public Rust interface, or frontend interface
+changes in this slice. If registry resolution exposes an API or required-feature
+difference, stop and re-plan instead of adapting product behavior.
 
-No product behavior, Telegram schema handling, session format, persistence
-format, public Rust interface, or frontend interface changes in this slice.
-If the registry packages expose an API or resolved-feature difference from the
-previous Git source, stop and re-plan instead of adapting product behavior in
-this source-only migration.
+## Published Artifact Equivalence
+
+The downloaded `0.10.0` artifacts for `grammers-client`,
+`grammers-mtsender`, `grammers-session`, and `grammers-tl-types` each record
+Git SHA `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` in
+`.cargo_vcs_info.json`. Hash comparison against the cached checkout of that
+revision found every common published file identical. Differences were limited
+to Cargo packaging metadata and two `grammers-tl-types` test-support files not
+included in the published crate.
+
+The crates.io artifacts therefore originate from the existing pin and retain
+its runtime source. The previous live Telegram and Takeout smoke record remains
+applicable; no repeated live smoke is required. If this provenance check cannot
+be reproduced or later reveals runtime-source drift, repeat the smoke checks or
+record explicit risk acceptance before completing the slice.
 
 ## Dependency Declaration and Resolution
 
-Declare each direct dependency with the exact Cargo requirement `=0.10.0`:
+Declare all four direct dependencies with exact Cargo requirement `=0.10.0`,
+preserving their current default-feature settings and requested features:
 
-- `grammers-client`, preserving `default-features = false`;
-- `grammers-mtsender`, preserving its current default-feature behavior;
-- `grammers-session`, preserving `default-features = false` and `serde`;
-- `grammers-tl-types`, preserving `deserializable-functions` and its current
-  default-feature behavior.
+- `grammers-client`: defaults disabled;
+- `grammers-mtsender`: current defaults;
+- `grammers-session`: defaults disabled, `serde` enabled;
+- `grammers-tl-types`: current defaults plus `deserializable-functions`.
 
-Regenerate `Cargo.lock` through Cargo so all resolved `grammers-*` packages use
-the crates.io registry source and registry checksums. Audit the lockfile diff;
-unrelated dependency upgrades are excluded where Cargo permits. The completed
-graph must contain no Git-sourced `grammers-*` package.
+Regenerate `Cargo.lock` through Cargo. All resolved `grammers-*` packages must
+use the canonical crates.io registry source and registry checksums, with no Git-
+sourced Grammers package left in the graph. Keep unrelated lockfile updates out
+where Cargo permits.
 
-The exact manifest requirement is part of repository policy, not merely the
-version currently selected by the lockfile. This prevents a future lockfile
-refresh from silently moving the dependency line beyond `0.10.0`.
+The exact requirement makes the intent visible in the manifest and prevents a
+lock refresh from silently moving beyond `0.10.0`. If a future valid Grammers
+resolution cannot satisfy exact mutually dependent pins, the policy may be
+relaxed to a caret requirement only while retaining exact resolved-version
+enforcement in the repository rule.
 
 ## Feature Baseline and Repository Policy
 
-Migrate the generated baseline schema from Git identity to release identity:
+The existing generator and repository rule already enforce the four-package
+inventory, canonical source, feature universe, and enabled-feature closure.
+This migration changes only their release identity and removes one redundant
+check:
 
-- replace the top-level `revision` field with `version: "0.10.0"`;
-- make the generator require the canonical crates.io registry source and the
-  exact selected version for every direct Grammers package;
-- make the repository rule verify the direct manifest requirements, resolved
-  versions, registry sources, package inventory, and enabled feature closure;
-- update positive and negative repository-rule fixtures to represent crates.io
-  packages and reject a wrong version, a Git source, a path source, or another
-  registry source.
+- replace generator `revision` with `version: "0.10.0"` and replace its Git
+  `exactSource` with the canonical crates.io registry source;
+- require each selected metadata package to have version `0.10.0`;
+- require each direct Grammers manifest dependency to have requirement
+  `=0.10.0`;
+- remove the repository rule's second source comparison because baseline
+  generation has already rejected source drift;
+- update fixtures from Git package identities to registry identities.
 
-The baseline JSON remains generated output: edit the generator, then regenerate
-the artifact with its `--write` mode. A diff in `universe` or `forbidden` is an
-upstream publication fact and may be accepted after review. Any diff in
-`required` is a feature-policy change and must be investigated before the
-slice proceeds.
+Negative coverage needs two policy classes: non-canonical source and release
+drift. Release-drift coverage must exercise both the selected package version
+and the direct manifest requirement; separate Git/path/alternate-registry cases
+are unnecessary because they share the same canonical-source comparison.
 
-## Documentation Policy
+The JSON remains generated output. Update the generator, then regenerate the
+artifact with `--write`. A diff in `universe` or `forbidden` is an upstream
+publication fact and may be accepted after review. Any diff in `required` is a
+feature-policy change and stops the slice for investigation.
 
-Rewrite only the current-state dependency-policy text in `docs/project.md` so
-it identifies crates.io and exact version `0.10.0` as the active source. Keep
-the surrounding historical Codeberg/GitHub migration narrative and the prior
-sanitized verification record intact, clearly marked as historical evidence.
-
-## Error Handling and Rollback
-
-No new runtime error path is introduced. Cargo resolution, baseline generation,
-or repository-rule failure closes the migration before product code changes.
-Rollback is a revert of the isolated source-migration commits; there is no data
-or configuration migration.
-
-## Testing Strategy
-
-The initial source switch supplies the RED signal: the existing baseline and
-repository rule still require the Codeberg revision and must reject registry
-metadata. After updating the policy, focused repository-rule tests must include
-non-empty negative coverage for source and version drift.
-
-Compare the regenerated baseline to the previous artifact. The `required`
-arrays must remain policy-equivalent. Cargo metadata provides the authoritative
-completion audit: all four direct packages must resolve at `0.10.0` from the
-canonical crates.io registry source, and no Git-sourced Grammers package may
-remain.
-
-Because the selected semantic version remains `0.10.0` and this slice does not
-change product code, the previous live Telegram and Takeout smoke record remains
-the behavioral evidence. A new live smoke run is not required unless automated
-verification reveals a runtime-relevant difference.
+Update only the current-state dependency-policy text in `docs/project.md` to
+name crates.io and exact version `0.10.0`; retain the surrounding historical
+narrative and verification evidence.
 
 ## Rust Verification Loops
 
-Affected package: `extractum-telegram`. No Rust source file is expected to
-change, but its full target graph proves that the crates.io artifacts remain
-source-compatible with the existing adapters and fixtures.
+Affected package: `extractum-telegram`. No Rust source is expected to change,
+but its test graph proves that the published artifacts remain compatible with
+the existing adapters and fixtures.
 
-Focused policy loop:
+RED/GREEN policy loop:
 
-- run the repository-rule test that owns the Grammers dependency policy;
+- confirm the pre-migration baseline rejects registry metadata;
+- run the focused repository-rule test with non-empty source and release-drift
+  cases;
 - run `node scripts/telegram-grammers-feature-baseline.mjs --check`;
-- inspect locked `cargo metadata` for exact versions, canonical registry
-  sources, direct ownership, and the absence of Git-sourced Grammers packages.
+- inspect locked `cargo metadata` for exact manifest requirements, selected
+  versions, canonical registry sources, unchanged required features, and no
+  Git-sourced Grammers packages.
 
 Package gates:
 
 - `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
 - `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`.
 
-End-of-slice workspace gate:
+End-of-slice gate: `npm.cmd run verify`.
 
-- `npm.cmd run verify`.
+No migrations are introduced; rollback is a revert of the source-migration
+commit.
 
 ## Completion Criteria
 
-- The four direct dependencies use exact Cargo requirements `=0.10.0` and the
-  locked Grammers graph contains only crates.io registry sources.
-- The generated baseline and repository rule enforce version `0.10.0`, the
-  crates.io source, the existing direct package inventory, and the unchanged
-  required-feature policy.
-- Current project documentation names crates.io as active without rewriting
-  historical migration evidence.
-- Focused package checks and `npm.cmd run verify` pass.
+- All four manifests require `=0.10.0`; the locked Grammers graph resolves
+  `0.10.0` only from crates.io and contains no Grammers Git source.
+- `npm.cmd run verify` passes.
