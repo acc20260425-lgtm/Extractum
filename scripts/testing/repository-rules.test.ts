@@ -48,6 +48,13 @@ const ruleFixtures: Record<string, RuleFixture> = {
           <Grid />
         `,
       },
+      "imports escaped SVAR from a feature component": {
+        ...extractumGridBoundarySources,
+        "src/lib/components/research-projects/FeatureGrid.svelte": String.raw`
+          <script lang="ts">import { Grid } from "\x40svar-ui/svelte-grid";</script>
+          <Grid />
+        `,
+      },
       "drops the tree wrapper scoped SVAR style": {
         ...extractumGridBoundarySources,
         [TREE_DATA_GRID_PATH]: extractumGridBoundarySources[TREE_DATA_GRID_PATH].replace(

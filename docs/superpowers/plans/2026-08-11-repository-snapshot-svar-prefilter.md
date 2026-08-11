@@ -4,7 +4,7 @@
 
 **Goal:** Avoid constructing TypeScript and Svelte ASTs for production files that cannot contain a direct `@svar-ui/` import.
 
-**Architecture:** Keep the existing repository index and SVAR boundary evaluator intact. Add one conservative raw-text prefilter immediately before the evaluator's existing AST branch; `getText()` and the parser views share `rawSourceCache`, so this removes parsing without adding filesystem reads.
+**Architecture:** Keep the existing repository index and SVAR boundary evaluator intact. Add one conservative raw-text prefilter immediately before the evaluator's existing AST branch: files containing either the literal `@svar-ui/` marker or any backslash reach the existing parser. `getText()` and the parser views share `rawSourceCache`, so this removes parsing without adding filesystem reads or narrowing existing static-import coverage.
 
 **Tech Stack:** JavaScript, TypeScript, Vitest, Svelte compiler, TypeScript compiler.
 
@@ -12,7 +12,7 @@
 
 - Preserve the existing order of import filtering and `APPROVED_SVAR_GRID_PATHS` validation after parsing.
 - Do not add repository-index APIs or a second imports-only AST representation.
-- Add exactly one regression test for the prefilter; direct TypeScript-import coverage remains outside this slice.
+- Add exactly two regression cases for the prefilter: the no-marker skip test and an escaped forbidden Svelte-import mutation that must produce a semantic violation.
 
 ---
 
@@ -25,7 +25,7 @@
 
 **Interfaces:**
 - Consumes: `index.getText(inputPath)`, `index.getTypeScript(inputPath)`, `index.getSvelte(inputPath)`, and `evaluateRule({ id, index })`.
-- Produces: unchanged `evaluateRule()` results; files without the literal `@svar-ui/` no longer reach either AST parser from the general SVAR scan.
+- Produces: unchanged `evaluateRule()` results; files containing either the literal `@svar-ui/` marker or any backslash reach the existing parser, while files containing neither skip AST construction in the general SVAR scan.
 
 - [ ] **Step 1: Write the failing prefilter regression test**
 
@@ -71,7 +71,48 @@ In `evaluateExtractumGridWrapperBoundary()` within `scripts/testing/repository-r
 
 Leave the subsequent import filtering, approved-path check, strict wrapper validation, and repository-index implementation unchanged.
 
-- [ ] **Step 4: Run the complete validation**
+Run the focused no-marker test from Step 2 again. Expected: PASS; the invalid source is skipped without reaching the TypeScript parser.
+
+- [ ] **Step 4: Add the escaped-import mutation and verify the second RED**
+
+Add this mutation to the existing `rule:extractum-grid-wrapper-boundary` fixture:
+
+```ts
+      "imports escaped SVAR from a feature component": {
+        ...extractumGridBoundarySources,
+        "src/lib/components/research-projects/FeatureGrid.svelte": String.raw`
+          <script lang="ts">import { Grid } from "\x40svar-ui/svelte-grid";</script>
+          <Grid />
+        `,
+      },
+```
+
+Run:
+
+```powershell
+npm.cmd exec vitest -- run scripts/testing/repository-rules.test.ts -t "gives every registered evaluator its own positive fixture and violating mutation" --reporter=dot
+```
+
+Expected: FAIL because the escaped mutation returns no violations. This confirms that the literal-only prefilter narrows the existing static-import coverage.
+
+- [ ] **Step 5: Add the conservative backslash fallback and verify GREEN**
+
+Replace the literal-only prefilter with:
+
+```js
+  for (const file of productionFiles) {
+    const source = index.getText(file);
+    // A backslash is the only way to spell module-specifier characters non-literally,
+    // including line continuations, so always parse those files.
+    if (!source.includes("@svar-ui/") && !source.includes("\\")) continue;
+    const facts = file.endsWith(".svelte") ? index.getSvelte(file) : index.getTypeScript(file);
+```
+
+Keep import filtering and `APPROVED_SVAR_GRID_PATHS` validation in their existing order after parsing. Do not change `repository-index.mjs` or expand import-fact coverage.
+
+Run the focused mutation command from Step 4 again. Expected: PASS; the escaped static import produces the existing semantic direct-import violation.
+
+- [ ] **Step 6: Run the complete validation**
 
 Run:
 
@@ -79,7 +120,7 @@ Run:
 npm.cmd run test:related -- scripts/testing/repository-rules.mjs
 ```
 
-Expected: the non-empty related Vitest selection passes, including the new no-marker regression, the live repository snapshot test, and the existing forbidden Svelte import mutation. The mutation proves that files containing the marker are still parsed and rejected, so the prefilter cannot skip every production file.
+Expected: the non-empty related Vitest selection passes, including the no-marker regression, the live repository snapshot test, and both the literal and escaped forbidden Svelte import mutations. The mutations prove that files containing a marker or a backslash are parsed and rejected semantically.
 
 Only after the related test selection passes, run:
 
@@ -89,14 +130,14 @@ npm.cmd run check
 
 Expected: `svelte-check` reports zero errors and zero warnings.
 
-- [ ] **Step 5: Inspect and commit the implementation**
+- [ ] **Step 7: Inspect and commit the implementation**
 
 Run:
 
 ```powershell
-git diff -- scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts
-git add scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts
-git commit -m "test: prefilter repository SVAR boundary scan"
+git diff -- scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts docs/superpowers/specs/2026-08-11-repository-snapshot-svar-prefilter-design.md docs/superpowers/plans/2026-08-11-repository-snapshot-svar-prefilter.md
+git add scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts docs/superpowers/specs/2026-08-11-repository-snapshot-svar-prefilter-design.md docs/superpowers/plans/2026-08-11-repository-snapshot-svar-prefilter.md
+git commit -m "fix: preserve escaped SVAR import coverage"
 ```
 
-Expected: the diff contains one production prefilter and one regression test, with no repository-index changes or unrelated files; the commit succeeds. This plan document is tracked and committed separately, so it is intentionally absent from the implementation staging command.
+Expected: the four-file diff contains the conservative production prefilter, both regression cases, and corrected design and implementation documentation, with no repository-index changes or unrelated files; the commit succeeds.
