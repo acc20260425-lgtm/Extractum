@@ -13,9 +13,6 @@
 - Preserve the existing order of import filtering and `APPROVED_SVAR_GRID_PATHS` validation after parsing.
 - Do not add repository-index APIs or a second imports-only AST representation.
 - Add exactly one regression test for the prefilter; direct TypeScript-import coverage remains outside this slice.
-- Use `npm.cmd` for repository scripts on Windows.
-- Keep all timing instrumentation local and out of committed files.
-- Do not change Rust code; no Rust verification loop is required.
 
 ---
 
@@ -30,17 +27,7 @@
 - Consumes: `index.getText(inputPath)`, `index.getTypeScript(inputPath)`, `index.getSvelte(inputPath)`, and `evaluateRule({ id, index })`.
 - Produces: unchanged `evaluateRule()` results; files without the literal `@svar-ui/` no longer reach either AST parser from the general SVAR scan.
 
-- [ ] **Step 1: Record the pre-change focused benchmark**
-
-Run from the repository root:
-
-```powershell
-Measure-Command { npm.cmd exec vitest -- run scripts/testing/repository-rules.test.ts --reporter=dot | Out-Host } | Select-Object TotalMilliseconds
-```
-
-Expected: the existing five tests pass. Record Vitest's reported test duration and `TotalMilliseconds` in the execution notes only; do not edit a tracked file.
-
-- [ ] **Step 2: Write the failing prefilter regression test**
+- [ ] **Step 1: Write the failing prefilter regression test**
 
 Add this test inside `describe("repository rule registry", ...)` in `scripts/testing/repository-rules.test.ts`, after the current-snapshot test:
 
@@ -49,7 +36,7 @@ Add this test inside `describe("repository rule registry", ...)` in `scripts/tes
     const index = indexFor({
       ...extractumGridBoundarySources,
       // Invalid syntax is a parse detector, not a supported repository state.
-      "src/lib/unrelated.ts": "export const = ;",
+      "src/lib/unrelated-without-marker.ts": "export const = ;",
     });
 
     expect(evaluateRule({
@@ -62,7 +49,7 @@ Add this test inside `describe("repository rule registry", ...)` in `scripts/tes
   });
 ```
 
-- [ ] **Step 3: Run the new test and verify RED**
+- [ ] **Step 2: Run the new test and verify RED**
 
 Run:
 
@@ -70,9 +57,9 @@ Run:
 npm.cmd exec vitest -- run scripts/testing/repository-rules.test.ts -t "skips production files without the @svar-ui/ marker" --reporter=dot
 ```
 
-Expected: FAIL because the actual result contains an `INFRA_ERROR` qualified with `src/lib/unrelated.ts`. This confirms that the invalid syntax detects the current unwanted parse.
+Expected: FAIL because the actual result contains an `INFRA_ERROR` qualified with `src/lib/unrelated-without-marker.ts`. This confirms that the invalid syntax detects the current unwanted parse.
 
-- [ ] **Step 4: Add the minimal text prefilter**
+- [ ] **Step 3: Add the minimal text prefilter**
 
 In `evaluateExtractumGridWrapperBoundary()` within `scripts/testing/repository-rules.mjs`, change only the start of the production-file loop to:
 
@@ -84,55 +71,25 @@ In `evaluateExtractumGridWrapperBoundary()` within `scripts/testing/repository-r
 
 Leave the subsequent import filtering, approved-path check, strict wrapper validation, and repository-index implementation unchanged.
 
-- [ ] **Step 5: Run the new test and verify GREEN**
-
-Run:
-
-```powershell
-npm.cmd exec vitest -- run scripts/testing/repository-rules.test.ts -t "skips production files without the @svar-ui/ marker" --reporter=dot
-```
-
-Expected: PASS with one selected test and no warnings or errors from the test.
-
-- [ ] **Step 6: Record the post-change focused benchmark**
-
-Run the same command used in Step 1:
-
-```powershell
-Measure-Command { npm.cmd exec vitest -- run scripts/testing/repository-rules.test.ts --reporter=dot | Out-Host } | Select-Object TotalMilliseconds
-```
-
-Expected: all six tests pass. Record Vitest's test duration and `TotalMilliseconds` in the execution notes and compare them with Step 1; do not add a timing assertion or tracked instrumentation.
-
-- [ ] **Step 7: Run the related Vitest selection**
+- [ ] **Step 4: Run the complete validation**
 
 Run:
 
 ```powershell
 npm.cmd run test:related -- scripts/testing/repository-rules.mjs
-```
-
-Expected: the non-empty related Vitest selection passes with zero failed tests.
-
-- [ ] **Step 8: Run the Svelte and TypeScript check**
-
-Run:
-
-```powershell
 npm.cmd run check
 ```
 
-Expected: `svelte-check` reports zero errors and zero warnings.
+Expected: the non-empty related Vitest selection passes, including the new regression and the live repository snapshot test; then `svelte-check` reports zero errors and zero warnings. This is the GREEN proof for the new test and the regression gate for the full affected surface.
 
-- [ ] **Step 9: Inspect and commit the implementation**
+- [ ] **Step 5: Inspect and commit the implementation**
 
 Run:
 
 ```powershell
-git diff --check
 git diff -- scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts
 git add scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts
 git commit -m "test: prefilter repository SVAR boundary scan"
 ```
 
-Expected: the diff contains one production prefilter and one regression test, with no timing instrumentation, repository-index changes, or unrelated files; the commit succeeds.
+Expected: the diff contains one production prefilter and one regression test, with no repository-index changes or unrelated files; the commit succeeds. This plan document is tracked and committed separately, so it is intentionally absent from the implementation staging command.
