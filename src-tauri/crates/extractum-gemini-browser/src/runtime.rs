@@ -179,11 +179,6 @@ impl GeminiBrowserJobRuntime {
     }
 
     #[cfg(test)]
-    pub(crate) fn has_waiter_for_test(&self, run_id: &str) -> bool {
-        self.has_waiter(run_id)
-    }
-
-    #[cfg(test)]
     pub(crate) fn worker_status_for_test(&self) -> GeminiBrowserWorkerStatus {
         self.worker_status.borrow().clone()
     }
@@ -214,10 +209,6 @@ impl GeminiBrowserJobRuntime {
     }
 
     pub(crate) fn execution_timeout(&self) -> Duration {
-        self.execution_timeout
-    }
-
-    pub(crate) fn worker_execution_timeout(&self) -> Duration {
         self.execution_timeout
     }
 
@@ -280,6 +271,7 @@ impl GeminiBrowserJobRuntime {
         self.cancelled_runs.lock().insert(run_id.to_string());
     }
 
+    #[cfg(test)]
     pub(crate) fn is_cancelled(&self, run_id: &str) -> bool {
         self.cancelled_runs.lock().contains(run_id)
     }

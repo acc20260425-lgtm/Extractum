@@ -6,12 +6,9 @@ use super::identity::{
     load_telegram_source_identity, TelegramPeerKind, TelegramResolutionStrategy,
     TelegramSourceIdentity,
 };
+use super::types::{SourceSyncTarget, TelegramSourceKind};
 #[cfg(test)]
-use super::types::TELEGRAM_SOURCE_TYPE;
-use super::types::{
-    SourceSyncTarget, TelegramSourceKind, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-    TELEGRAM_KIND_SUPERGROUP,
-};
+use super::types::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE};
 use crate::compression::decompress_bytes;
 use crate::error::{AppError, AppResult};
 use crate::telegram_impl::{PeerDescriptor, TelegramClientHandle};

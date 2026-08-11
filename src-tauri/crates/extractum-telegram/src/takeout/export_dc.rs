@@ -74,6 +74,7 @@ where
         .map_err(|error| AppError::network(error.to_string()))
 }
 
+#[cfg(test)]
 async fn export_dc_invoke_with<R, Shifted, Home, ShiftedFuture, HomeFuture>(
     alias: &ExportDcAlias,
     warnings: &mut Vec<String>,

@@ -6,8 +6,8 @@ use super::executor::{app_error_to_domain, AppStatusObserver, DomainErrorContext
 use crate::gemini_browser::executor::{domain_error_to_app, AppBrowserExecutor};
 use extractum_gemini_browser::{
     cancel_run, ensure_startup_reconciled, execute_delivered_job, run_registered_worker,
-    DeliveredJobInput, DeliveryOutcome, GeminiBrowserArtifactMode, GeminiBrowserJob,
-    GeminiBrowserJobRuntime, QueueInspectionSnapshot, QueuedGeminiBrowserJob, ReconciliationAction,
+    DeliveredJobInput, DeliveryOutcome, GeminiBrowserJob, GeminiBrowserJobRuntime,
+    QueueInspectionSnapshot, QueuedGeminiBrowserJob, ReconciliationAction,
     StartupReconciliationSnapshot,
 };
 
@@ -15,27 +15,6 @@ pub(crate) const GEMINI_BROWSER_QUEUE_NAME: &str = "gemini-browser";
 const GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS: u64 = 100;
 type GeminiBrowserApalisTask<IdType> =
     apalis::prelude::Task<GeminiBrowserJob, apalis_sqlite::SqliteContext, IdType>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ApalisQueueInspectionMode {
-    #[cfg(test)]
-    Supported,
-    DegradedRunLogOnly,
-}
-
-pub(crate) fn apalis_queue_inspection_mode() -> ApalisQueueInspectionMode {
-    ApalisQueueInspectionMode::DegradedRunLogOnly
-}
-
-pub(crate) fn startup_reconciliation_checks_queued_runs_against_apalis(
-    mode: ApalisQueueInspectionMode,
-) -> bool {
-    match mode {
-        #[cfg(test)]
-        ApalisQueueInspectionMode::Supported => true,
-        ApalisQueueInspectionMode::DegradedRunLogOnly => false,
-    }
-}
 
 #[cfg(test)]
 pub(crate) fn run_status_for_queue_state(
@@ -340,15 +319,14 @@ mod app_tests {
         time::Duration,
     };
 
-    use apalis::prelude::{
-        BoxDynError, Data, TaskSink, WorkerBuilder, WorkerBuilderExt, WorkerContext,
-    };
+    use apalis::prelude::{BoxDynError, Data, WorkerBuilder, WorkerBuilderExt, WorkerContext};
     use apalis_sqlite::SqliteStorage;
     use parking_lot::Mutex;
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
     use tokio::sync::oneshot;
 
     use super::*;
+    use extractum_gemini_browser::GeminiBrowserArtifactMode;
 
     fn test_job(run_id: &str) -> GeminiBrowserJob {
         GeminiBrowserJob {

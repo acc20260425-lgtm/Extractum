@@ -209,6 +209,7 @@ impl PromptPackSourceReader for AppPromptPackSourceReader {
 
 #[cfg(test)]
 #[path = "youtube_summary/test_support.rs"]
+#[allow(dead_code)]
 mod source_adapter_test_support;
 
 #[cfg(test)]

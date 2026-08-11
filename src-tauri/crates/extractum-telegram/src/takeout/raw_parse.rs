@@ -1,5 +1,4 @@
 use grammers_client::tl;
-use grammers_session::types::{PeerKind, PeerRef};
 use serde_json::json;
 
 use extractum_core::{
@@ -344,18 +343,6 @@ fn contact_summary(contact: &tl::types::MessageMediaContact) -> String {
 fn trimmed_non_empty(input: &str) -> Option<String> {
     let trimmed = input.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-pub(super) fn peer_ref_identity(peer: PeerRef) -> AppResult<(&'static str, i64)> {
-    let kind = match peer.id.kind() {
-        PeerKind::User => "user",
-        PeerKind::Chat => "chat",
-        PeerKind::Channel => "channel",
-    };
-    let peer_id = peer.id.bare_id().ok_or_else(|| {
-        AppError::validation("Telegram self-user peer cannot be used for Takeout import")
-    })?;
-    Ok((kind, peer_id))
 }
 
 pub(super) fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult<i64> {

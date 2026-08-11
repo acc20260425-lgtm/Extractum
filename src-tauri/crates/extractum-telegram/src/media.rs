@@ -238,12 +238,6 @@ fn extract_item_payload_from_parts(
     Some((content, derive_content_kind(has_content, has_media), media))
 }
 
-pub(super) fn extract_item_payload(
-    message: &grammers_client::message::Message,
-) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {
-    extract_item_payload_from_parts(message.text(), message.media())
-}
-
 pub(super) fn extract_raw_item_payload(
     message: &tl::enums::Message,
 ) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {

@@ -25,10 +25,6 @@ pub(crate) struct ActiveRunControl {
 }
 
 impl ActiveRunControl {
-    pub(crate) fn run_id(&self) -> &str {
-        &self.run_id
-    }
-
     pub(crate) fn cancellation(&self) -> CancellationToken {
         self.cancellation.clone()
     }
@@ -39,6 +35,7 @@ impl ActiveRunControl {
 }
 
 impl GeminiBrowserDomainState {
+    #[cfg(test)]
     pub(crate) fn init_status_snapshot(&self, browser_profile_dir: String) {
         *self.status_snapshot.write() = Some(Self::not_started_status(browser_profile_dir));
     }
@@ -136,6 +133,7 @@ impl GeminiBrowserDomainState {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn set_status_snapshot(&self, status: GeminiBrowserProviderStatus) {
         *self.status_snapshot.write() = Some(status);
     }
@@ -187,6 +185,7 @@ impl GeminiBrowserDomainState {
         }
     }
 
+    #[cfg(test)]
     pub(crate) async fn request_stop(&self) -> bool {
         if let Some(active) = self.active.lock().as_ref() {
             active.cancellation.cancel();

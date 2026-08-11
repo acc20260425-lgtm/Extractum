@@ -184,6 +184,7 @@ enum TelegramLoginAttemptToken {
 
 pub struct TelegramLoginAttempt {
     token: TelegramLoginAttemptToken,
+    #[cfg(test)]
     phone: String,
 }
 
@@ -302,7 +303,11 @@ impl TelegramRuntime {
             ),
         };
 
-        account.login_attempt = Some(TelegramLoginAttempt { token, phone });
+        account.login_attempt = Some(TelegramLoginAttempt {
+            token,
+            #[cfg(test)]
+            phone,
+        });
         Ok(())
     }
 

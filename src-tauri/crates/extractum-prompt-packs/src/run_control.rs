@@ -19,6 +19,7 @@ impl PromptPackRunState {
         Self::default()
     }
 
+    #[cfg(any(test, feature = "dev-fixtures"))]
     pub(crate) async fn track(&self, run_id: i64) -> AppResult<()> {
         self.active.lock().await.insert(run_id);
         self.ensure_cancellation_token(run_id).await;

@@ -92,10 +92,8 @@ mod public_api_tests {
         ));
         let root = probe_root.join(name);
         fs::create_dir_all(root.join("src")).expect("create external probe directory");
-        let package_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .display()
-            .to_string()
-            .replace('\\', "/");
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let package_path = manifest_dir.display().to_string().replace('\\', "/");
         let feature = if feature_on {
             ", features = [\"dev-fixtures\"]"
         } else {
@@ -124,6 +122,11 @@ fn main() {
 "#,
         )
         .expect("write external probe source");
+        fs::copy(
+            manifest_dir.join("../../Cargo.lock"),
+            root.join("Cargo.lock"),
+        )
+        .expect("copy workspace lockfile into external probe");
         Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
             .args([
                 "check",

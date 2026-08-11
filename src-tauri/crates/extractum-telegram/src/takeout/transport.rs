@@ -38,7 +38,7 @@ impl ExportDcAttemptTracker {
 
 pub struct TakeoutTransport {
     client: Client,
-    session: Arc<MemorySession>,
+    _session: Arc<MemorySession>,
     attempts: ExportDcAttemptTracker,
 }
 
@@ -51,7 +51,7 @@ impl TakeoutTransport {
     ) -> Self {
         Self {
             client,
-            session,
+            _session: session,
             attempts: ExportDcAttemptTracker::new(home_dc_id, export_dc_id),
         }
     }
@@ -70,14 +70,6 @@ impl TakeoutTransport {
 
     pub(super) fn client(&self) -> &Client {
         &self.client
-    }
-
-    pub(super) fn session(&self) -> &Arc<MemorySession> {
-        &self.session
-    }
-
-    pub(super) fn home_dc_id(&self) -> i32 {
-        self.attempts.attempt().home_dc_id()
     }
 
     pub(super) fn export_dc_id(&self) -> Option<i32> {

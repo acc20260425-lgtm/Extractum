@@ -445,7 +445,9 @@ use application_ipc_commands::{
     seed_analysis_redesign_fixtures,
 };
 
-pub(crate) use {application_command_inventory, telegram_command_registration_inventory};
+#[cfg(test)]
+pub(crate) use application_command_inventory;
+pub(crate) use telegram_command_registration_inventory;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

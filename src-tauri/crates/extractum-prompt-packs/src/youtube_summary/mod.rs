@@ -153,16 +153,6 @@ async fn start_youtube_summary_run_with_preflight_failures_and_source(
 }
 
 #[cfg(test)]
-pub(crate) async fn preflight_youtube_summary_in_pool(
-    pool: &SqlitePool,
-    request: PreflightYoutubeSummaryRunRequest,
-    model_budget: ModelBudget,
-) -> AppResult<super::dto::YoutubeSummaryPreflightResponse> {
-    let source = AppPromptPackSourceReader::new(pool.clone());
-    preflight_youtube_summary(&source, request, model_budget).await
-}
-
-#[cfg(test)]
 pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     pool: &SqlitePool,
     request: StartYoutubeSummaryRunRequest,

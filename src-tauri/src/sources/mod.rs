@@ -52,9 +52,10 @@ pub(crate) use store::{
     upsert_youtube_playlist_source, upsert_youtube_video_source,
 };
 pub(crate) use sync::finalize_sync;
+#[cfg(test)]
+pub(crate) use types::TELEGRAM_KIND_CHANNEL;
 pub(crate) use types::{
     SourceSyncTarget, StoredItemRow, MIGRATED_HISTORY_STATUS_AVAILABLE,
     MIGRATED_HISTORY_STATUS_UNAVAILABLE, NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP,
-    NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-    TELEGRAM_KIND_SUPERGROUP,
+    NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };

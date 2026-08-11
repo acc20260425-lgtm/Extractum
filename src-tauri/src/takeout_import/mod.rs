@@ -621,10 +621,7 @@ enum FallbackRecordState {
 enum StepOutcome<T> {
     Remote(AppResult<T>),
     MetadataStopped(AppResult<T>),
-    AttemptStopped {
-        remote: AppResult<T>,
-        error: AppError,
-    },
+    AttemptStopped { error: AppError },
 }
 
 #[cfg(test)]
@@ -782,10 +779,7 @@ where
                 return Ok(StepOutcome::MetadataStopped(history_result));
             }
             if let Err(error) = record_attempt(attempt).await {
-                return Ok(StepOutcome::AttemptStopped {
-                    remote: history_result,
-                    error,
-                });
+                return Ok(StepOutcome::AttemptStopped { error });
             }
             let HistoryTransitionResponse::Remote {
                 result: search_result,
@@ -1034,10 +1028,7 @@ macro_rules! run_history_search_transition_with_provenance {
                 )
                 .await
                 {
-                    return Ok(StepOutcome::AttemptStopped {
-                        remote: history_result,
-                        error,
-                    });
+                    return Ok(StepOutcome::AttemptStopped { error });
                 }
                 let search_result = $search_operation.await;
                 queue_drained_fallbacks(&mut record_state, $transport.drain_fallbacks())?;

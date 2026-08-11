@@ -25,6 +25,7 @@ const ONLY_MY_PROVENANCE: &str =
 
 #[derive(Clone, Debug, PartialEq)]
 enum RawCall {
+    #[cfg(test)]
     SelfCheck,
     Init {
         request: tl::functions::account::InitTakeoutSession,
@@ -83,6 +84,7 @@ impl OperationsBackend for RealOperationsBackend<'_> {
     fn invoke(&mut self, call: RawCall) -> BackendFuture<'_> {
         Box::pin(async move {
             match call {
+                #[cfg(test)]
                 RawCall::SelfCheck => {
                     takeout_self_check(self.transport.client()).await?;
                     Ok(RawFixture::Unit)
@@ -416,6 +418,7 @@ async fn invoke_export_dc<R: tl::RemoteCall>(
     .await
 }
 
+#[cfg(test)]
 async fn start_takeout_with_backend<B: OperationsBackend>(
     backend: &mut B,
     source_subtype: &str,
@@ -521,6 +524,7 @@ async fn revalidate_migration_with_backend<B: OperationsBackend>(
     migration.map(migrated_peer).transpose()
 }
 
+#[cfg(test)]
 async fn migration_probe_with_backend<B: OperationsBackend>(
     backend: &mut B,
     takeout_id: i64,

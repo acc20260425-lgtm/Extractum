@@ -2,8 +2,7 @@ use serde::Deserialize;
 
 use super::{
     error::{GeminiBrowserError, GeminiBrowserResult},
-    GeminiBrowserProviderStatus, GeminiBrowserRunRequest, GeminiBrowserRunResult,
-    GeminiBrowserRunStatus, GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope,
+    GeminiBrowserProviderStatus, GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope,
     GeminiBrowserSidecarResponse,
 };
 
@@ -90,21 +89,6 @@ pub fn classify_resume_response(
         _ => Err(GeminiBrowserError::protocol(
             "Unexpected Gemini sidecar resume response",
         )),
-    }
-}
-
-pub(crate) fn sidecar_unavailable_result(
-    request: GeminiBrowserRunRequest,
-) -> GeminiBrowserRunResult {
-    GeminiBrowserRunResult {
-        run_id: request.run_id,
-        status: GeminiBrowserRunStatus::Failed,
-        text: None,
-        message: Some("Gemini browser sidecar is unavailable.".to_string()),
-        manual_action: None,
-        artifacts: Default::default(),
-        elapsed_ms: 0,
-        debug_summary: None,
     }
 }
 

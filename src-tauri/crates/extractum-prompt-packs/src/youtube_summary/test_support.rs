@@ -622,14 +622,6 @@ pub(crate) async fn test_pool_with_same_video_selected_explicitly_and_from_playl
     pool
 }
 
-pub(crate) async fn test_pool_with_comments_out_of_order() -> sqlx::SqlitePool {
-    let pool = test_pool_with_ready_video().await;
-    insert_comment(&pool, 901, "comment-newer", 20, "newer").await;
-    insert_comment(&pool, 901, "comment-oldest", 10, "oldest").await;
-    insert_comment(&pool, 901, "comment-middle", 15, "middle").await;
-    pool
-}
-
 pub(crate) async fn test_pool_with_ready_video_and_comments() -> sqlx::SqlitePool {
     let pool = test_pool_with_ready_video().await;
     insert_comment(&pool, 901, "comment-1", 10, "Useful comment").await;

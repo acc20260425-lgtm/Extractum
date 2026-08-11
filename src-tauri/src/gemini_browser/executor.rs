@@ -12,10 +12,7 @@ use super::{sidecar, GeminiBrowserProviderStatus, GeminiBrowserState};
 #[derive(Clone, Copy)]
 pub(crate) enum DomainErrorContext {
     Persistence,
-    Protocol,
     Transport,
-    Browser,
-    Invariant,
 }
 
 pub(crate) fn domain_error_to_app(error: GeminiBrowserError) -> AppError {
@@ -44,10 +41,7 @@ pub(crate) fn app_error_to_domain(
         AppErrorKind::Conflict => GeminiBrowserError::conflict(message),
         AppErrorKind::Auth | AppErrorKind::Network | AppErrorKind::Internal => match context {
             DomainErrorContext::Persistence => GeminiBrowserError::persistence(message),
-            DomainErrorContext::Protocol => GeminiBrowserError::protocol(message),
             DomainErrorContext::Transport => GeminiBrowserError::transport(message),
-            DomainErrorContext::Browser => GeminiBrowserError::browser(message),
-            DomainErrorContext::Invariant => GeminiBrowserError::invariant(message),
         },
     }
 }

@@ -43,6 +43,7 @@ pub(super) async fn insert_youtube_video(pool: &sqlx::SqlitePool, source_id: i64
     .expect("insert video metadata");
 }
 
+#[allow(dead_code)]
 pub(super) async fn insert_playlist(pool: &sqlx::SqlitePool, playlist_source_id: i64) {
     sqlx::query(
         "INSERT INTO sources (
@@ -68,6 +69,7 @@ pub(super) async fn insert_playlist(pool: &sqlx::SqlitePool, playlist_source_id:
     .expect("insert playlist metadata");
 }
 
+#[allow(dead_code)]
 pub(super) async fn insert_playlist_item(
     pool: &sqlx::SqlitePool,
     playlist_source_id: i64,

@@ -303,12 +303,16 @@ function expectSemanticViolations(violations: string[], label: string) {
 }
 
 describe("repository rule registry", () => {
-  it("accepts the current repository snapshot for every registered rule", () => {
-    const index = realAuthorityIndex();
-    for (const id of registeredRuleIds) {
-      expect(evaluateRule({ id, index }), id).toEqual({ id, violations: [] });
-    }
-  });
+  it(
+    "accepts the current repository snapshot for every registered rule",
+    () => {
+      const index = realAuthorityIndex();
+      for (const id of registeredRuleIds) {
+        expect(evaluateRule({ id, index }), id).toEqual({ id, violations: [] });
+      }
+    },
+    15_000,
+  );
 
   it("registers every current repository rule", () => {
     expect(registeredRuleIds).toEqual([
