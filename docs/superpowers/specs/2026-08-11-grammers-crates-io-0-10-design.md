@@ -19,6 +19,8 @@ Grammers dependency source:
 - the four workspace declarations and `Cargo.lock`;
 - the feature-baseline generator and generated JSON artifact;
 - the repository rule and its current-state fixtures;
+- the reproducible provenance record in
+  `docs/superpowers/verification/2026-08-11-grammers-crates-io-provenance.md`;
 - the active dependency-policy description in `docs/project.md`;
 - focused Rust, policy, and workspace verification.
 
@@ -30,13 +32,12 @@ difference, stop and re-plan instead of adapting product behavior.
 
 ## Published Artifact Equivalence
 
-The downloaded `0.10.0` artifacts for `grammers-client`,
-`grammers-mtsender`, `grammers-session`, and `grammers-tl-types` each record
-Git SHA `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` in
-`.cargo_vcs_info.json`. Hash comparison against the cached checkout of that
-revision found every common published file identical. Differences were limited
-to Cargo packaging metadata and two `grammers-tl-types` test-support files not
-included in the published crate.
+The reproducible provenance record confirms that the downloaded `0.10.0`
+artifacts for all four direct crates identify Git SHA
+`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` and that every file shared with the
+cached checkout is byte-identical. It records the commands, cache paths,
+excluded packaging files, the two unpublished test-support files, and observed
+output.
 
 The crates.io artifacts therefore originate from the existing pin and retain
 its runtime source. The previous live Telegram and Takeout smoke record remains
@@ -69,17 +70,17 @@ enforcement in the repository rule.
 
 The existing generator and repository rule already enforce the four-package
 inventory, canonical source, feature universe, and enabled-feature closure.
-This migration changes only their release identity and removes one redundant
-check:
+Responsibility for the migration delta is split explicitly:
 
-- replace generator `revision` with `version: "0.10.0"` and replace its Git
-  `exactSource` with the canonical crates.io registry source;
-- require each selected metadata package to have version `0.10.0`;
-- require each direct Grammers manifest dependency to have requirement
-  `=0.10.0`;
-- remove the repository rule's second source comparison because baseline
-  generation has already rejected source drift;
-- update fixtures from Git package identities to registry identities.
+- The generator replaces `revision` with `version: "0.10.0"`, replaces its
+  Git `exactSource` with the canonical crates.io registry source, and requires
+  every selected direct metadata package to have version `0.10.0`.
+- The repository rule requires every direct Grammers dependency in
+  `extractum-telegram` metadata to have manifest requirement `=0.10.0`. It
+  relies on canonical baseline generation for resolved version and source, and
+  removes its redundant second source comparison.
+- Repository-rule fixtures move from Git package identities to registry
+  identities.
 
 Negative coverage needs two policy classes: non-canonical source and release
 drift. Release-drift coverage must exercise both the selected package version
@@ -90,6 +91,8 @@ The JSON remains generated output. Update the generator, then regenerate the
 artifact with `--write`. A diff in `universe` or `forbidden` is an upstream
 publication fact and may be accepted after review. Any diff in `required` is a
 feature-policy change and stops the slice for investigation.
+
+## Documentation Policy
 
 Update only the current-state dependency-policy text in `docs/project.md` to
 name crates.io and exact version `0.10.0`; retain the surrounding historical
@@ -103,7 +106,8 @@ the existing adapters and fixtures.
 
 RED/GREEN policy loop:
 
-- confirm the pre-migration baseline rejects registry metadata;
+- after switching the manifest but before updating the generator, confirm that
+  the pre-migration baseline rejects registry metadata;
 - run the focused repository-rule test with non-empty source and release-drift
   cases;
 - run `node scripts/telegram-grammers-feature-baseline.mjs --check`;
@@ -125,4 +129,6 @@ commit.
 
 - All four manifests require `=0.10.0`; the locked Grammers graph resolves
   `0.10.0` only from crates.io and contains no Grammers Git source.
+- Repository-rule fixtures fail for a non-canonical source and for release
+  drift in both the resolved package version and direct manifest requirement.
 - `npm.cmd run verify` passes.
