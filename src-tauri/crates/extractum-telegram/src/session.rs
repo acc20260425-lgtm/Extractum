@@ -65,25 +65,29 @@ fn decode_base64(value: &str) -> AppResult<Vec<u8>> {
     })
 }
 
+pub(crate) fn session_error(error: impl std::fmt::Display) -> AppError {
+    AppError::internal(error.to_string())
+}
+
 fn associated_data(account_id: i64) -> String {
     format!("org.ai.extractum.telegram.session.v1.account.{account_id}")
 }
 
-async fn memory_session_to_saved(session: &TelegramSession) -> SavedSession {
+async fn memory_session_to_saved(session: &TelegramSession) -> AppResult<SavedSession> {
     let session = session.clone_memory_session();
-    let home_dc = session.home_dc_id();
-    let updates_state = session.updates_state().await;
+    let home_dc = session.home_dc_id().map_err(session_error)?;
+    let updates_state = session.updates_state().await.map_err(session_error)?;
     let mut dc_options = HashMap::new();
     for dc_id in 1..=5i32 {
-        if let Some(dc) = session.dc_option(dc_id) {
+        if let Some(dc) = session.dc_option(dc_id).map_err(session_error)? {
             dc_options.insert(dc_id, dc);
         }
     }
-    SavedSession {
+    Ok(SavedSession {
         home_dc,
         dc_options,
         updates_state,
-    }
+    })
 }
 
 fn saved_to_telegram_session(saved: SavedSession) -> TelegramSession {
@@ -199,12 +203,16 @@ impl TelegramSession {
         Arc::clone(&self.inner)
     }
 
-    pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) {
+    pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) -> AppResult<()> {
         for peer_info in peer_infos {
             if peer_info.auth().is_some() {
-                self.inner.cache_peer(peer_info).await;
+                self.inner
+                    .cache_peer(peer_info)
+                    .await
+                    .map_err(session_error)?;
             }
         }
+        Ok(())
     }
 }
 
@@ -249,7 +257,7 @@ pub async fn encode_session_json(
     account_id: i64,
     key: &SessionEncryptionKey,
 ) -> AppResult<String> {
-    let saved = memory_session_to_saved(session).await;
+    let saved = memory_session_to_saved(session).await?;
     let envelope = encrypt_saved_session(account_id, key, &saved)?;
     serde_json::to_string(&envelope).map_err(|error| AppError::internal(error.to_string()))
 }

@@ -346,7 +346,7 @@ async fn fetch_message_batch_with<B: MessageBatchBackend>(
         .map(|peer| (peer.id(), peer))
         .collect::<HashMap<_, _>>();
     let peer_infos = peers.values().map(PeerInfo::from).collect::<Vec<_>>();
-    session.cache_peer_infos(&peer_infos).await;
+    session.cache_peer_infos(&peer_infos).await?;
 
     let (next_offset_id, next_offset_date) = if !is_terminal {
         messages

@@ -32,7 +32,11 @@ pub(super) async fn peer_photo_bytes(
     client: &grammers_client::Client,
     peer: &Peer,
 ) -> AppResult<Option<Vec<u8>>> {
-    let Some(photo) = peer.photo(false).await else {
+    let Some(photo) = peer
+        .photo(false)
+        .await
+        .map_err(|error| AppError::network(error.to_string()))?
+    else {
         return Ok(None);
     };
 

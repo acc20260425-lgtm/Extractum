@@ -5,6 +5,8 @@ use grammers_client::tl;
 use grammers_mtsender::InvocationError;
 use grammers_session::{storages::MemorySession, Session};
 
+use crate::session::session_error;
+
 use super::super::error::should_fallback_export_dc_error;
 use super::{
     transport::TakeoutTransport,
@@ -20,15 +22,21 @@ struct ExportDcAlias {
 }
 
 pub(super) async fn prepare_export_dc_alias(session: &Arc<MemorySession>) -> AppResult<(i32, i32)> {
-    let home_dc_id = session.home_dc_id();
+    let home_dc_id = session.home_dc_id().map_err(session_error)?;
     let export_dc_id = export_dc_id_for_home_dc(home_dc_id);
-    let mut export_option = session.dc_option(home_dc_id).ok_or_else(|| {
-        AppError::internal(format!(
-            "Home DC option {home_dc_id} is missing from session"
-        ))
-    })?;
+    let mut export_option = session
+        .dc_option(home_dc_id)
+        .map_err(session_error)?
+        .ok_or_else(|| {
+            AppError::internal(format!(
+                "Home DC option {home_dc_id} is missing from session"
+            ))
+        })?;
     export_option.id = export_dc_id;
-    session.set_dc_option(&export_option).await;
+    session
+        .set_dc_option(&export_option)
+        .await
+        .map_err(session_error)?;
 
     let alias = ExportDcAlias {
         home_dc_id,
