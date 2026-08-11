@@ -6,7 +6,7 @@ Reduce the cost of the repository snapshot test by avoiding TypeScript and Svelt
 
 ## Scope
 
-The permanent change is limited to one text prefilter in `scripts/testing/repository-rules.mjs` and one regression test in `scripts/testing/repository-rules.test.ts`. Timing instrumentation is used only for local before-and-after measurements and is not committed.
+The permanent change is limited to one text prefilter in `scripts/testing/repository-rules.mjs` and one regression test in `scripts/testing/repository-rules.test.ts`.
 
 ## Current Behavior
 
@@ -18,13 +18,15 @@ The current repository contains 379 matching production files. Only five contain
 
 Immediately before the existing TypeScript-or-Svelte parse, the general forbidden-import scan will read the file through `index.getText(file)` and continue when the immutable cached source does not include the exact literal `@svar-ui/`. The remaining parse, import filtering, and `APPROVED_SVAR_GRID_PATHS` check stay in their current order.
 
+This adds no filesystem reads: `getText()` and the later `getTypeScript()` or `getSvelte()` call share the repository index's `rawSourceCache`, and the general scan already caused every matching file to be read before this change. The prefilter removes AST construction only.
+
 This is a conservative prefilter. Every matching import must contain the literal prefix in its source text, so the prefilter cannot hide a forbidden import. Comments, string literals, or ambient module declarations may cause an unnecessary parse, but the AST import check prevents false violations.
 
 The existing strict wrapper checks remain unchanged. `DataGrid.svelte` and `TreeDataGrid.svelte` continue to be parsed and checked for required component imports, component composition, tree mode, and scoped SVAR cell styling. Their later reads reuse the repository index cache. Approved files still pass through the general scan, preserving its current semantics.
 
 ## Tests
 
-Add one evaluator regression test whose otherwise valid fixture contains a syntactically invalid production source without `@svar-ui/`. Before the change, the general scan tries to parse that source and returns an `INFRA_ERROR`; after the change, the source is skipped and the rule returns no violations. This tests the public rule behavior without spying on repository-index internals.
+Add one evaluator regression test named `skips production files without the @svar-ui/ marker`. Its otherwise valid fixture contains a syntactically invalid `.ts` production source without the marker. A fixture comment will state that the invalid syntax detects whether parsing occurred and is not a supported repository state. Before the change, the general scan tries to parse that source through the TypeScript `parseDiagnostics` path and returns an `INFRA_ERROR`; after the change, the source is skipped and the rule returns no violations. This tests the public rule behavior without spying on repository-index internals.
 
 The existing forbidden Svelte import mutation continues to prove that a file containing a real marker is parsed and rejected. Existing wrapper fixtures continue to prove strict validation of approved files.
 
