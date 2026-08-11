@@ -239,6 +239,7 @@ mod tests {
             from_id: None,
             from_boosts_applied: None,
             from_rank: None,
+            rich_message: None,
             peer_id: tl::types::PeerChannel { channel_id: 900 }.into(),
             saved_peer_id: None,
             fwd_from: None,

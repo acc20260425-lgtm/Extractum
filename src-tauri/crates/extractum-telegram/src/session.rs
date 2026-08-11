@@ -348,7 +348,12 @@ mod tests {
         let loaded_memory_session = loaded.clone_memory_session();
         let same_memory_session = loaded.clone_memory_session();
         assert!(Arc::ptr_eq(&loaded_memory_session, &same_memory_session));
-        assert_eq!(loaded_memory_session.home_dc_id(), 2);
+        assert_eq!(
+            loaded_memory_session
+                .home_dc_id()
+                .expect("read loaded home DC"),
+            2
+        );
     }
 
     #[tokio::test]
@@ -377,7 +382,9 @@ mod tests {
             URL_SAFE_NO_PAD.encode([7u8; SESSION_KEY_BYTES]),
         ))
         .expect("valid key");
-        let saved = memory_session_to_saved(&session).await;
+        let saved = memory_session_to_saved(&session)
+            .await
+            .expect("save memory session");
 
         let encryption_error = expect_error(
             encrypt_saved_session_with(7, &key, &saved, |_, _, _| {
@@ -486,8 +493,10 @@ mod tests {
     #[tokio::test]
     async fn legacy_json_returns_rewrite_decision() {
         let session = test_session(2);
-        let legacy_json = serde_json::to_string(&memory_session_to_saved(&session).await)
-            .expect("serialize legacy session");
+        let saved = memory_session_to_saved(&session)
+            .await
+            .expect("save memory session");
+        let legacy_json = serde_json::to_string(&saved).expect("serialize legacy session");
 
         assert!(
             !session_json_requires_existing_key(&legacy_json).expect("classify legacy session"),

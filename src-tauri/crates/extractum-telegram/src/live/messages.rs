@@ -439,6 +439,7 @@ mod tests {
             from_id: None,
             from_boosts_applied: None,
             from_rank: None,
+            rich_message: None,
             peer_id: tl::types::PeerChannel { channel_id: 900 }.into(),
             saved_peer_id: None,
             fwd_from: None,
@@ -479,6 +480,7 @@ mod tests {
             mutual_contact: false,
             deleted: false,
             bot: false,
+            bot_guard: false,
             bot_chat_history: false,
             bot_nochats: false,
             verified: false,
@@ -706,26 +708,31 @@ mod tests {
         assert!(
             Session::peer(memory_session.as_ref(), PeerId::user(101).unwrap())
                 .await
+                .expect("read cached peer")
                 .is_some()
         );
         assert!(
             Session::peer(memory_session.as_ref(), PeerId::user(102).unwrap())
                 .await
+                .expect("read cached peer")
                 .is_none()
         );
         assert!(
             Session::peer(memory_session.as_ref(), PeerId::chat(201).unwrap())
                 .await
+                .expect("read cached peer")
                 .is_some()
         );
         assert!(
             Session::peer(memory_session.as_ref(), PeerId::channel(301).unwrap())
                 .await
+                .expect("read cached peer")
                 .is_some()
         );
         assert!(
             Session::peer(memory_session.as_ref(), PeerId::channel(302).unwrap())
                 .await
+                .expect("read cached peer")
                 .is_none()
         );
 
@@ -899,6 +906,7 @@ mod tests {
             PeerId::channel(900).expect("history peer id")
         )
         .await
+        .expect("read cached peer")
         .is_none());
     }
 
@@ -922,6 +930,7 @@ mod tests {
                 reply_to_scheduled: false,
                 forum_topic: true,
                 quote: false,
+                reply_to_ephemeral: false,
                 reply_to_msg_id: Some(41),
                 reply_to_peer_id: Some(tl::types::PeerChannel { channel_id: 900 }.into()),
                 reply_from: None,
