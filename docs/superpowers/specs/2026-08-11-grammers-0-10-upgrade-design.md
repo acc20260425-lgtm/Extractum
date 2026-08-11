@@ -31,7 +31,9 @@ new layer-227 capabilities. New optional TL fields are accepted and otherwise
 ignored by existing extraction behavior.
 
 Any other breaking `grammers 0.10` API changes found by compilation are
-adapted in this slice without expanding product behavior.
+adapted in this slice without expanding product behavior. If an adaptation
+escapes the existing session, live, avatar, or Takeout adapters, stop and
+re-plan instead of expanding the slice.
 
 ## Architecture
 
@@ -53,8 +55,8 @@ best-effort outer boundary.
 | --- | --- | --- |
 | `memory_session_to_saved` | change `SavedSession` to `AppResult<SavedSession>` | propagate `home_dc_id`, `updates_state`, and `dc_option` failures |
 | `TelegramSession::cache_peer_infos` | change `()` to `AppResult<()>` | propagate `cache_peer` failure; its single caller uses `?` |
-| `peer_photo_bytes` | unchanged: `AppResult<Option<Vec<u8>>>` | propagate the new `Peer::photo` result; the timeout wrapper still suppresses the resulting `AppError` |
-| `prepare_export_dc_alias` | unchanged: `AppResult<(i32, i32)>` | use `?` for session errors, then preserve `ok_or_else` for a missing DC option before propagating `set_dc_option` |
+| `peer_photo_bytes` | unchanged: `AppResult<Option<Vec<u8>>>` | propagate the fallible `Peer::photo` result in `grammers 0.10`; the timeout wrapper still suppresses the resulting `AppError` |
+| `prepare_export_dc_alias` | unchanged: `AppResult<(i32, i32)>` | `?` for the session error; `ok_or_else` for the absent DC option with its current message; `?` for `set_dc_option` |
 
 Replace the export-DC `matches!` allowlist with an exhaustive `match` and make
 `InvocationError::Session` an explicit non-fallback branch. Extend the existing
@@ -76,8 +78,9 @@ claiming support for new rich-message semantics.
 Update:
 
 - the four workspace Git pins and `Cargo.lock`;
-- `src/lib/telegram-grammers-feature-baseline.json`;
-- `scripts/telegram-grammers-feature-baseline.mjs`;
+- the revision constant in `scripts/telegram-grammers-feature-baseline.mjs`,
+  then regenerate `src/lib/telegram-grammers-feature-baseline.json` with that
+  script rather than editing the JSON by hand;
 - the grammers revision fixture in `scripts/testing/repository-rules.test.ts`;
 - the current dependency-policy version, revision, and validation note in
   `docs/project.md`.
@@ -87,6 +90,10 @@ disabled, session keeps only `serde`, mtsender keeps its existing default
 selection, and TL types retain `deserializable-functions` plus their required
 generated-code features. Review lockfile churn and keep unrelated dependency
 updates out of the slice where Cargo permits.
+
+Baseline changes to `universe` and `forbidden` are accepted as upstream feature
+facts. Any change to `required` is a requested-feature policy change and must
+be investigated explicitly before proceeding.
 
 ## Testing Strategy
 
@@ -113,7 +120,7 @@ private payloads must not be committed.
 
 ## Compatibility and Rollback
 
-No migration or API change is introduced; rollback is a revert of the isolated
+No migration is introduced; rollback is a revert of the isolated
 dependency-slice commit.
 
 ## Completion Criteria
