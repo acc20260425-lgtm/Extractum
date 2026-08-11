@@ -9,10 +9,10 @@ edition = "2021"
 [workspace.dependencies]
 base64 = "0.22"
 chacha20poly1305 = { version = "0.10", features = ["std"] }
-grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }
-grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
-grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }
-grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
+grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981", default-features = false }
+grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981" }
+grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981", default-features = false, features = ["serde"] }
+grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981", features = ["deserializable-functions"] }
 parking_lot = "0.12"
 rand_core = { version = "0.6", features = ["getrandom"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
