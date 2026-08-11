@@ -1,4 +1,5 @@
 use extractum_core::error::AppError;
+use grammers_mtsender::InvocationError;
 
 pub(super) fn is_non_forum_topic_refresh_error(error: &str) -> bool {
     error.contains("CHANNEL_FORUM_MISSING") || error.contains("CHANNEL_MONOFORUM_UNSUPPORTED")
@@ -11,15 +12,17 @@ pub(super) fn is_channel_private_error(error: &AppError) -> bool {
         .contains("CHANNEL_PRIVATE")
 }
 
-pub(super) fn should_fallback_export_dc_error(error: &grammers_mtsender::InvocationError) -> bool {
-    matches!(
-        error,
-        grammers_mtsender::InvocationError::InvalidDc
-            | grammers_mtsender::InvocationError::Io(_)
-            | grammers_mtsender::InvocationError::Transport(_)
-            | grammers_mtsender::InvocationError::Authentication(_)
-            | grammers_mtsender::InvocationError::Dropped
-    )
+pub(super) fn should_fallback_export_dc_error(error: &InvocationError) -> bool {
+    match error {
+        InvocationError::InvalidDc
+        | InvocationError::Io(_)
+        | InvocationError::Transport(_)
+        | InvocationError::Authentication(_)
+        | InvocationError::Dropped => true,
+        InvocationError::Session(_) | InvocationError::Rpc(_) | InvocationError::Deserialize(_) => {
+            false
+        }
+    }
 }
 
 #[cfg(test)]

@@ -329,5 +329,8 @@ mod tests {
                 caused_by: None,
             }
         )));
+        assert!(!should_fallback_export_dc_error(&InvocationError::Session(
+            Box::new(std::io::Error::other("session failure")),
+        )));
     }
 }
