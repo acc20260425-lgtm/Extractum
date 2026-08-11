@@ -6,17 +6,18 @@
 
 ## Goal
 
-Move Extractum's four direct `grammers-*` dependencies from Codeberg revision
-`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` to their crates.io releases at the
-exact version `0.10.0`, preserving the feature selection, resolved behavior,
-and `extractum-telegram` public interface established by the previous upgrade.
+Move Extractum's complete eight-package `grammers-*` graph from Codeberg
+revision `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` to the corresponding crates.io
+releases, preserving the feature selection, resolved behavior, and
+`extractum-telegram` public interface established by the previous upgrade.
 
 ## Scope
 
 The slice owns the active project state that declares or enforces the current
 Grammers dependency source:
 
-- the four workspace declarations and `Cargo.lock`;
+- the four direct workspace declarations and the complete eight-package graph
+  in `Cargo.lock`;
 - the feature-baseline generator and generated JSON artifact;
 - the repository rule and its current-state fixtures;
 - the reproducible provenance record in
@@ -32,12 +33,11 @@ difference, stop and re-plan instead of adapting product behavior.
 
 ## Published Artifact Equivalence
 
-The reproducible provenance record confirms that the downloaded `0.10.0`
-artifacts for all four direct crates identify Git SHA
-`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` and that every file shared with the
-cached checkout is byte-identical. It records the commands, cache paths,
-excluded packaging files, the two unpublished test-support files, and observed
-output.
+The reproducible provenance record confirms that all eight downloaded artifacts
+identify Git SHA `5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` and that every file shared with
+the cached checkout is byte-identical. It covers the seven `0.10.0` packages
+and `grammers-tl-parser 1.2.2`, recording the commands, cache paths, excluded
+packaging files, two unpublished test-support files, and observed output.
 
 The crates.io artifacts therefore originate from the existing pin and retain
 its runtime source. The previous live Telegram and Takeout smoke record remains
@@ -55,37 +55,46 @@ preserving their current default-feature settings and requested features:
 - `grammers-session`: defaults disabled, `serde` enabled;
 - `grammers-tl-types`: current defaults plus `deserializable-functions`.
 
-Regenerate `Cargo.lock` through Cargo. All resolved `grammers-*` packages must
-use the canonical crates.io registry source and registry checksums, with no Git-
-sourced Grammers package left in the graph. Keep unrelated lockfile updates out
-where Cargo permits.
+Regenerate `Cargo.lock` through Cargo. The resolved graph must contain seven
+Grammers packages at `0.10.0` and `grammers-tl-parser` at `1.2.2`, all from the
+canonical crates.io registry source, with no Git-sourced Grammers package.
+Cargo enforces the registry checksums while resolving and building. Keep
+unrelated lockfile updates out where Cargo permits.
 
-The exact requirement makes the intent visible in the manifest and prevents a
-lock refresh from silently moving beyond `0.10.0`. If a future valid Grammers
-resolution cannot satisfy exact mutually dependent pins, the policy may be
-relaxed to a caret requirement only while retaining exact resolved-version
-enforcement in the repository rule.
+The exact direct requirements make intent visible in the manifest. The
+generated baseline additionally records the inventory and individual versions
+of all eight resolved packages, preventing a lock refresh from silently moving
+transitive Grammers crates. If a future valid resolution cannot satisfy exact
+mutually dependent direct pins, those requirements may be relaxed to caret only
+while retaining the eight-package resolved-version policy.
 
 ## Feature Baseline and Repository Policy
 
-The existing generator and repository rule already enforce the four-package
+The existing generator and repository rule enforce the direct four-package
 inventory, canonical source, feature universe, and enabled-feature closure.
-Responsibility for the migration delta is split explicitly:
+This slice extends resolved-graph ownership to all eight packages while keeping
+direct feature ownership unchanged:
 
 - The generator replaces `revision` with `version: "0.10.0"`, replaces its
-  Git `exactSource` with the canonical crates.io registry source, and requires
-  every selected direct metadata package to have version `0.10.0`.
+  Git `exactSource` with the canonical crates.io registry source, and keeps the
+  existing direct-package feature records.
+- The generator adds a canonical `resolvedPackages` inventory derived from all
+  `grammers-*` entries in Cargo metadata. It records seven packages at `0.10.0`
+  plus `grammers-tl-parser` at `1.2.2`, rejects any non-canonical source, and
+  makes inventory or version drift change the generated baseline.
 - The repository rule requires every direct Grammers dependency in
   `extractum-telegram` metadata to have manifest requirement `=0.10.0`. It
-  relies on canonical baseline generation for resolved version and source, and
-  removes its redundant second source comparison.
+  relies on canonical baseline generation plus `sameJson` for the complete
+  resolved inventory, versions, and sources, and removes its redundant second
+  source comparison.
 - Repository-rule fixtures move from Git package identities to registry
   identities.
 
 Negative coverage needs two policy classes: non-canonical source and release
-drift. Release-drift coverage must exercise both the selected package version
-and the direct manifest requirement; separate Git/path/alternate-registry cases
-are unnecessary because they share the same canonical-source comparison.
+drift. Source coverage must exercise a transitive package; release-drift
+coverage must exercise a transitive resolved version and a direct manifest
+requirement. Separate Git/path/alternate-registry cases are unnecessary because
+they share the same canonical-source comparison.
 
 The JSON remains generated output. Update the generator, then regenerate the
 artifact with `--write`. A diff in `universe` or `forbidden` is an upstream
@@ -112,8 +121,8 @@ RED/GREEN policy loop:
   cases;
 - run `node scripts/telegram-grammers-feature-baseline.mjs --check`;
 - inspect locked `cargo metadata` for exact manifest requirements, selected
-  versions, canonical registry sources, unchanged required features, and no
-  Git-sourced Grammers packages.
+  eight-package inventory and versions, canonical registry sources, unchanged
+  required features, and no Git-sourced Grammers packages.
 
 Package gates:
 
@@ -122,13 +131,17 @@ Package gates:
 
 End-of-slice gate: `npm.cmd run verify`.
 
+## Compatibility and Rollback
+
 No migrations are introduced; rollback is a revert of the source-migration
 commit.
 
 ## Completion Criteria
 
-- All four manifests require `=0.10.0`; the locked Grammers graph resolves
-  `0.10.0` only from crates.io and contains no Grammers Git source.
-- Repository-rule fixtures fail for a non-canonical source and for release
-  drift in both the resolved package version and direct manifest requirement.
+- All four direct declarations require `=0.10.0`; the locked graph contains
+  seven Grammers packages at `0.10.0` and `grammers-tl-parser` at `1.2.2`, all
+  from crates.io and with no Grammers Git source.
+- Repository-rule fixtures fail for a transitive non-canonical source and for
+  release drift in both a transitive resolved version and direct manifest
+  requirement.
 - `npm.cmd run verify` passes.
