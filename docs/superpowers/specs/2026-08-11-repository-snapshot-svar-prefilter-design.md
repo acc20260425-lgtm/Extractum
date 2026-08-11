@@ -38,10 +38,15 @@ After the RED/GREEN cycle, run:
 
 ```powershell
 npm.cmd run test:related -- scripts/testing/repository-rules.mjs
+```
+
+After the related test selection passes, run:
+
+```powershell
 npm.cmd run check
 ```
 
-Measure the focused test locally before and after with the same command, but do not commit timing instrumentation or enforce an environment-dependent threshold. Because this change affects only frontend test infrastructure and no Rust code, Rust verification loops and `npm.cmd run verify` are outside this slice.
+Because this change affects only frontend test infrastructure and no Rust code, Rust verification loops and `npm.cmd run verify` are outside this slice.
 
 ## Non-Goals
 

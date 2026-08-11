@@ -19,7 +19,7 @@
 ### Task 1: Prefilter the SVAR boundary scan
 
 **Files:**
-- Modify: `scripts/testing/repository-rules.mjs:42-57`
+- Modify: `scripts/testing/repository-rules.mjs:48-49`
 - Test: `scripts/testing/repository-rules.test.ts:305-345`
 - Reference: `docs/superpowers/specs/2026-08-11-repository-snapshot-svar-prefilter-design.md`
 
@@ -77,10 +77,17 @@ Run:
 
 ```powershell
 npm.cmd run test:related -- scripts/testing/repository-rules.mjs
+```
+
+Expected: the non-empty related Vitest selection passes, including the new no-marker regression, the live repository snapshot test, and the existing forbidden Svelte import mutation. The mutation proves that files containing the marker are still parsed and rejected, so the prefilter cannot skip every production file.
+
+Only after the related test selection passes, run:
+
+```powershell
 npm.cmd run check
 ```
 
-Expected: the non-empty related Vitest selection passes, including the new regression and the live repository snapshot test; then `svelte-check` reports zero errors and zero warnings. This is the GREEN proof for the new test and the regression gate for the full affected surface.
+Expected: `svelte-check` reports zero errors and zero warnings.
 
 - [ ] **Step 5: Inspect and commit the implementation**
 
