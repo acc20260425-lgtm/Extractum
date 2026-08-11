@@ -84,8 +84,11 @@ ownership unchanged:
   and `source`; together these entries are the sole resolved-release identity.
   The canonical artifact records seven packages at `0.10.0` plus
   `grammers-tl-parser` at `1.2.2`, all with the crates.io registry source.
+  Generation records the observed source; `sameJson` comparison with the
+  canonical artifact owns source drift.
 - The repository rule requires every direct Grammers dependency in
-  `extractum-telegram` metadata to have manifest requirement `=0.10.0`. It
+  `extractum-telegram` metadata to have exact manifest requirement
+  `=${resolvedPackage.version}`, derived from its `resolvedPackages` entry. It
   uses `sameJson` against the canonical baseline for the complete resolved
   inventory, versions, and sources, and removes its redundant second source
   comparison.
@@ -94,9 +97,10 @@ ownership unchanged:
 
 The synthetic Cargo-metadata builder in `repository-rules.test.ts` must rename
 its four feature-policy records to `directPackages`, then expand its package
-records and dependency/resolve edges to all eight `resolvedPackages`. This is
-the main fixture change and makes transitive source and version mutations
-observable without changing the direct feature policy.
+records and resolved nodes to all eight `resolvedPackages`. Grammers-to-Grammers
+edges remain empty because no policy evaluator reads them. This makes
+transitive source and version mutations observable without changing the direct
+feature policy.
 
 Negative coverage needs two policy classes: non-canonical source and release
 drift. Source coverage must exercise a transitive package; release-drift

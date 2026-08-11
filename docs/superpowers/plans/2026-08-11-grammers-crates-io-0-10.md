@@ -263,6 +263,13 @@ files remain modified but unstaged. Do not commit this intermediate state. Task
 3 continues immediately and restores GREEN before creating the one atomic
 source-migration commit.
 
+If execution is interrupted before Task 3 completes, discard only the Task 2
+handoff and restart Task 2:
+
+```powershell
+git checkout -- src-tauri/Cargo.toml src-tauri/Cargo.lock scripts/testing/repository-rules.test.ts
+```
+
 ---
 
 ### Task 3: Implement Schema-v2 Generation and Repository Policy (GREEN)
@@ -350,12 +357,24 @@ Keep direct-package inventory and feature calculations unchanged apart from the 
 
 - [ ] **Step 3: Update the repository rule**
 
-Read direct policy from `baseline.directPackages`. Add:
+Read direct feature policy from `baseline.directPackages` and resolved release
+identity from `baseline.resolvedPackages`. Add:
 
 ```js
+const resolvedPackages = Array.isArray(baseline?.resolvedPackages)
+  ? baseline.resolvedPackages
+  : [];
 for (const dependency of producerGrammers) {
-  if (dependency.req !== "=0.10.0") {
-    violations.push(`${dependency.name}: direct manifest requirement must be =0.10.0`);
+  const resolvedPackage = resolvedPackages.find(({ name }) => name === dependency.name);
+  if (!resolvedPackage) {
+    violations.push(`${dependency.name}: missing resolved baseline entry`);
+    continue;
+  }
+  const expectedRequirement = `=${resolvedPackage.version}`;
+  if (dependency.req !== expectedRequirement) {
+    violations.push(
+      `${dependency.name}: direct manifest requirement must be ${expectedRequirement}`,
+    );
   }
 }
 ```
