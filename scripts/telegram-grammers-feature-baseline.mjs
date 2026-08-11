@@ -8,7 +8,7 @@ const artifactPath = path.join(
   repoRoot,
   "src/lib/telegram-grammers-feature-baseline.json",
 );
-const revision = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa";
+const revision = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981";
 const exactSource =
   `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`;
 const directOwnerName = "extractum-telegram";

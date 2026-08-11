@@ -211,8 +211,10 @@ any migration from the old GitHub git URL to the Codeberg git URL as explicit
 dependency work under this policy.
 
 Current pinned upstream: Codeberg rev
-`1f901ce6e973fdcf0e74267f3d8efad5c729daaa` for the `grammers-*` `0.9.0`
-line. The older GitHub lock rev
+`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` for the `grammers-*` `0.10.0`
+line. This update introduces fallible session access and TL layer 227,
+affecting live sync, Takeout, session handling, and source identity adapters.
+The older GitHub lock rev
 `fa7692e49f301f16dc671c2f305ac1a32cad1a8e` was not available from the
 Codeberg repository during migration.
 

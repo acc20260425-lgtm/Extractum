@@ -88,7 +88,7 @@ function clone<T>(value: T): T {
 
 const grammersBaseline = {
   schemaVersion: 1,
-  revision: "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+  revision: "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981",
   packages: [
     { name: "grammers-client", required: [], forbidden: ["default"], universe: ["default"] },
     { name: "grammers-mtsender", required: [], forbidden: ["proxy"], universe: ["proxy"] },
