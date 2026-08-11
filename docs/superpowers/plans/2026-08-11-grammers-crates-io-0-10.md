@@ -21,7 +21,7 @@
 - On Windows use `npm.cmd`, not `npm`.
 - Use canonical `src-tauri/target`; do not create a slice-specific Cargo target directory.
 - In a fresh checkout or worktree, run `npm.cmd run bootstrap:testing` before the final `npm.cmd run verify`.
-- Rollback the source migration by reverting the Task 2, Task 3, and Task 4 commits. Task 1 is a behavior-neutral fixture refactor and may remain.
+- Task 3 creates the single atomic source-migration commit; revert that commit for functional rollback. Task 1 fixture refactoring, Task 4 documentation, and Task 5 plan tracking may remain because they do not control runtime dependency resolution.
 
 ## File Map
 
@@ -250,16 +250,18 @@ npm.cmd run test:related -- scripts/testing/repository-rules.test.ts
 
 Expected: FAIL with a non-empty selection because production still generates schema v1 and does not enforce dependency `req`.
 
-- [ ] **Step 8: Commit the intentional RED checkpoint**
+- [ ] **Step 8: Record the RED handoff without committing it**
 
 ```powershell
 git diff --check
-git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock scripts/testing/repository-rules.test.ts
-git diff --cached --check
-git commit -m "test: specify grammers crates.io policy"
+git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock scripts/testing/repository-rules.test.ts
+git status --short
 ```
 
-Expected: this checkpoint intentionally leaves the focused repository-rule test RED; Task 3 must immediately implement the policy before broader gates.
+Expected: the task report contains both RED outputs and the three migration
+files remain modified but unstaged. Do not commit this intermediate state. Task
+3 continues immediately and restores GREEN before creating the one atomic
+source-migration commit.
 
 ---
 
@@ -272,7 +274,8 @@ Expected: this checkpoint intentionally leaves the focused repository-rule test 
 - Test: `scripts/testing/repository-rules.test.ts`
 
 **Interfaces:**
-- Consumes: Task 2 schema-v2 fixture and real crates.io metadata.
+- Consumes: Task 2's uncommitted schema-v2 fixture, Cargo manifest/lock changes,
+  RED evidence, and real crates.io metadata.
 - Produces: canonical `{schemaVersion, directPackages, resolvedPackages}` and exact direct requirement enforcement.
 
 - [ ] **Step 1: Update generator metadata and baseline types**
@@ -420,24 +423,26 @@ $producer.dependencies |
 
 Expected report evidence: eight resolved rows and four direct requirement rows. Enforcement remains owned by the passing checks in Step 5.
 
-- [ ] **Step 8: Review lockfile scope and commit GREEN implementation**
+- [ ] **Step 8: Review scope and commit the complete GREEN migration**
 
 ```powershell
 git diff --check
-git diff -- src-tauri/Cargo.lock scripts/telegram-grammers-feature-baseline.mjs scripts/testing/repository-rules.mjs src/lib/telegram-grammers-feature-baseline.json
-git add -- scripts/telegram-grammers-feature-baseline.mjs scripts/testing/repository-rules.mjs src/lib/telegram-grammers-feature-baseline.json
+git diff -- src-tauri/Cargo.toml src-tauri/Cargo.lock scripts/testing/repository-rules.test.ts scripts/telegram-grammers-feature-baseline.mjs scripts/testing/repository-rules.mjs src/lib/telegram-grammers-feature-baseline.json
+git add -- src-tauri/Cargo.toml src-tauri/Cargo.lock scripts/testing/repository-rules.test.ts scripts/telegram-grammers-feature-baseline.mjs scripts/testing/repository-rules.mjs src/lib/telegram-grammers-feature-baseline.json
 git diff --cached --check
-git commit -m "build: enforce grammers crates.io graph"
+git commit -m "build: source grammers from crates.io"
 ```
 
-Expected: generator, rule, and generated artifact are GREEN; lockfile review shows only registry migration closure from Task 2.
+Expected: one atomic source-migration commit contains the manifest, lockfile,
+schema-v2 fixture, generator, rule, and generated artifact. Its focused policy
+tests are GREEN and lockfile churn is limited to the registry migration closure.
 
 ---
 
 ### Task 4: Update Current Dependency Documentation
 
 **Files:**
-- Modify: `docs/project.md:198-226`
+- Modify: `docs/project.md`
 - Preserve: `docs/superpowers/verification/2026-08-11-grammers-0-10-upgrade.md`
 - Preserve: `docs/superpowers/verification/2026-08-11-grammers-crates-io-provenance.md`
 

@@ -144,7 +144,8 @@ End-of-slice gate: `npm.cmd run verify`.
 ## Compatibility and Rollback
 
 No migrations are introduced; rollback is a revert of the source-migration
-commits.
+commit. Documentation and plan-tracking commits do not affect functional
+rollback.
 
 ## Completion Criteria
 
