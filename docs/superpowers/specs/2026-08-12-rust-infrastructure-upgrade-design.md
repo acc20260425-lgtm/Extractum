@@ -360,7 +360,9 @@ in the fast job.
 The full PR job installs dependencies with `npm.cmd ci`, restores the canonical
 `src-tauri/target` cache, invokes the shared cargo-deny setup action, runs
 `npm.cmd run bootstrap:testing`, installs Playwright Chromium, runs the fast
-Rust gate, and then runs `npm.cmd run verify`. `scripts/verify.mjs` removes its
+Rust gate, and then runs `npm.cmd run verify`. `bootstrap:testing` owns
+`svelte-kit sync` before sidecar compilation, so this documented `npm ci` then
+`bootstrap:testing` order works in a fresh checkout. `scripts/verify.mjs` removes its
 redundant workspace Cargo check and adds `--locked` to the workspace Cargo test
 step. The job does not repeat that expensive workspace command outside
 `verify`.

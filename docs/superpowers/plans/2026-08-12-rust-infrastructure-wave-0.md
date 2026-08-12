@@ -178,6 +178,13 @@ git commit -m "build: pin Rust toolchain and MSRV"
 
 - [ ] **Step 1: Write the failing verifier contract test**
 
+Add this import to `scripts/verify.test.ts` before the existing local-module
+import, so the package contract assertion compiles:
+
+```ts
+import { readFileSync } from "node:fs";
+```
+
 Replace the first test's expected trailing steps so it asserts one Cargo command and exact arguments:
 
 ```ts
@@ -201,6 +208,13 @@ expect(cargoSteps).toEqual([{
   command: "cargo",
   args: ["test", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets", "--locked"],
 }]);
+
+const packageJson = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
+expect(packageJson.scripts["bootstrap:testing"]).toBe(
+  "svelte-kit sync && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
+);
 ```
 
 - [ ] **Step 2: Run the RED test**
@@ -209,7 +223,10 @@ expect(cargoSteps).toEqual([{
 npm.cmd run test:unit -- scripts/verify.test.ts
 ```
 
-Expected: FAIL because two unlocked Cargo steps still exist.
+Expected: FAIL because two unlocked Cargo steps still exist and the current
+`bootstrap:testing` script lacks `svelte-kit sync`; the explicit
+`readFileSync` import ensures the package assertion, rather than a compile
+error, establishes that RED condition.
 
 - [ ] **Step 3: Implement the minimal verifier change**
 
@@ -226,6 +243,7 @@ In `createVerifySteps`, delete the workspace Cargo check object and replace the 
 Add these `package.json` scripts (the deny script becomes executable after Task 4):
 
 ```json
+"bootstrap:testing": "svelte-kit sync && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
 "check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings",
 "check:rust:production": "cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked",
 "check:rust:supply-chain": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources",
