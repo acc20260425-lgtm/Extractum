@@ -231,10 +231,16 @@ For any `grammers-*` update:
 
 - update the related `grammers-*` crates together unless there is a documented
   reason to split them;
-- record the old and new upstream commit revisions from `Cargo.lock`;
+- record the direct requirements and the complete resolved package versions,
+  sources, and checksums from `Cargo.lock` and the generated Grammers feature
+  baseline;
+- when making a VCS provenance or equivalence claim, obtain the commit SHA from
+  `.cargo_vcs_info.json` using the documented
+  [provenance verification](superpowers/verification/2026-08-11-grammers-crates-io-provenance.md)
+  procedure;
 - explain why the update is needed and whether it affects Telegram sync,
   Takeout import, session handling, or source identity behavior;
-- run `npm run verify` at minimum, plus focused Telegram validation when the
+- run `npm.cmd run verify` at minimum, plus focused Telegram validation when the
   upstream change touches runtime behavior;
 - keep the update in a dedicated dependency commit or clearly isolated slice.
 
