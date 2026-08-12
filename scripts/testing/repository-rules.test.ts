@@ -97,27 +97,28 @@ const grammersResolvedVersions = {
   "grammers-tl-types": "0.10.0",
 } as const;
 
-const grammersRevision = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981";
-const grammersSource =
-  `git+https://codeberg.org/Lonami/grammers?rev=${grammersRevision}#${grammersRevision}`;
+const grammersSource = "registry+https://github.com/rust-lang/crates.io-index";
 const grammersPackageId = (name: string, version: string) =>
-  `${name} ${version} (${grammersSource})`;
+  `${grammersSource}#${name}@${version}`;
 
 const grammersBaseline = {
-  schemaVersion: 1,
-  revision: grammersRevision,
-  packages: [
+  schemaVersion: 2,
+  directPackages: [
     { name: "grammers-client", required: [], forbidden: ["default"], universe: ["default"] },
     { name: "grammers-mtsender", required: [], forbidden: ["proxy"], universe: ["proxy"] },
     { name: "grammers-session", required: ["serde"], forbidden: ["default"], universe: ["default", "serde"] },
     { name: "grammers-tl-types", required: ["default", "deserializable-functions"], forbidden: ["impl-serde"], universe: ["default", "deserializable-functions", "impl-serde"] },
   ],
+  resolvedPackages: Object.entries(grammersResolvedVersions).map(([name, version]) => ({
+    name,
+    version,
+    source: grammersSource,
+  })),
 };
 
 function cargoMetadata() {
-  const revision = grammersBaseline.revision;
   const grammers = Object.entries(grammersResolvedVersions).map(([name, version]) => {
-    const directPolicy = grammersBaseline.packages.find((entry) => entry.name === name);
+    const directPolicy = grammersBaseline.directPackages.find((entry) => entry.name === name);
     return {
       id: grammersPackageId(name, version),
       name,
@@ -156,9 +157,8 @@ function cargoMetadata() {
   ].map(([name, features, usesDefaultFeatures]) => ({
     name,
     kind: null,
-    source: String(name).startsWith("grammers-")
-      ? `git+https://codeberg.org/Lonami/grammers?rev=${revision}`
-      : null,
+    req: String(name).startsWith("grammers-") ? "=0.10.0" : "*",
+    source: String(name).startsWith("grammers-") ? grammersSource : null,
     path: name === "extractum-core" ? "C:/repo/src-tauri/crates/extractum-core" : null,
     target: null,
     rename: null,
@@ -197,7 +197,7 @@ function cargoMetadata() {
         ...grammers.map((entry) => ({
           id: entry.id,
           features: [
-            ...(grammersBaseline.packages.find(({ name }) => name === entry.name)?.required ?? []),
+            ...(grammersBaseline.directPackages.find(({ name }) => name === entry.name)?.required ?? []),
           ],
           deps: [],
         })),
@@ -304,9 +304,21 @@ const telegramStructuredFixtures = {
         metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies.push({ name: "grammers-client", kind: null });
         return cargoIndex(metadata);
       },
-      "drifts the Grammers source revision": () => {
+      "drifts a transitive Grammers source": () => {
         const metadata = clone(cargoMetadata());
-        metadata.packages.find(({ name }: any) => name === "grammers-client")!.source = "git+https://codeberg.org/Lonami/grammers?rev=wrong#wrong";
+        metadata.packages.find(({ name }: any) => name === "grammers-crypto")!.source =
+          "git+https://codeberg.org/Lonami/grammers?rev=wrong#wrong";
+        return cargoIndex(metadata);
+      },
+      "drifts a transitive Grammers version": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "grammers-mtproto")!.version = "0.10.1";
+        return cargoIndex(metadata);
+      },
+      "widens a direct Grammers manifest requirement": () => {
+        const metadata = clone(cargoMetadata());
+        const producer = metadata.packages.find(({ name }: any) => name === "extractum-telegram")!;
+        producer.dependencies.find(({ name }: any) => name === "grammers-client")!.req = "^0.10.0";
         return cargoIndex(metadata);
       },
       "enables a forbidden Grammers feature": () => {
@@ -315,14 +327,14 @@ const telegramStructuredFixtures = {
         metadata.resolve.nodes.find(({ id }: any) => id === selected.id)!.features.push("impl-serde");
         return cargoIndex(metadata);
       },
-      "reorders the generated baseline packages": () => {
+      "reorders the generated baseline direct packages": () => {
         const index = cargoIndex();
         return {
           ...index,
           getJson(inputPath: string) {
             const value = index.getJson(inputPath);
             return inputPath === GRAMMERS_BASELINE_PATH
-              ? { ...value, packages: [...value.packages].reverse() }
+              ? { ...value, directPackages: [...value.directPackages].reverse() }
               : value;
           },
         };
@@ -392,7 +404,7 @@ describe("repository rule registry", () => {
     }
   });
 
-  it("rule:telegram-crate-dependency-ownership rejects a reordered generated baseline", () => {
+  it("rule:telegram-crate-dependency-ownership rejects reordered generated direct packages", () => {
     const fixture = telegramStructuredFixtures["rule:telegram-crate-dependency-ownership"];
     expect(evaluateRule({
       id: "rule:telegram-crate-dependency-ownership",
@@ -405,7 +417,7 @@ describe("repository rule registry", () => {
     expectSemanticViolations(
       evaluateRule({
         id: "rule:telegram-crate-dependency-ownership",
-        index: fixture.mutations["reorders the generated baseline packages"](),
+        index: fixture.mutations["reorders the generated baseline direct packages"](),
       }).violations,
       "rule:telegram-crate-dependency-ownership: reordered generated baseline",
     );

@@ -8,9 +8,6 @@ const artifactPath = path.join(
   repoRoot,
   "src/lib/telegram-grammers-feature-baseline.json",
 );
-const revision = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981";
-const exactSource =
-  `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`;
 const directOwnerName = "extractum-telegram";
 const packageNames = [
   "grammers-client",
@@ -23,7 +20,8 @@ const packageNames = [
  * @typedef {object} CargoMetadataPackage
  * @property {string} id
  * @property {string} name
- * @property {string} [source]
+ * @property {string} version
+ * @property {string | null} [source]
  * @property {Record<string, unknown>} features
  */
 
@@ -54,10 +52,17 @@ const packageNames = [
  */
 
 /**
+ * @typedef {object} ResolvedGrammersPackage
+ * @property {string} name
+ * @property {string} version
+ * @property {string | null} source
+ */
+
+/**
  * @typedef {object} FeatureBaseline
  * @property {number} schemaVersion
- * @property {string} revision
- * @property {FeatureBaselinePackage[]} packages
+ * @property {FeatureBaselinePackage[]} directPackages
+ * @property {ResolvedGrammersPackage[]} resolvedPackages
  */
 
 /**
@@ -173,7 +178,7 @@ export function generateFeatureBaseline(metadata = loadMetadata()) {
     );
   }
 
-  const packages = directPackageIds.map((packageId) => {
+  const directPackages = directPackageIds.map((packageId) => {
     const matchingPackages = metadataPackages.filter(
       (candidate) => candidate?.id === packageId,
     );
@@ -186,9 +191,6 @@ export function generateFeatureBaseline(metadata = loadMetadata()) {
     const packageRecord = matchingPackages[0];
     if (!packageNames.includes(packageRecord.name)) {
       fail(`unexpected direct Grammers package ${packageRecord.name}`);
-    }
-    if (packageRecord.source !== exactSource) {
-      fail(`source drifted for ${packageRecord.name}`);
     }
     if (
       !packageRecord.features
@@ -233,15 +235,34 @@ export function generateFeatureBaseline(metadata = loadMetadata()) {
   }).sort((left, right) => left.name.localeCompare(right.name));
 
   if (
-    packages.map(({ name }) => name).join("\n")
+    directPackages.map(({ name }) => name).join("\n")
     !== [...packageNames].sort().join("\n")
   ) {
     fail("direct Grammers package set drifted");
   }
+  const resolvedPackages = metadataPackages
+    .filter((candidate) => candidate?.name?.startsWith("grammers-"))
+    .map((candidate) => {
+      if (typeof candidate.version !== "string") {
+        fail(`missing version for ${candidate.name}`);
+      }
+      if (candidate.source !== null && typeof candidate.source !== "string") {
+        fail(`invalid source for ${candidate.name}`);
+      }
+      return {
+        name: candidate.name,
+        version: candidate.version,
+        source: candidate.source ?? null,
+      };
+    })
+    .sort((left, right) =>
+      left.name.localeCompare(right.name)
+      || left.version.localeCompare(right.version)
+      || String(left.source).localeCompare(String(right.source)));
   return {
-    schemaVersion: 1,
-    revision,
-    packages,
+    schemaVersion: 2,
+    directPackages,
+    resolvedPackages,
   };
 }
 

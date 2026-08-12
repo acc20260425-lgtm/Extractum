@@ -223,12 +223,28 @@ function evaluateTelegramCrateDependencyOwnership(index) {
   const appGrammers = (app.dependencies ?? []).filter((dependency) => dependency?.name?.startsWith("grammers-"));
   if (appGrammers.length) violations.push(`extractum: direct Grammers dependencies are forbidden: ${appGrammers.map(({ name }) => name).sort().join(", ")}`);
 
-  const expectedPackages = Array.isArray(baseline?.packages) ? baseline.packages : [];
+  const expectedPackages = Array.isArray(baseline?.directPackages) ? baseline.directPackages : [];
   const producerGrammers = (producer.dependencies ?? []).filter((dependency) => dependency?.name?.startsWith("grammers-"));
   const actualNames = producerGrammers.map(({ name }) => name).sort();
   const expectedNames = expectedPackages.map(({ name }) => name).sort();
   if (actualNames.join("\n") !== expectedNames.join("\n")) {
     violations.push("extractum-telegram: direct Grammers dependency inventory drifted");
+  }
+  const resolvedPackages = Array.isArray(baseline?.resolvedPackages)
+    ? baseline.resolvedPackages
+    : [];
+  for (const dependency of producerGrammers) {
+    const resolvedPackage = resolvedPackages.find(({ name }) => name === dependency.name);
+    if (!resolvedPackage) {
+      violations.push(`${dependency.name}: missing resolved baseline entry`);
+      continue;
+    }
+    const expectedRequirement = `=${resolvedPackage.version}`;
+    if (dependency.req !== expectedRequirement) {
+      violations.push(
+        `${dependency.name}: direct manifest requirement must be ${expectedRequirement}`,
+      );
+    }
   }
   for (const expected of expectedPackages) {
     const packages = (metadata.packages ?? []).filter(({ name }) => name === expected.name);
@@ -237,8 +253,6 @@ function evaluateTelegramCrateDependencyOwnership(index) {
       continue;
     }
     const selected = packages[0];
-    const expectedSource = `git+https://codeberg.org/Lonami/grammers?rev=${baseline.revision}#${baseline.revision}`;
-    if (selected.source !== expectedSource) violations.push(`${expected.name}: source revision drifted`);
     if (Object.keys(selected.features ?? {}).sort().join("\n") !== [...expected.universe].sort().join("\n")) {
       violations.push(`${expected.name}: feature universe drifted`);
     }
