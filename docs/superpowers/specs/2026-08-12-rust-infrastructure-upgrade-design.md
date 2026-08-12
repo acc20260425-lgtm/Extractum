@@ -38,14 +38,21 @@ local baseline is `rustc 1.95.0 (59807616e 2026-04-14)` on
 
 `src-tauri/Cargo.lock` is synchronized with the manifests and contains 736
 cross-platform packages and no Git sources. Duplicate policy is derived from
-the versioned JSON returned by `cargo metadata --locked --filter-platform
-x86_64-pc-windows-msvc`, not from `cargo tree` rendering. The current filtered
-resolve graph contains 503 reachable package nodes, 37 names resolved at more
-than one version, 91 package-version instances across those names, and 54
-versions in excess of one per name. The previous `cargo tree` observation of
-51 names and 151 rendered records is superseded because rendered lines and
-`(*)` markers are not stable graph entities. The complete lockfile count is
-evidence, not a deduplication target.
+the feature-resolved Windows build graph emitted by `cargo tree --target
+x86_64-pc-windows-msvc --workspace --prefix none --format "{p}" --no-dedupe`.
+The generator extracts and uniquifies only `name@version`; it does not parse
+tree frames or `(*)` markers. The current graph contains 448 package versions,
+400 unique names, 32 names resolved at more than one version, 80
+package-version instances across those names, and 48 versions in excess of one
+per name.
+
+The previous `cargo tree -d` observation of 51 names and 151 rendered records
+is superseded because it counted build units, including host/target and feature
+slices, rather than unique versions. A later Cargo metadata measurement of 37
+names and 91 instances is also superseded: `resolve.nodes` included optional
+packages not reached by the active feature graph, including duplicate branches
+for `ahash`, `const-oid`, `hmac`, `schemars`, and `toml_datetime`. The complete
+lockfile count is evidence, not a deduplication target.
 
 A Cargo dry run on 2026-08-12 against the current manifests and then-current
 crates.io index found 157 updates, 28 additions,
@@ -250,20 +257,29 @@ duplicate-baseline JSON records:
 
 - schema version;
 - target `x86_64-pc-windows-msvc`;
-- 37 unique duplicated package names;
-- 91 package-version instances across duplicated names;
-- the sorted 37-name duplicate inventory used as audit evidence.
+- 448 unique package versions and 400 unique names in the active graph;
+- 32 unique duplicated package names;
+- 80 package-version instances across duplicated names;
+- the sorted 32-name duplicate inventory used as audit evidence.
 
-The generator uses `cargo metadata --locked --filter-platform
-x86_64-pc-windows-msvc --format-version 1`, the filtered `resolve.nodes`, and
-stable ordering. It deliberately
-omits resolved versions, which would add noise to every dependency wave without
-participating in the gate. A repository rule fails if either count grows. A
-decrease is accepted and should lower the committed baseline in the same
-dependency wave. A changed package set at the same count is reported for review
-but does not fail solely because one upstream duplicate replaced another. This
-policy blocks graph growth without claiming that Extractum can collapse
-mutually incompatible upstream major versions.
+The generator streams the normalized `cargo tree` output so the fully expanded
+`--no-dedupe` tree is not retained in memory, extracts package identities from
+the `{p}` records, and applies stable ordering. It deliberately omits the
+resolved versions from the committed artifact, which would add noise to every
+dependency wave without participating in the gate. A repository rule fails if
+either duplicate count grows. A decrease is accepted and should lower the
+committed baseline in the same dependency wave. A changed package set at the
+same count is reported for review but does not fail solely because one upstream
+duplicate replaced another.
+
+A baseline increase has an explicit reviewed path. The dependency wave updates
+the committed counters and adds a supply-chain artifact entry for every newly
+duplicated name or additional version, identifying the upstream owner/cause,
+why avoiding the duplicate is not currently practical, and a review date. The
+same wave must include its release/focused evidence where the owning dependency
+policy requires it. This policy makes growth exceptional and attributable
+without claiming that Extractum can collapse mutually incompatible upstream
+major versions.
 
 Wildcard dependencies, unknown registries, and unknown Git sources are denied.
 The canonical crates.io registry is allowed. Exact pins, prerelease versions,
@@ -358,7 +374,9 @@ reviewable groups with an initial measured inventory:
    `tauri-plugin-opener`, and `tauri-plugin-mcp-bridge` within `0.11`.
 
 Each direct package uses a precise update and records the transitive closure
-that Cargo necessarily moves with it. The Tauri group updates the Rust crates,
+that Cargo necessarily moves with it. The known `serde` closure includes
+`serde_core` and must appear in that group's lockfile summary. The Tauri group
+updates the Rust crates,
 `tauri-build`, npm CLI/API, and same-name frontend plugins as one compatibility
 family. Official Tauri guidance expects `tauri`, `tauri-build`, and the CLI to
 remain on compatible current minor releases. The group closes with the
