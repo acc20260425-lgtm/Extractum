@@ -198,10 +198,10 @@ states, or warning codes in committed documentation.
 
 ## Dependency policy
 
-The `grammers-*` crates are owned git dependencies because Extractum's
-Telegram behavior depends on upstream runtime details. Treat updates to
-`grammers-client`, `grammers-session`, and `grammers-mtsender` as explicit
-dependency work, not incidental lockfile churn.
+The `grammers-*` crates are explicitly controlled crates.io dependencies because
+Extractum's Telegram behavior depends on upstream runtime details. Treat updates
+to the direct Grammers line or its resolved graph as explicit dependency work,
+not incidental lockfile churn.
 
 The historical GitHub repository
 [`Lonami/grammers`](https://github.com/Lonami/grammers/) is archived and now
@@ -210,18 +210,13 @@ points to the canonical upstream at
 any migration from the old GitHub git URL to the Codeberg git URL as explicit
 dependency work under this policy.
 
-Current pinned upstream: Codeberg rev
-`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981` for the `grammers-*` `0.10.0`
-line. This update introduces fallible session access and TL layer 227,
-affecting live sync, Takeout, session handling, and source identity adapters.
-The older GitHub lock rev
-`fa7692e49f301f16dc671c2f305ac1a32cad1a8e` was not available from the
-Codeberg repository during migration.
-
-Sanitized evidence for the current pin is recorded in
-[`2026-08-11-grammers-0-10-upgrade.md`](superpowers/verification/2026-08-11-grammers-0-10-upgrade.md):
-the observed live Telegram sync and Takeout/export-DC import both completed
-without warnings, and the Takeout path did not use its fallback.
+Current active source: crates.io. The four direct dependencies are pinned with
+exact requirement `=0.10.0`; the generated Grammers feature baseline fixes the
+complete resolved graph at seven `0.10.0` packages plus
+`grammers-tl-parser 1.2.2`, all from the canonical crates.io registry source.
+The published artifacts originate from Codeberg revision
+`5c6d44ff30e02d6c9295bcf1fcb51403ad77c981`, as recorded in the sanitized
+[provenance verification](superpowers/verification/2026-08-11-grammers-crates-io-provenance.md).
 
 Migration validation evidence recorded on 2026-06-01: the Codeberg-pinned
 `grammers-*` line passed focused live Telegram sync smoke checks through the
