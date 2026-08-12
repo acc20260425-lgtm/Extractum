@@ -86,9 +86,26 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
+const grammersResolvedVersions = {
+  "grammers-client": "0.10.0",
+  "grammers-crypto": "0.10.0",
+  "grammers-mtproto": "0.10.0",
+  "grammers-mtsender": "0.10.0",
+  "grammers-session": "0.10.0",
+  "grammers-tl-gen": "0.10.0",
+  "grammers-tl-parser": "1.2.2",
+  "grammers-tl-types": "0.10.0",
+} as const;
+
+const grammersRevision = "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981";
+const grammersSource =
+  `git+https://codeberg.org/Lonami/grammers?rev=${grammersRevision}#${grammersRevision}`;
+const grammersPackageId = (name: string, version: string) =>
+  `${name} ${version} (${grammersSource})`;
+
 const grammersBaseline = {
   schemaVersion: 1,
-  revision: "5c6d44ff30e02d6c9295bcf1fcb51403ad77c981",
+  revision: grammersRevision,
   packages: [
     { name: "grammers-client", required: [], forbidden: ["default"], universe: ["default"] },
     { name: "grammers-mtsender", required: [], forbidden: ["proxy"], universe: ["proxy"] },
@@ -99,14 +116,18 @@ const grammersBaseline = {
 
 function cargoMetadata() {
   const revision = grammersBaseline.revision;
-  const grammers = grammersBaseline.packages.map((entry) => ({
-    id: `${entry.name} 0.1.0 (git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision})`,
-    name: entry.name,
-    source: `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`,
-    features: Object.fromEntries(entry.universe.map((feature) => [feature, []])),
-    targets: [{ kind: ["lib"], name: entry.name.replaceAll("-", "_") }],
-    dependencies: [],
-  }));
+  const grammers = Object.entries(grammersResolvedVersions).map(([name, version]) => {
+    const directPolicy = grammersBaseline.packages.find((entry) => entry.name === name);
+    return {
+      id: grammersPackageId(name, version),
+      name,
+      version,
+      source: grammersSource,
+      features: Object.fromEntries((directPolicy?.universe ?? []).map((feature) => [feature, []])),
+      targets: [{ kind: ["lib"], name: name.replaceAll("-", "_") }],
+      dependencies: [],
+    };
+  });
   const app = {
     id: "path+file:///repo/src-tauri#extractum@0.2.0",
     name: "extractum",
@@ -173,7 +194,13 @@ function cargoMetadata() {
       nodes: [
         { id: app.id, features: [], deps: [{ name: "extractum_telegram", pkg: producer.id, dep_kinds: [{ kind: null, target: null }, { kind: "dev", target: null }] }] },
         { id: producer.id, features: ["app-test-support"], deps: producerNodeDependencies },
-        ...grammers.map((entry) => ({ id: entry.id, features: [...grammersBaseline.packages.find(({ name }) => name === entry.name)!.required], deps: [] })),
+        ...grammers.map((entry) => ({
+          id: entry.id,
+          features: [
+            ...(grammersBaseline.packages.find(({ name }) => name === entry.name)?.required ?? []),
+          ],
+          deps: [],
+        })),
       ],
     },
   };
