@@ -338,8 +338,10 @@ Wave 0 creates Windows GitHub Actions automation with three execution paths.
 One repository-owned PowerShell script downloads the pinned cargo-deny Windows
 binary, verifies the recorded checksum, extracts it, and exposes it on `PATH`.
 Both local instructions and the composite CI action call that script; neither
-duplicates the bootstrap implementation. The fast push job otherwise
-requires no npm installation and runs:
+duplicates the bootstrap implementation. The fast workflow runs on
+`pull_request` for branch work and on `push` only for `main`, avoiding duplicate
+Windows runs for commits already covered by a PR. It otherwise requires no npm
+installation and runs:
 
 1. `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` under the
    pinned root toolchain;

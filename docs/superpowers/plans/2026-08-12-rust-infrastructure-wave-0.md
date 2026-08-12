@@ -38,7 +38,7 @@
 - `.github/tools/cargo-deny.json` — pinned cargo-deny Windows release URL and SHA-256.
 - `scripts/setup-cargo-deny.ps1` — single repository-owned download, checksum, extraction, and PATH bootstrap.
 - `.github/actions/setup-cargo-deny/action.yml` — shared download/checksum/PATH bootstrap.
-- `.github/workflows/rust-fast.yml` — push and PR fast Rust gate.
+- `.github/workflows/rust-fast.yml` — main-branch push and PR fast Rust gate without duplicate branch runs.
 - `.github/workflows/rust-full.yml` — PR/manual full repository gate.
 - `.github/workflows/rust-release.yml` — scheduled advisories and manual/tag Windows bundle gate.
 - `scripts/testing/github-rust-workflows.test.ts` — minimal contract that all three workflows call the canonical npm gates.
@@ -976,17 +976,22 @@ git commit -m "test: enforce Rust infrastructure policy"
 - Create: `scripts/testing/github-rust-workflows.test.ts`
 
 **Interfaces:**
-- Produces: push/PR fast gate, PR/manual full gate, scheduled advisories, tag/manual bundle gate.
+- Produces: main-push/PR fast gate, PR/manual full gate, scheduled advisories, tag/manual bundle gate.
 - Consumes: Task 4 setup action and Task 2/4 npm scripts.
 
 - [ ] **Step 1: Create the fast workflow**
 
-Use `actions/checkout@v6`, repository toolchain (`rustup show active-toolchain`), `Swatinem/rust-cache@v2` with `workspaces: "./src-tauri -> target"`, local cargo-deny setup action, then:
+Trigger `push` only for `main` and trigger `pull_request` for branch work, so a
+PR commit receives one fast run rather than both push and PR runs. Use
+`actions/checkout@v6`, repository toolchain (`rustup show active-toolchain`),
+`Swatinem/rust-cache@v2` with `workspaces: "./src-tauri -> target"`, local
+cargo-deny setup action, then:
 
 ```yaml
 name: Rust Fast
 on:
   push:
+    branches: [main]
   pull_request:
 jobs:
   rust-fast:
