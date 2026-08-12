@@ -70,13 +70,17 @@ acceptance constants. Every dependency wave re-measures its available direct
 updates and residual lockfile delta and records the new snapshot in that
 wave's verification record.
 
-The accepted Clippy command, without `--all-features`, currently reports five
-violations across three crates:
+The accepted Clippy command, without `--all-features` and with `--keep-going`
+so one package cannot hide later findings, currently reports eight violations
+across three crates:
 
-- three `clippy::large_enum_variant` findings across
-  `extractum-gemini-browser` and `extractum-llm`;
+- four `clippy::large_enum_variant` findings: public `CancelRunOutcome`,
+  private `ExecutionSelection`, public sidecar wire type
+  `GeminiBrowserSidecarResponse`, and private Telegram `ListedPeer`;
 - `clippy::new_without_default` for `LlmSchedulerState`;
-- `clippy::new_without_default` for `TelegramRuntime`.
+- `clippy::new_without_default` for `TelegramRuntime`;
+- one ignored `?Sized` bound in the LLM deserialize API probe;
+- one `clippy::items_after_test_module` in the Telegram runtime tests.
 
 The feature choice matters: enabling `app-test-support` hides the Telegram
 finding. Baselines must therefore be measured with the exact accepted command,
@@ -154,7 +158,7 @@ pretending a compiler update is behavior-neutral.
 
 #### Clippy Baseline
 
-Classify all five existing findings before suppressing or changing code. The
+Classify all eight existing findings before suppressing or changing code. The
 baseline commit records the accepted command and the classification of each
 finding.
 
@@ -164,14 +168,24 @@ and behavior. `GeminiBrowserSidecarResponse::RunResult` is a public
 must be accompanied by golden serialization/deserialization tests proving its
 JSON wire representation is unchanged and by focused tests of the immediate
 cross-crate consumer. Private `ExecutionSelection` changes require focused
-behavior tests but no public API claim.
+behavior tests but no public API claim. Public `CancelRunOutcome` receives a
+focused owner test for its queued-cancellation payload. Private `ListedPeer`
+is owned by the Telegram package checkpoint.
 
 For `new_without_default`, adding `Default` is not automatic.
 `LlmSchedulerState` and `TelegramRuntime` expose public cross-crate APIs, and a
 default runtime handle may be semantically invalid. Each finding is resolved
-either by a meaningful, tested `Default` implementation or by a narrowly scoped
+either by a meaningful `Default` implementation or by a narrowly scoped
 `#[allow(clippy::new_without_default)]` with a comment explaining why no valid
-default exists. Global allows and unrelated refactors are forbidden.
+default exists. The Clippy gate is sufficient evidence for a behavior-neutral
+`Default` delegating to `new()`; synthetic tests that merely assert the trait
+exists are not required. Global allows and unrelated refactors are forbidden.
+
+The ignored LLM `?Sized` bound is removed from both paired deserialize-probe
+impls because `DeserializeOwned` already constrains the tested type to `Sized`.
+The Telegram test-only impl blocks move
+before `mod tests` so the test module remains the final item. Neither cleanup
+changes production behavior.
 
 The normal Clippy gate intentionally does not use `--all-features`, because
 `csp-verification`, `prompt-pack-dev-fixtures`, and `app-test-support` alter the
@@ -322,15 +336,16 @@ later if review evidence proves insufficient; it is not Wave 0 scope.
 
 Wave 0 creates Windows GitHub Actions automation with three execution paths.
 
-Both the fast push and full PR jobs first invoke one repository-owned composite
-setup action that downloads the pinned cargo-deny Windows binary, verifies the
-recorded checksum, and exposes it on `PATH`. The fast push job otherwise
+One repository-owned PowerShell script downloads the pinned cargo-deny Windows
+binary, verifies the recorded checksum, extracts it, and exposes it on `PATH`.
+Both local instructions and the composite CI action call that script; neither
+duplicates the bootstrap implementation. The fast push job otherwise
 requires no npm installation and runs:
 
 1. `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` under the
    pinned root toolchain;
 2. `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets
-   --locked -- -D warnings`;
+   --locked --keep-going --message-format=short -- -D warnings`;
 3. the canonical `cargo check --manifest-path src-tauri/Cargo.toml -p
    <producer> --lib --no-default-features --locked` checks for the two
    producers;
@@ -352,8 +367,11 @@ step. The job does not repeat that expensive workspace command outside
 The release/bundle path is an explicit workflow job available through
 `workflow_dispatch` and release tags. It runs the full PR gate, current
 advisories, `npm.cmd run build:tauri-prereqs`, and a Windows Tauri release build,
-then verifies the expected NSIS/MSI artifacts and performs the documented
-application/sidecar smoke. A dependency wave touching Tauri, `windows-sys`,
+then uploads MSI and NSIS with separate `actions/upload-artifact@v4` steps whose
+`if-no-files-found` policy is `error`, and performs the documented
+application/sidecar smoke. The successful build and executable startup smoke
+prove the application executable exists; no separate artifact-discovery script
+is added. A dependency wave touching Tauri, `windows-sys`,
 Keyring, or SQLx must manually dispatch this job and link its run in that
 wave's verification record before acceptance. Release tags invoke it
 automatically. This gives the release rule an executor rather than relying on
@@ -476,7 +494,7 @@ The fast deterministic Rust contract, issued from the repository root, is:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
 cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources

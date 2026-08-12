@@ -36,13 +36,12 @@
 - `scripts/rust-duplicate-baseline.test.ts` — parser/generator unit tests.
 - `scripts/testing/rust-supply-chain-exceptions.json` — owner/reason/review-date records for cargo-deny exceptions and approved duplicate growth.
 - `.github/tools/cargo-deny.json` — pinned cargo-deny Windows release URL and SHA-256.
+- `scripts/setup-cargo-deny.ps1` — single repository-owned download, checksum, extraction, and PATH bootstrap.
 - `.github/actions/setup-cargo-deny/action.yml` — shared download/checksum/PATH bootstrap.
 - `.github/workflows/rust-fast.yml` — push and PR fast Rust gate.
 - `.github/workflows/rust-full.yml` — PR/manual full repository gate.
 - `.github/workflows/rust-release.yml` — scheduled advisories and manual/tag Windows bundle gate.
-- `scripts/windows-release-artifacts.mjs` — release artifact inventory/validation.
-- `scripts/windows-release-artifacts.test.ts` — artifact validation unit tests.
-- `scripts/testing/github-rust-workflows.test.ts` — contracts for triggers, shared tool bootstrap, and exact gate commands.
+- `scripts/testing/github-rust-workflows.test.ts` — minimal contract that all three workflows call the canonical npm gates.
 - `docs/superpowers/verification/2026-08-12-rust-infrastructure-wave-0.md` — final factual evidence.
 
 **Modify**
@@ -51,15 +50,13 @@
 - `src-tauri/crates/*/Cargo.toml` — `rust-version.workspace = true` for all six extracted crates.
 - `scripts/verify.mjs` — remove redundant workspace check; lock workspace tests.
 - `scripts/verify.test.ts` — assert exact Cargo test arguments and absence of Cargo check.
-- `src-tauri/crates/extractum-gemini-browser/src/execution.rs` — box private completed selection.
+- `src-tauri/crates/extractum-gemini-browser/src/execution.rs` — box public queued-cancellation payload and private completed selection.
 - `src-tauri/crates/extractum-gemini-browser/src/types.rs` — box sidecar run-result payload while preserving JSON.
 - `src-tauri/src/gemini_browser/sidecar.rs` — unwrap the boxed cross-crate response.
-- `src-tauri/crates/extractum-llm/src/scheduler.rs` — box `LlmRequestError::Failed`; implement meaningful `Default`.
-- `src-tauri/crates/extractum-prompt-packs/src/completion_transport.rs` — adapt owned boxed LLM failures.
-- `src-tauri/crates/extractum-analysis/src/chat.rs` — checkpoint borrowed boxed LLM failure formatting.
-- `src-tauri/crates/extractum-analysis/src/report/phases.rs` — checkpoint borrowed boxed LLM failure formatting.
-- `src-tauri/src/llm/mod.rs` — checkpoint the root event consumer of boxed LLM failures.
-- `src-tauri/crates/extractum-telegram/src/runtime.rs` — implement meaningful `Default`.
+- `src-tauri/crates/extractum-llm/src/lib.rs` — remove the ignored `?Sized` bound from the deserialize API probe.
+- `src-tauri/crates/extractum-llm/src/scheduler.rs` — implement meaningful `Default`.
+- `src-tauri/crates/extractum-telegram/src/live/peer.rs` — box the private Grammers peer variant.
+- `src-tauri/crates/extractum-telegram/src/runtime.rs` — implement meaningful `Default` and keep the test module last.
 - `scripts/testing/repository-index.mjs` — cache raw compact Cargo-tree output.
 - `scripts/testing/repository-rules.mjs` — add three Rust policy rules and duplicate evaluator.
 - `scripts/testing/repository-rules.test.ts` — positive/mutation fixtures and registry inventory.
@@ -72,8 +69,7 @@
 - `generateRustDuplicateBaseline(treeText: string): RustDuplicateBaseline` produces the canonical JSON shape consumed by repository rules.
 - `RepositoryIndex#getCargoTree(): string` supplies cached compact Windows Cargo-tree output; fixtures inject it without running Cargo.
 - `rule:rust-toolchain-policy`, `rule:rust-dependency-policy`, and `rule:rust-duplicate-baseline` join `registeredRuleIds`.
-- `.github/actions/setup-cargo-deny` reads `.github/tools/cargo-deny.json` and leaves `cargo-deny.exe` on `PATH` for all workflows.
-- `validateWindowsReleaseArtifacts(paths: string[]): WindowsReleaseInventory` validates release outputs before workflow artifact upload.
+- `scripts/setup-cargo-deny.ps1` reads `.github/tools/cargo-deny.json`; the composite action and local operator procedure are thin callers of it.
 - `npm.cmd run check:rust:fast` is the shared fast gate; `npm.cmd run verify` owns the single locked workspace test command.
 
 ---
@@ -156,8 +152,6 @@ Expected: seven packages, all `edition = 2021`, all `rust_version = 1.95`.
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-core --lib --no-default-features --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
-npm.cmd run bootstrap:testing
-npm.cmd run verify
 git diff --check
 ```
 
@@ -233,7 +227,7 @@ In `createVerifySteps`, delete the workspace Cargo check object and replace the 
 Add these `package.json` scripts (the deny script becomes executable after Task 4):
 
 ```json
-"check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings",
+"check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings",
 "check:rust:production": "cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked",
 "check:rust:supply-chain": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources",
 "check:rust:advisories": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories",
@@ -264,22 +258,33 @@ git commit -m "build: lock and streamline Rust verification"
 - Modify: `src-tauri/crates/extractum-gemini-browser/src/execution.rs`
 - Modify: `src-tauri/crates/extractum-gemini-browser/src/types.rs`
 - Modify: `src-tauri/src/gemini_browser/sidecar.rs`
+- Modify: `src-tauri/crates/extractum-llm/src/lib.rs`
 - Modify: `src-tauri/crates/extractum-llm/src/scheduler.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/live/peer.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/runtime.rs`
 
 **Interfaces:**
-- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for two empty runtime states.
+- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for two empty runtime states, and lint-clean test helpers.
 - Consumes: Task 2 accepted Clippy command.
 
-- [ ] **Step 1: Capture the accepted five-finding RED baseline**
+- [ ] **Step 1: Capture the accepted eight-finding RED baseline**
 
 Ensure no unrelated Cargo process owns `src-tauri/target/debug/.cargo-lock`, then run:
 
 ```powershell
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --message-format=short -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
 ```
 
-Expected: exactly three `large_enum_variant` and two `new_without_default` failures. If the set differs, update the verification record and re-scope before editing.
+Expected: exactly these eight findings; if the set differs, update the verification record and re-scope before editing:
+
+- `extractum-gemini-browser/src/execution.rs:42` — public `CancelRunOutcome`, `large_enum_variant`;
+- `extractum-gemini-browser/src/execution.rs:53` — private `ExecutionSelection`, `large_enum_variant`;
+- `extractum-gemini-browser/src/types.rs:256` — public wire type `GeminiBrowserSidecarResponse`, `large_enum_variant`;
+- `extractum-llm/src/lib.rs:49` — `?Sized` is ignored because `DeserializeOwned` implies `Sized`;
+- `extractum-llm/src/scheduler.rs:322` — `LlmSchedulerState`, `new_without_default`;
+- `extractum-telegram/src/live/peer.rs:9` — private `ListedPeer`, `large_enum_variant`;
+- `extractum-telegram/src/runtime.rs:209` — `TelegramRuntime`, `new_without_default`;
+- `extractum-telegram/src/runtime.rs:484` — `items_after_test_module`.
 
 - [ ] **Step 2: Add the sidecar wire-format RED test**
 
@@ -312,7 +317,21 @@ fn sidecar_run_result_response_keeps_wire_shape() {
 
 Initially write it against the intended boxed API so it fails to compile before the implementation.
 
-- [ ] **Step 3: Box the two Gemini Browser variants**
+- [ ] **Step 3: Box the three Gemini Browser variants**
+
+Change the public cancellation outcome without changing behavior:
+
+```rust
+QueuedCancelled {
+    result: Box<GeminiBrowserRunResult>,
+},
+```
+
+Construct it with `CancelRunOutcome::QueuedCancelled { result: Box::new(result) }`.
+The existing exact test
+`execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter`
+owns this public Rust API adjustment and continues to assert the cancelled
+payload through deref coercion.
 
 Change the private selection:
 
@@ -356,58 +375,25 @@ GeminiBrowserSidecarResponse::RunResult { result } => Ok(*result),
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
 ```
 
 Expected: non-empty PASS; app consumer compiles.
 
-- [ ] **Step 5: Box the public LLM error payload and add `Default`**
+- [ ] **Step 5: Fix the LLM helper bound and add `Default`**
 
-Change:
-
-```rust
-pub enum LlmRequestError {
-    Cancelled,
-    Failed(Box<AppError>),
-}
-```
-
-Update both scheduler constructors:
+In the test-only public API probe, keep the paired impls consistently sized and
+remove the ineffective bounds from both lines:
 
 ```rust
-result = future => result.map_err(|error| LlmRequestError::Failed(Box::new(error.into()))),
+impl<T> AmbiguousIfDeserialize<()> for T {}
+impl<T: DeserializeOwned> AmbiguousIfDeserialize<u8> for T {}
 ```
 
-```rust
-.map_err(|error| LlmRequestError::Failed(Box::new(error)))?;
-```
-
-Update scheduler tests that construct the variant:
-
-```rust
-Err(LlmRequestError::Failed(Box::new(AppError::from("boom"))))
-```
-
-Borrow-only consumers in `extractum-analysis/src/chat.rs`,
-`extractum-analysis/src/report/phases.rs`, and app `src/llm/mod.rs` continue to
-use `error.to_string()` or deref coercion. In
-`extractum-prompt-packs/src/completion_transport.rs`, update both owned
-conversions:
-
-```rust
-Err(LlmRequestError::Failed(error)) => {
-    Err(YoutubeSummaryStageExecutionError::Failed(*error))
-}
-```
-
-and update the browser-error constructor:
-
-```rust
-.map_err(|error| LlmRequestError::Failed(Box::new(error)))
-```
-
-Add:
+Do not change `LlmRequestError` or any of its consumers: it has no accepted
+Clippy finding. Add:
 
 ```rust
 impl Default for LlmSchedulerState {
@@ -417,32 +403,34 @@ impl Default for LlmSchedulerState {
 }
 ```
 
-Add a focused synchronous test in the scheduler test module:
+The implementation is behaviorally identical to `new()` and needs no
+synthetic trait-existence test; the accepted Clippy gate is the regression
+test.
+
+- [ ] **Step 6: Run the LLM owner checkpoint**
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
+```
+
+Expected: PASS, including the compile-time public API probes in `lib.rs`.
+
+- [ ] **Step 7: Resolve the three Telegram findings**
+
+Box the large private production variant:
 
 ```rust
-#[test]
-fn scheduler_default_matches_new_empty_state() {
-    fn assert_default<T: Default>() {}
-    assert_default::<LlmSchedulerState>();
-    let _scheduler = LlmSchedulerState::default();
+enum ListedPeer {
+    Grammers(Box<Peer>),
+    #[cfg(test)]
+    Test(TestPeer),
 }
 ```
 
-- [ ] **Step 6: Run LLM owner and immediate dependent checkpoints**
+Construct it with `ListedPeer::Grammers(Box::new(dialog.peer().clone()))`;
+existing matches continue through deref coercion.
 
-```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --lib scheduler::tests::scheduler_default_matches_new_empty_state --locked -- --exact
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
-```
-
-Expected: all pass; no public consumer retains the unboxed constructor pattern.
-
-- [ ] **Step 7: Add meaningful `Default` for Telegram runtime**
-
-Add immediately after `impl TelegramRuntime` or before it:
+Add immediately before the existing `impl TelegramRuntime` block:
 
 ```rust
 impl Default for TelegramRuntime {
@@ -452,21 +440,13 @@ impl Default for TelegramRuntime {
 }
 ```
 
-Add in its test module:
-
-```rust
-#[test]
-fn telegram_runtime_default_constructs_empty_runtime() {
-    fn assert_default<T: Default>() {}
-    assert_default::<TelegramRuntime>();
-    let _runtime = TelegramRuntime::default();
-}
-```
+Move the `TelegramRuntimeTestCallbacks` and `TelegramRuntime` test-only impl
+blocks currently after `mod tests` to immediately before it, so the test module
+is the final item. Do not add a synthetic `Default` test.
 
 - [ ] **Step 8: Run Telegram feature-off, owner, and app consumer gates**
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib runtime::tests::telegram_runtime_default_constructs_empty_runtime --locked -- --exact
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
@@ -478,7 +458,7 @@ Expected: all pass; the feature-off check proves production surface, app tests p
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
 npm.cmd run verify
 ```
 
@@ -487,7 +467,7 @@ Expected: PASS with no global or crate-level lint allow.
 - [ ] **Step 10: Commit the Clippy baseline**
 
 ```powershell
-git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-prompt-packs/src/completion_transport.rs src-tauri/crates/extractum-analysis/src/chat.rs src-tauri/crates/extractum-analysis/src/report/phases.rs src-tauri/src/llm/mod.rs src-tauri/crates/extractum-telegram/src/runtime.rs
+git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs
 git commit -m "refactor: establish Rust Clippy baseline"
 ```
 
@@ -498,6 +478,7 @@ git commit -m "refactor: establish Rust Clippy baseline"
 **Files:**
 - Create: `deny.toml`
 - Create: `.github/tools/cargo-deny.json`
+- Create: `scripts/setup-cargo-deny.ps1`
 - Create: `.github/actions/setup-cargo-deny/action.yml`
 - Create: `scripts/testing/rust-supply-chain-exceptions.json`
 - Modify: `package.json`
@@ -520,7 +501,13 @@ Create `.github/tools/cargo-deny.json`:
 }
 ```
 
-- [ ] **Step 2: Add the shared composite setup action**
+- [ ] **Step 2: Add one shared setup script and a thin composite action**
+
+Create `scripts/setup-cargo-deny.ps1` with parameters
+`-InstallDirectory`, `-AddToGitHubPath`, and `-PrependToProcessPath`. It alone
+reads `.github/tools/cargo-deny.json`, creates the explicit install directory,
+downloads the archive, verifies SHA-256, extracts `cargo-deny.exe`, applies the
+requested PATH mode, and runs the pinned binary with `--version`.
 
 Create `.github/actions/setup-cargo-deny/action.yml`:
 
@@ -533,18 +520,8 @@ runs:
     - name: Download and verify cargo-deny
       shell: pwsh
       run: |
-        $manifest = Get-Content -Raw '.github/tools/cargo-deny.json' | ConvertFrom-Json
         $toolDir = Join-Path $env:RUNNER_TEMP 'extractum-cargo-deny'
-        New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
-        $archive = Join-Path $toolDir 'cargo-deny.tar.gz'
-        Invoke-WebRequest -Uri $manifest.url -OutFile $archive
-        $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actual -ne $manifest.sha256) { throw "cargo-deny SHA-256 mismatch: $actual" }
-        tar.exe -xzf $archive -C $toolDir
-        $binary = Get-ChildItem -LiteralPath $toolDir -Recurse -Filter 'cargo-deny.exe' | Select-Object -First 1
-        if (-not $binary) { throw 'cargo-deny.exe missing from verified archive' }
-        $binary.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        & $binary.FullName --version
+        & './scripts/setup-cargo-deny.ps1' -InstallDirectory $toolDir -AddToGitHubPath
 ```
 
 - [ ] **Step 3: Add a curated initial `deny.toml`**
@@ -565,7 +542,6 @@ multiple-versions = "warn"
 wildcards = "deny"
 
 [licenses]
-confidence-threshold = 0.93
 unused-allowed-license = "warn"
 allow = [
   "Apache-2.0",
@@ -608,23 +584,14 @@ Each later entry must contain `package`, `owner`, `reason`, `reviewAfter`, and t
 
 - [ ] **Step 5: Exercise the pinned binary locally using the same manifest**
 
-Download into a temporary directory (do not install globally), validate the
-recorded checksum, extract, and prepend its directory to the current process
+Call the same repository script into a temporary directory (do not install
+globally) and prepend its verified binary directory to the current process
 `PATH`:
 
 ```powershell
-$manifest = Get-Content -Raw '.github/tools/cargo-deny.json' | ConvertFrom-Json
 $toolDir = Join-Path ([System.IO.Path]::GetTempPath()) ("extractum-cargo-deny-" + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $toolDir | Out-Null
 try {
-  $archive = Join-Path $toolDir 'cargo-deny.tar.gz'
-  Invoke-WebRequest -Uri $manifest.url -OutFile $archive
-  $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($actual -ne $manifest.sha256) { throw "cargo-deny SHA-256 mismatch: $actual" }
-  tar.exe -xzf $archive -C $toolDir
-  $binary = Get-ChildItem -LiteralPath $toolDir -Recurse -Filter 'cargo-deny.exe' | Select-Object -First 1
-  if (-not $binary) { throw 'cargo-deny.exe missing from verified archive' }
-  $env:PATH = "$($binary.DirectoryName);$env:PATH"
+  & .\scripts\setup-cargo-deny.ps1 -InstallDirectory $toolDir -PrependToProcessPath
   cargo deny --version
   cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources
   cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories
@@ -653,7 +620,7 @@ Expected: fmt, Clippy, both feature-off checks, and deterministic cargo-deny pas
 - [ ] **Step 7: Commit supply-chain bootstrap**
 
 ```powershell
-git add deny.toml .github/tools/cargo-deny.json .github/actions/setup-cargo-deny/action.yml scripts/testing/rust-supply-chain-exceptions.json package.json
+git add deny.toml .github/tools/cargo-deny.json scripts/setup-cargo-deny.ps1 .github/actions/setup-cargo-deny/action.yml scripts/testing/rust-supply-chain-exceptions.json package.json
 git commit -m "build: add Rust supply-chain policy"
 ```
 
@@ -913,17 +880,12 @@ Expected: RED until evaluators exist.
 
 Use `index.getText("rust-toolchain.toml")`, `index.getCargoMetadata()`, `index.getJson("package.json")`, and `index.getJson("scripts/testing/rust-dependency-policy.json")`. The toolchain evaluator checks exact channel/components/target, seven package `rust_version`, edition 2021, and seven `publish = []/false` metadata states. The dependency evaluator checks direct manifest requirements for exact pins, approved prerelease inventory, Tauri/npm major compatibility, and MCP bridge minor 11.
 
-Implement shared parsers with explicit failure messages:
+Compare the normalized toolchain file as one canonical artifact; do not build a
+partial TOML parser from regular expressions:
 
 ```js
-function quotedTomlValue(source, key) {
-  const match = new RegExp(`^${key.replaceAll("-", "\\-")}\\s*=\\s*"([^"]+)"`, "m").exec(source);
-  return match?.[1];
-}
-
-function quotedTomlArray(source, key) {
-  const match = new RegExp(`^${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m").exec(source);
-  return match ? [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]).sort() : undefined;
+function normalizeText(source) {
+  return source.replaceAll("\r\n", "\n").trimEnd() + "\n";
 }
 
 function dependencyByName(metadata, packageName, dependencyName) {
@@ -941,15 +903,14 @@ The toolchain evaluator must emit violations for every mismatch rather than
 returning after the first:
 
 ```js
-const toolchain = index.getText("rust-toolchain.toml");
-if (quotedTomlValue(toolchain, "channel") !== policy.toolchain.channel) {
-  violations.push("rust-toolchain.toml: channel must match Rust dependency policy");
-}
-if (JSON.stringify(quotedTomlArray(toolchain, "components")) !== JSON.stringify([...policy.toolchain.components].sort())) {
-  violations.push("rust-toolchain.toml: component inventory drifted");
-}
-if (JSON.stringify(quotedTomlArray(toolchain, "targets")) !== JSON.stringify([policy.toolchain.target])) {
-  violations.push("rust-toolchain.toml: target inventory drifted");
+const expectedToolchain = `[toolchain]
+channel = "${policy.toolchain.channel}"
+components = ["rustfmt", "clippy"]
+targets = ["${policy.toolchain.target}"]
+profile = "minimal"
+`;
+if (normalizeText(index.getText("rust-toolchain.toml")) !== expectedToolchain) {
+  violations.push("rust-toolchain.toml: canonical content drifted");
 }
 for (const name of policy.toolchain.workspacePackages) {
   const pkg = workspacePackage(metadata, name);
@@ -1012,33 +973,13 @@ git commit -m "test: enforce Rust infrastructure policy"
 - Create: `.github/workflows/rust-fast.yml`
 - Create: `.github/workflows/rust-full.yml`
 - Create: `.github/workflows/rust-release.yml`
-- Create: `scripts/windows-release-artifacts.mjs`
-- Create: `scripts/windows-release-artifacts.test.ts`
 - Create: `scripts/testing/github-rust-workflows.test.ts`
 
 **Interfaces:**
 - Produces: push/PR fast gate, PR/manual full gate, scheduled advisories, tag/manual bundle gate.
 - Consumes: Task 4 setup action and Task 2/4 npm scripts.
 
-- [ ] **Step 1: Write release-artifact RED tests**
-
-Define and test:
-
-```ts
-expect(validateWindowsReleaseArtifacts([
-  "src-tauri/target/x86_64-pc-windows-msvc/release/extractum.exe",
-  "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/extractum_0.2.0_x64_en-US.msi",
-  "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/extractum_0.2.0_x64-setup.exe",
-])).toEqual({ executable: expect.any(String), msi: expect.any(String), nsis: expect.any(String) });
-```
-
-Add failures for missing executable, MSI, and NSIS.
-
-- [ ] **Step 2: Implement artifact validation**
-
-Export a pure function and CLI. Normalize slashes and require exactly one existing executable plus at least one `.msi` under `/bundle/msi/` and one `-setup.exe` under `/bundle/nsis/`. CLI recursively lists `src-tauri/target/x86_64-pc-windows-msvc/release` and prints canonical JSON.
-
-- [ ] **Step 3: Create the fast workflow**
+- [ ] **Step 1: Create the fast workflow**
 
 Use `actions/checkout@v6`, repository toolchain (`rustup show active-toolchain`), `Swatinem/rust-cache@v2` with `workspaces: "./src-tauri -> target"`, local cargo-deny setup action, then:
 
@@ -1060,7 +1001,7 @@ jobs:
       - run: npm.cmd run check:rust:fast
 ```
 
-- [ ] **Step 4: Create the full PR/manual workflow**
+- [ ] **Step 2: Create the full PR/manual workflow**
 
 Trigger `pull_request` and `workflow_dispatch`. Use checkout, `actions/setup-node@v6` with cache `npm`, Rust cache, shared cargo-deny setup, then:
 
@@ -1074,7 +1015,7 @@ Trigger `pull_request` and `workflow_dispatch`. Use checkout, `actions/setup-nod
 
 Upload `test-results/`, `playwright-report/`, and `artifacts/playwright-results.json` on failure with `actions/upload-artifact@v4` and `if: ${{ !cancelled() }}`.
 
-- [ ] **Step 5: Create scheduled advisory and release workflow**
+- [ ] **Step 3: Create scheduled advisory and release workflow**
 
 Trigger:
 
@@ -1097,30 +1038,56 @@ on:
 
 ```powershell
 npm.cmd run tauri -- build --target x86_64-pc-windows-msvc
-node scripts/windows-release-artifacts.mjs
 npm.cmd run smoke:gemini-browser-sidecar:binary
 ```
 
 Launch `src-tauri/target/x86_64-pc-windows-msvc/release/extractum.exe` with `Start-Process -PassThru -WindowStyle Hidden`, observe five seconds, fail on confirmed early exit, then stop/reap that exact PID in `finally`. Do not make live Telegram/LLM requests. Upload MSI/NSIS artifacts with `actions/upload-artifact@v4`.
 
-- [ ] **Step 6: Test local scripts and inspect workflow syntax**
+Use two explicit upload steps so GitHub Actions itself fails if either bundle
+family is absent:
+
+```yaml
+- uses: actions/upload-artifact@v4
+  with:
+    name: extractum-msi
+    path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+    if-no-files-found: error
+- uses: actions/upload-artifact@v4
+  with:
+    name: extractum-nsis
+    path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+    if-no-files-found: error
+```
+
+- [ ] **Step 4: Add the minimal shared-command workflow contract**
+
+Create `scripts/testing/github-rust-workflows.test.ts`. It reads the three
+workflow files as text and checks only that their relevant jobs call the same
+canonical npm scripts used locally:
+
+- fast workflow: `npm.cmd run check:rust:fast`;
+- full workflow: `npm.cmd run check:rust:fast` and `npm.cmd run verify`;
+- release workflow: `npm.cmd run check:rust:advisories`, plus the full gates in
+  the bundle job.
+
+Do not mirror triggers, runner names, action versions, artifact paths, or YAML
+structure in this unit test.
+
+- [ ] **Step 5: Test the shared-command contract and inspect workflow syntax**
 
 ```powershell
-npm.cmd run test:unit -- scripts/windows-release-artifacts.test.ts scripts/testing/github-rust-workflows.test.ts
+npm.cmd run test:unit -- scripts/testing/github-rust-workflows.test.ts
 npm.cmd run test:unit
 git diff --check
 ```
 
-`github-rust-workflows.test.ts` reads all three workflow files and asserts the
-required triggers, `windows-latest`, local cargo-deny setup action, exact npm
-gate names, release target, schedule, and artifact upload. GitHub parses and
-validates the actual workflow syntax on the first PR; record that accepted run
-URL in Task 8.
+GitHub parses and validates the actual workflow syntax on the first PR; record
+that accepted run URL in Task 8.
 
-- [ ] **Step 7: Commit CI executors**
+- [ ] **Step 6: Commit CI executors**
 
 ```powershell
-git add .github/workflows/rust-fast.yml .github/workflows/rust-full.yml .github/workflows/rust-release.yml scripts/windows-release-artifacts.mjs scripts/windows-release-artifacts.test.ts scripts/testing/github-rust-workflows.test.ts
+git add .github/workflows/rust-fast.yml .github/workflows/rust-full.yml .github/workflows/rust-release.yml scripts/testing/github-rust-workflows.test.ts
 git commit -m "ci: add Rust verification and release gates"
 ```
 
@@ -1192,7 +1159,7 @@ Populate the verification document with no placeholders:
 
 - commit range for Wave 0;
 - `rustc -Vv`, `cargo -V`, cargo-deny version and SHA-256;
-- five Clippy classifications and exact focused test names/results;
+- eight Clippy classifications and exact focused test names/results;
 - license allowlist and any exact clarifications/exceptions;
 - actual duplicate baseline totals and cardinality changes;
 - fast/full/advisory command outputs;
@@ -1224,19 +1191,17 @@ git commit -m "docs: verify Rust infrastructure baseline"
 
 ### Affected Packages
 
-- `extractum-gemini-browser`: `ExecutionSelection`, public sidecar response wire type.
-- `extractum-llm`: public `LlmRequestError`, public scheduler default construction.
-- `extractum-telegram`: public runtime default construction and feature-off surface.
-- `extractum`: immediate consumer of Gemini Browser, LLM, and Telegram APIs.
-- `extractum-analysis` and `extractum-prompt-packs`: immediate LLM consumers.
+- `extractum-gemini-browser`: public `CancelRunOutcome`, private `ExecutionSelection`, and public sidecar response wire type.
+- `extractum-llm`: test-only deserialize API probe and public scheduler default construction.
+- `extractum-telegram`: private `ListedPeer`, public runtime default construction, test-module ordering, and feature-off surface.
+- `extractum`: immediate consumer of Gemini Browser and Telegram APIs.
 - All seven packages: toolchain/MSRV and final locked workspace test.
 
-### Narrow RED/GREEN Tests
+### Narrow RED/GREEN and Behavior Tests
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --lib scheduler::tests::scheduler_default_matches_new_empty_state --locked -- --exact
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib runtime::tests::telegram_runtime_default_constructs_empty_runtime --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact
 ```
 
 Before trusting an exact filter, list tests if necessary and reject any run reporting zero tests.
@@ -1257,8 +1222,6 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets --locked
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
 ```
 
@@ -1268,7 +1231,7 @@ Every Rust-source task ends with:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
 npm.cmd run verify
 ```
 
