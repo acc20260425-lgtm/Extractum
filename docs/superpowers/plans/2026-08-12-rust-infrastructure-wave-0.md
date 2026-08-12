@@ -279,9 +279,22 @@ git commit -m "build: lock and streamline Rust verification"
 - Modify: `src-tauri/crates/extractum-llm/src/scheduler.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/live/peer.rs`
 - Modify: `src-tauri/crates/extractum-telegram/src/runtime.rs`
+- Modify: `src-tauri/crates/extractum-analysis/src/report.rs`
+- Modify: `src-tauri/crates/extractum-analysis/src/state.rs`
+- Modify: `src-tauri/crates/extractum-analysis/src/store/read_model.rs`
+- Modify: `src-tauri/crates/extractum-analysis/src/report/tests/corpus_port.rs`
+- Modify: `src-tauri/crates/extractum-analysis/src/tests.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/dto.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/gem_analysis.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/synthesis_input.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/result_builder.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/runtime.rs`
+- Modify: `src-tauri/crates/extractum-prompt-packs/src/lib.rs`
 
 **Interfaces:**
-- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for two empty runtime states, and lint-clean test helpers.
+- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for four runtime states, behavior-neutral mechanical lint fixes, narrowly owned argument-count exceptions, and lint-clean test helpers.
 - Consumes: Task 2 accepted Clippy command.
 
 - [ ] **Step 1: Capture the accepted eight-finding RED baseline**
@@ -292,7 +305,7 @@ Ensure no unrelated Cargo process owns `src-tauri/target/debug/.cargo-lock`, the
 cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
 ```
 
-Expected: exactly these eight findings; if the set differs, update the verification record and re-scope before editing:
+Expected: exactly these eight initial findings; if the initial set differs, update the verification record and re-scope before editing:
 
 - `extractum-gemini-browser/src/execution.rs:42` — public `CancelRunOutcome`, `large_enum_variant`;
 - `extractum-gemini-browser/src/execution.rs:53` — private `ExecutionSelection`, `large_enum_variant`;
@@ -303,7 +316,35 @@ Expected: exactly these eight findings; if the set differs, update the verificat
 - `extractum-telegram/src/runtime.rs:209` — `TelegramRuntime`, `new_without_default`;
 - `extractum-telegram/src/runtime.rs:484` — `items_after_test_module`.
 
-- [ ] **Step 2: Add the sidecar wire-format RED test**
+- [ ] **Step 2: Capture the post-frontier target inventory and extend the accepted baseline**
+
+After resolving the eight initial findings, re-run the same discovery command and
+preserve both commands and inventories in the verification record:
+
+```powershell
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
+```
+
+Expected: 15 post-frontier target diagnostics at these 14 unique source
+locations (the `snapshots.rs:335` finding is reported for both lib and
+lib-test but has one source fix):
+
+- `extractum-analysis/src/report.rs:355` — public `prepare_analysis_report_execution`, `too_many_arguments`;
+- `extractum-analysis/src/state.rs:22` — public `AnalysisState::new`, `new_without_default`;
+- `extractum-analysis/src/store/read_model.rs:53` — private `resolve_run_scope_label_parts`, `too_many_arguments`;
+- `extractum-analysis/src/report/tests/corpus_port.rs:136` — test-only `vec_init_then_push`;
+- `extractum-analysis/src/tests.rs:64` — test-only `explicit_auto_deref`;
+- `extractum-prompt-packs/src/dto.rs:10` — public/persisted `PromptPackRuntimeProvider`, `derivable_impls`;
+- `extractum-prompt-packs/src/youtube_summary/gem_analysis.rs:644` — `needless_return`;
+- `extractum-prompt-packs/src/youtube_summary/result_validation.rs:622` — `needless_lifetimes`;
+- `extractum-prompt-packs/src/youtube_summary/snapshots.rs:292` — `needless_borrow`;
+- `extractum-prompt-packs/src/youtube_summary/snapshots.rs:335` — private `insert_material`, `too_many_arguments` (lib and lib-test, one source fix);
+- `extractum-prompt-packs/src/youtube_summary/synthesis_input.rs:87` — `redundant_closure`;
+- `extractum-prompt-packs/src/result_builder.rs:1114` — test-only `insert_intermediate_entities_artifact`, `too_many_arguments`;
+- `extractum-prompt-packs/src/runtime.rs:866` — test-only public API probe, `needless_maybe_sized`;
+- `extractum-prompt-packs/src/lib.rs:152` — test-only `assertions_on_constants`.
+
+- [ ] **Step 3: Add the sidecar wire-format RED test**
 
 In `types.rs` tests, add a helper result and an exact response round-trip:
 
@@ -333,7 +374,7 @@ fn sidecar_run_result_response_keeps_wire_shape() {
 
 Initially write it against the intended boxed API so it fails to compile before the implementation.
 
-- [ ] **Step 3: Box the three Gemini Browser variants**
+- [ ] **Step 4: Box the three Gemini Browser variants**
 
 Change the public cancellation outcome without changing behavior:
 
@@ -387,7 +428,7 @@ In app-side `sidecar.rs`, unwrap at the immediate consumer:
 GeminiBrowserSidecarResponse::RunResult { result } => Ok(*result),
 ```
 
-- [ ] **Step 4: Run Gemini Browser focused tests and consumer checkpoint**
+- [ ] **Step 5: Run Gemini Browser focused tests and consumer checkpoint**
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
@@ -398,7 +439,7 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --lo
 
 Expected: non-empty PASS; app consumer compiles.
 
-- [ ] **Step 5: Fix the LLM helper bound and add `Default`**
+- [ ] **Step 6: Fix the LLM helper bound and add `Default`**
 
 In the test-only public API probe, keep the paired impls consistently sized and
 remove the ineffective bounds from both lines:
@@ -423,7 +464,7 @@ The implementation is behaviorally identical to `new()` and needs no
 synthetic trait-existence test; the accepted Clippy gate is the regression
 test.
 
-- [ ] **Step 6: Run the LLM owner checkpoint**
+- [ ] **Step 7: Run the LLM owner checkpoint**
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
@@ -431,7 +472,7 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets -
 
 Expected: PASS, including the compile-time public API probes in `lib.rs`.
 
-- [ ] **Step 7: Resolve the three Telegram findings**
+- [ ] **Step 8: Resolve the three Telegram findings**
 
 Box the large private production variant:
 
@@ -460,7 +501,7 @@ Move the `TelegramRuntimeTestCallbacks` and `TelegramRuntime` test-only impl
 blocks currently after `mod tests` to immediately before it, so the test module
 is the final item. Do not add a synthetic `Default` test.
 
-- [ ] **Step 8: Run Telegram feature-off, owner, and app consumer gates**
+- [ ] **Step 9: Run Telegram feature-off, owner, and app consumer gates**
 
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
@@ -470,7 +511,60 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --loc
 
 Expected: all pass; the feature-off check proves production surface, app tests prove the dev-feature seam.
 
-- [ ] **Step 9: Close the accepted Clippy gate**
+- [ ] **Step 10: Resolve the post-frontier analysis and prompt-pack findings**
+
+Apply behavior-neutral mechanical fixes to the ten findings that are not
+`too_many_arguments`. Implement `Default for AnalysisState` by delegating to
+`new()`; Clippy is the regression gate and no synthetic trait-only test is
+needed. For persisted `PromptPackRuntimeProvider`, derive `Default`, mark the
+existing `Api` variant `#[default]`, and add this focused test in `dto.rs`:
+
+```rust
+#[test]
+fn prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api() {
+    assert_eq!(
+        PromptPackRuntimeProvider::default(),
+        PromptPackRuntimeProvider::Api
+    );
+    assert_eq!(
+        serde_json::to_value(PromptPackRuntimeProvider::default())
+            .expect("serialize default runtime provider"),
+        serde_json::json!("api")
+    );
+}
+```
+
+At the four established functions, use a narrowly scoped owning-function
+`#[allow(clippy::too_many_arguments)]` with a nearby ownership comment: retain
+the established call shape in Wave 0 rather than introducing parameter structs
+or public API changes. The functions are
+`prepare_analysis_report_execution`, `resolve_run_scope_label_parts`,
+`insert_material`, and `insert_intermediate_entities_artifact`. Do not add a
+module, crate, or global allow.
+
+Apply the remaining mechanical changes at the recorded locations: initialize
+the corpus vector directly; remove the redundant explicit test dereference;
+remove the needless `return`, lifetime, borrow, closure, and `?Sized` bound;
+and remove only `assert!(cfg!(test));` from
+`tests::cancellation_smoke_services_remain_test_only`. The latter test retains
+the feature-off/public-surface probe, so the tautological runtime assertion is
+not replaced with another tautology.
+
+- [ ] **Step 11: Run the post-frontier owner checkpoints**
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
+```
+
+Expected: all non-empty owner checkpoints pass. These changes preserve existing
+public shapes, so no additional immediate app-dependent checkpoint is required.
+
+- [ ] **Step 12: Close the accepted Clippy gate**
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
@@ -478,12 +572,13 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --lo
 npm.cmd run verify
 ```
 
-Expected: PASS with no global or crate-level lint allow.
+Expected: PASS with no global or crate-level lint allow; the final fail-fast
+Clippy command remains canonical and has no diagnostic flags.
 
-- [ ] **Step 10: Commit the Clippy baseline**
+- [ ] **Step 13: Commit the Clippy baseline**
 
 ```powershell
-git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs
+git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs src-tauri/crates/extractum-analysis/src/report.rs src-tauri/crates/extractum-analysis/src/state.rs src-tauri/crates/extractum-analysis/src/store/read_model.rs src-tauri/crates/extractum-analysis/src/report/tests/corpus_port.rs src-tauri/crates/extractum-analysis/src/tests.rs src-tauri/crates/extractum-prompt-packs/src/dto.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/gem_analysis.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/synthesis_input.rs src-tauri/crates/extractum-prompt-packs/src/result_builder.rs src-tauri/crates/extractum-prompt-packs/src/runtime.rs src-tauri/crates/extractum-prompt-packs/src/lib.rs
 git commit -m "refactor: establish Rust Clippy baseline"
 ```
 
@@ -1182,7 +1277,7 @@ Populate the verification document with no placeholders:
 
 - commit range for Wave 0;
 - `rustc -Vv`, `cargo -V`, cargo-deny version and SHA-256;
-- the diagnostic inventory command `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings`, its eight Clippy classifications, and exact focused test names/results;
+- both diagnostic discovery invocations of `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings`: the initial result of exactly eight findings with their classifications, and the post-frontier result of 15 target diagnostics at 14 unique source locations (including the dual lib/lib-test report for one `snapshots.rs:335` source fix); record both full inventories and results alongside exact focused test names/results;
 - license allowlist and any exact clarifications/exceptions;
 - actual duplicate baseline totals and cardinality changes;
 - fast/full/advisory command outputs;
@@ -1217,6 +1312,8 @@ git commit -m "docs: verify Rust infrastructure baseline"
 - `extractum-gemini-browser`: public `CancelRunOutcome`, private `ExecutionSelection`, and public sidecar response wire type.
 - `extractum-llm`: test-only deserialize API probe and public scheduler default construction.
 - `extractum-telegram`: private `ListedPeer`, public runtime default construction, test-module ordering, and feature-off surface.
+- `extractum-analysis`: report execution call shape, default analysis state, read-model helper, and test-only lint cleanup.
+- `extractum-prompt-packs`: persisted provider default/serialization, YouTube-summary helpers, test helpers, feature-off public-surface probe, and feature-off surface.
 - `extractum`: immediate consumer of Gemini Browser and Telegram APIs.
 - All seven packages: toolchain/MSRV and final locked workspace test.
 
@@ -1225,6 +1322,8 @@ git commit -m "docs: verify Rust infrastructure baseline"
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib tests::cancellation_smoke_services_remain_test_only --locked -- --exact
 ```
 
 Before trusting an exact filter, list tests if necessary and reject any run reporting zero tests.
@@ -1236,6 +1335,8 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --a
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
 ```
 
@@ -1245,8 +1346,14 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-llm --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
 ```
+
+The post-frontier `extractum-analysis` and `extractum-prompt-packs` work does
+not change a public cross-crate shape, so their owner checkpoints are complete
+without an additional app-dependent checkpoint.
 
 ### End-of-Slice Workspace Gates
 

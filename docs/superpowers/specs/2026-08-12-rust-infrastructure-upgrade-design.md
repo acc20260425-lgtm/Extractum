@@ -158,9 +158,36 @@ pretending a compiler update is behavior-neutral.
 
 #### Clippy Baseline
 
-Classify all eight existing findings before suppressing or changing code. The
-baseline commit records the accepted command and the classification of each
-finding.
+Discover the baseline in two stages. First, classify the eight initial findings
+before suppressing or changing code. After those are resolved, preserve the
+same `--keep-going --message-format=short` discovery command and its second
+inventory: 15 post-frontier target diagnostics at 14 unique source locations
+in `extractum-analysis` and `extractum-prompt-packs` (`snapshots.rs:335` is
+reported for lib and lib-test but has one source fix). The baseline commit and
+verification record retain both commands and both inventories.
+
+The post-frontier inventory is: `extractum-analysis/report.rs:355`
+(`prepare_analysis_report_execution`, `too_many_arguments`),
+`extractum-analysis/state.rs:22` (`AnalysisState::new`,
+`new_without_default`), `extractum-analysis/store/read_model.rs:53`
+(`resolve_run_scope_label_parts`, `too_many_arguments`),
+`extractum-analysis/report/tests/corpus_port.rs:136` (`vec_init_then_push`),
+`extractum-analysis/tests.rs:64` (`explicit_auto_deref`),
+`extractum-prompt-packs/dto.rs:10` (`PromptPackRuntimeProvider`,
+`derivable_impls`), `extractum-prompt-packs/youtube_summary/gem_analysis.rs:644`
+(`needless_return`),
+`extractum-prompt-packs/youtube_summary/result_validation.rs:622`
+(`needless_lifetimes`),
+`extractum-prompt-packs/youtube_summary/snapshots.rs:292`
+(`needless_borrow`),
+`extractum-prompt-packs/youtube_summary/snapshots.rs:335`
+(`insert_material`, `too_many_arguments`),
+`extractum-prompt-packs/youtube_summary/synthesis_input.rs:87`
+(`redundant_closure`),
+`extractum-prompt-packs/result_builder.rs:1114`
+(`insert_intermediate_entities_artifact`, `too_many_arguments`),
+`extractum-prompt-packs/runtime.rs:866` (`needless_maybe_sized`), and
+`extractum-prompt-packs/lib.rs:152` (`assertions_on_constants`).
 
 For `large_enum_variant`, boxing is allowed only when it preserves serialization
 and behavior. `GeminiBrowserSidecarResponse::RunResult` is a public
@@ -186,6 +213,28 @@ impls because `DeserializeOwned` already constrains the tested type to `Sized`.
 The Telegram test-only impl blocks move
 before `mod tests` so the test module remains the final item. Neither cleanup
 changes production behavior.
+
+The post-frontier baseline resolves ten non-argument-count diagnostics with
+behavior-neutral mechanical code changes. `AnalysisState::default()` delegates
+to `new()` without a synthetic trait-only test. `PromptPackRuntimeProvider`
+derives `Default` with existing `Api` marked `#[default]`; a focused test proves
+the default remains `Api` and preserves serialization. The tautological
+`assert!(cfg!(test));` is removed from
+`tests::cancellation_smoke_services_remain_test_only`, while that focused test
+retains the feature-off/public-surface probe.
+
+The four established functions with `too_many_arguments` receive only a
+narrowly scoped owning-function `#[allow(clippy::too_many_arguments)]` and a
+nearby ownership comment: public `prepare_analysis_report_execution`, private
+`resolve_run_scope_label_parts`, private `insert_material`, and test-only
+`insert_intermediate_entities_artifact`. Preserving their established call
+shapes is preferable in Wave 0; no parameter structs, public API changes, or
+module/crate/global allows are permitted. The remaining mechanical locations
+are `report/tests/corpus_port.rs:136` (`vec_init_then_push`), `tests.rs:64`
+(`explicit_auto_deref`), `gem_analysis.rs:644` (`needless_return`),
+`result_validation.rs:622` (`needless_lifetimes`), `snapshots.rs:292`
+(`needless_borrow`), `synthesis_input.rs:87` (`redundant_closure`), and
+`runtime.rs:866` (`needless_maybe_sized`).
 
 The normal Clippy gate intentionally does not use `--all-features`, because
 `csp-verification`, `prompt-pack-dev-fixtures`, and `app-test-support` alter the
