@@ -21,8 +21,7 @@ export function createVerifySteps({ npmExecPath = process.env.npm_execpath, plat
     npmStep("npm run test:app:e2e", "test:app:e2e", { npmExecPath, platform }),
     npmStep("npm run check", "check", { npmExecPath, platform }),
     npmStep("npm run check:rustfmt", "check:rustfmt", { npmExecPath, platform }),
-    { title: "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets", command: "cargo", args: ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets'] },
-    { title: "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets", command: "cargo", args: ['test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets'] },
+    { title: "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked", command: "cargo", args: ['test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets', '--locked'] },
     { title: "git diff HEAD --check", command: "git", args: ["diff", "HEAD", "--check"] },
   ];
 }

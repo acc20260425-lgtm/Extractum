@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import { createVerifySteps, runVerification } from "./verify.mjs";
@@ -16,9 +17,21 @@ describe("verify", () => {
       "check",
       "check:rustfmt",
       "cargo",
-      "cargo",
       "git",
     ]);
+    const cargoSteps = steps.filter((step) => step.command === "cargo");
+    expect(cargoSteps).toEqual([{
+      title: "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked",
+      command: "cargo",
+      args: ["test", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets", "--locked"],
+    }]);
+
+    const packageJson = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    );
+    expect(packageJson.scripts["bootstrap:testing"]).toBe(
+      "svelte-kit sync && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
+    );
     const npmScripts = steps.filter((step) => step.npmScript).map((step) => step.npmScript);
     expect(npmScripts).not.toContain("test");
     expect(npmScripts).not.toContain("bootstrap:testing");
