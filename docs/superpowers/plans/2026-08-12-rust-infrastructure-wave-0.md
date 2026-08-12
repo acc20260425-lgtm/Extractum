@@ -292,9 +292,43 @@ git commit -m "build: lock and streamline Rust verification"
 - Modify: `src-tauri/crates/extractum-prompt-packs/src/result_builder.rs`
 - Modify: `src-tauri/crates/extractum-prompt-packs/src/runtime.rs`
 - Modify: `src-tauri/crates/extractum-prompt-packs/src/lib.rs`
+- Modify: `src-tauri/src/prompt_packs/source_adapter.rs`
+- Modify: `src-tauri/src/apalis_jobs.rs`
+- Modify: `src-tauri/src/ingest_provenance.rs`
+- Modify: `src-tauri/src/job_helpers.rs`
+- Modify: `src-tauri/src/projects/read_model.rs`
+- Modify: `src-tauri/src/projects/mod.rs`
+- Modify: `src-tauri/src/topic_memberships.rs`
+- Modify: `src-tauri/src/prompt_packs/runtime_commands.rs`
+- Modify: `src-tauri/src/accounts.rs`
+- Modify: `src-tauri/src/takeout_import/recovery.rs`
+- Modify: `src-tauri/src/sources/items/query.rs`
+- Modify: `src-tauri/src/sources/items.rs`
+- Modify: `src-tauri/src/youtube/captions.rs`
+- Modify: `src-tauri/src/youtube/process_runtime.rs`
+- Modify: `src-tauri/src/youtube/source_metadata.rs`
+- Modify: `src-tauri/src/notebooklm_export/query.rs`
+- Modify: `src-tauri/src/llm/profiles.rs`
+- Modify: `src-tauri/src/llm/mod.rs`
+- Modify: `src-tauri/src/gemini_browser/jobs.rs`
+- Modify: `src-tauri/src/analysis/fixtures/seed/runs.rs`
+- Modify: `src-tauri/src/analysis/fixtures/seed.rs`
+- Modify: `src-tauri/src/analysis/fixtures.rs`
+- Modify: `src-tauri/src/analysis/store/read_model.rs`
+- Modify: `src-tauri/src/analysis/store/setup.rs`
+- Modify: `src-tauri/src/analysis/mod.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/external_process.rs`
+- Modify: `src-tauri/src/diagnostics/database.rs`
+- Modify: `src-tauri/src/library_sources/mod.rs`
+- Modify: `src-tauri/src/migrations.rs`
+- Modify: `src-tauri/src/telegram.rs`
+- Modify: `src-tauri/src/takeout_import/mod.rs`
+- Modify: `src-tauri/src/sources/store.rs`
+- Modify: `src-tauri/src/analysis/tests_application.rs`
 
 **Interfaces:**
-- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for four runtime states, behavior-neutral mechanical lint fixes, narrowly owned argument-count exceptions, and lint-clean test helpers.
+- Produces: unchanged sidecar JSON, boxed large Rust variants, meaningful `Default` for four runtime states, behavior-neutral mechanical lint fixes, narrowly owned argument-count exceptions, audited process-drop behavior, and lint-clean application/test helpers.
 - Consumes: Task 2 accepted Clippy command.
 
 - [ ] **Step 1: Capture the accepted eight-finding RED baseline**
@@ -319,7 +353,8 @@ Expected: exactly these eight initial findings; if the initial set differs, upda
 - [ ] **Step 2: Capture the post-frontier target inventory and extend the accepted baseline**
 
 After resolving the eight initial findings, re-run the same discovery command and
-preserve both commands and inventories in the verification record:
+preserve the first- and second-stage commands and inventories in the verification
+record:
 
 ```powershell
 cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
@@ -564,7 +599,92 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib
 Expected: all non-empty owner checkpoints pass. These changes preserve existing
 public shapes, so no additional immediate app-dependent checkpoint is required.
 
-- [ ] **Step 12: Close the accepted Clippy gate**
+- [ ] **Step 12: Capture and resolve the root `extractum` frontier**
+
+After the eight initial findings and the 15 post-frontier diagnostics are
+resolved, capture the third discovery stage before editing application-crate
+sources:
+
+```powershell
+cargo clippy --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked --keep-going --message-format=short -- -D warnings
+```
+
+Expected lib-test inventory: exactly 62 target diagnostics at 60 unique
+file-and-line locations in 35 files. The library target reports 50 occurrences; the lib-test
+target repeats those 50 and adds 12 test-only findings, for 112 emitted
+occurrences across both compilations. The three generated IPC diagnostics
+share the single macro-definition location `src/lib.rs:402`; rustc's short
+output may coalesce the two 11/7 expansions, but the target diagnostic count
+remains 62. Record all three discovery commands and
+all three inventories in the Wave 0 verification record. For this third stage,
+also record the exact location table, the library/lib-test relationship, and
+the following lib-test lint totals:
+
+- `explicit_auto_deref` 22;
+- `too_many_arguments` 17;
+- `type_complexity` 3;
+- `unnecessary_literal_unwrap` 3;
+- `bool_assert_comparison` 2;
+- `redundant_pattern_matching` 2;
+- `unwrap_or_default` 2;
+- one each of `duplicate_mod`, `nonminimal_bool`, `manual_repeat_n`,
+  `needless_question_mark`, `needless_borrow`, `unnecessary_unwrap`,
+  `implied_bounds_in_impls`, `match_result_ok`, `field_reassign_with_default`,
+  `get_first`, and `await_holding_lock`.
+
+Resolve the 43 mechanical target diagnostics at their recorded locations with
+behavior-preserving lint cleanups only. This includes loading the duplicated
+test-support module once, private production/test type aliases where needed,
+and limiting the `MutexGuard` lifetime before the next await. Do not turn a
+mechanical cleanup into a public type or API change.
+
+Resolve the 17 `too_many_arguments` diagnostics at their 15 recorded source
+locations only with owning-function or affected application-command-inventory
+entry `#[allow(clippy::too_many_arguments)]` attributes and nearby ownership
+comments. At `src/lib.rs:402`, annotate the affected inventory entries
+`start_project_analysis` (11 arguments), `list_analysis_runs` (11 arguments),
+and `start_analysis_report` (12 arguments), not the macro, module, or crate.
+Preserve every public Tauri/IPC and Rust signature; do not introduce parameter
+objects.
+
+For the two `redundant_pattern_matching` diagnostics in
+`src/youtube/process_runtime.rs`, first audit temporary and process-owner drop
+order against the existing lifecycle tests. Use `is_err()` only if the audit
+proves equivalent ordering. Otherwise retain the pattern and add the smallest
+function-local allow with a comment naming the ordering constraint. No module,
+crate, or global lint allow is authorized.
+
+Before the owner checkpoint, run non-empty exact RED/GREEN evidence for the
+behavior-sensitive cleanups. Reuse the existing tests where they cover the
+behavior; add a focused private unit test when the option-pair branch has no
+direct existing seam:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib apalis_jobs::tests::apalis_jobs_list_filters_by_status_job_type_and_search --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::external_source_job_cancellation_reaps_its_managed_operation --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::injected_timeout_reap_detaches_stuck_child_and_keeps_cookie_until_release --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib takeout_import::tests::cancelled_job_emits_persisted_terminal_record --locked -- --exact
+```
+
+The option-pair test must prove that the direct configured path is selected
+only when both a non-empty key and base URL exist, and that partial overrides
+continue through profile resolution. The process tests and audit record must
+state whether the mechanical rewrite preserved drop order or why the local
+allow was required. The takeout test must remain non-empty and prove the event
+recorder releases its lock before awaiting persisted state.
+
+Then run the owning package gates:
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
+```
+
+Expected: PASS without public/API/IPC signature changes and without module,
+crate, or global lint allows.
+
+- [ ] **Step 13: Close the accepted Clippy gate**
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
@@ -575,10 +695,10 @@ npm.cmd run verify
 Expected: PASS with no global or crate-level lint allow; the final fail-fast
 Clippy command remains canonical and has no diagnostic flags.
 
-- [ ] **Step 13: Commit the Clippy baseline**
+- [ ] **Step 14: Commit the Clippy baseline**
 
 ```powershell
-git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs src-tauri/crates/extractum-analysis/src/report.rs src-tauri/crates/extractum-analysis/src/state.rs src-tauri/crates/extractum-analysis/src/store/read_model.rs src-tauri/crates/extractum-analysis/src/report/tests/corpus_port.rs src-tauri/crates/extractum-analysis/src/tests.rs src-tauri/crates/extractum-prompt-packs/src/dto.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/gem_analysis.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/synthesis_input.rs src-tauri/crates/extractum-prompt-packs/src/result_builder.rs src-tauri/crates/extractum-prompt-packs/src/runtime.rs src-tauri/crates/extractum-prompt-packs/src/lib.rs
+git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs src-tauri/crates/extractum-analysis/src/report.rs src-tauri/crates/extractum-analysis/src/state.rs src-tauri/crates/extractum-analysis/src/store/read_model.rs src-tauri/crates/extractum-analysis/src/report/tests/corpus_port.rs src-tauri/crates/extractum-analysis/src/tests.rs src-tauri/crates/extractum-prompt-packs/src/dto.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/gem_analysis.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/synthesis_input.rs src-tauri/crates/extractum-prompt-packs/src/result_builder.rs src-tauri/crates/extractum-prompt-packs/src/runtime.rs src-tauri/crates/extractum-prompt-packs/src/lib.rs src-tauri/src/prompt_packs/source_adapter.rs src-tauri/src/apalis_jobs.rs src-tauri/src/ingest_provenance.rs src-tauri/src/job_helpers.rs src-tauri/src/projects/read_model.rs src-tauri/src/projects/mod.rs src-tauri/src/topic_memberships.rs src-tauri/src/prompt_packs/runtime_commands.rs src-tauri/src/accounts.rs src-tauri/src/takeout_import/recovery.rs src-tauri/src/sources/items/query.rs src-tauri/src/sources/items.rs src-tauri/src/youtube/captions.rs src-tauri/src/youtube/process_runtime.rs src-tauri/src/youtube/source_metadata.rs src-tauri/src/notebooklm_export/query.rs src-tauri/src/llm/profiles.rs src-tauri/src/llm/mod.rs src-tauri/src/gemini_browser/jobs.rs src-tauri/src/analysis/fixtures/seed/runs.rs src-tauri/src/analysis/fixtures/seed.rs src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/store/read_model.rs src-tauri/src/analysis/store/setup.rs src-tauri/src/analysis/mod.rs src-tauri/src/lib.rs src-tauri/src/external_process.rs src-tauri/src/diagnostics/database.rs src-tauri/src/library_sources/mod.rs src-tauri/src/migrations.rs src-tauri/src/telegram.rs src-tauri/src/takeout_import/mod.rs src-tauri/src/sources/store.rs src-tauri/src/analysis/tests_application.rs
 git commit -m "refactor: establish Rust Clippy baseline"
 ```
 
@@ -1277,7 +1397,7 @@ Populate the verification document with no placeholders:
 
 - commit range for Wave 0;
 - `rustc -Vv`, `cargo -V`, cargo-deny version and SHA-256;
-- both diagnostic discovery invocations of `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings`: the initial result of exactly eight findings with their classifications, and the post-frontier result of 15 target diagnostics at 14 unique source locations (including the dual lib/lib-test report for one `snapshots.rs:335` source fix); record both full inventories and results alongside exact focused test names/results;
+- all three diagnostic discovery stages: the first two invocations of `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings` with the initial result of exactly eight findings and the post-frontier result of 15 target diagnostics at 14 unique source locations (including the dual lib/lib-test report for one `snapshots.rs:335` source fix), followed by `cargo clippy --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked --keep-going --message-format=short -- -D warnings` with 62 lib-test diagnostics at 60 unique file-and-line locations in 35 files; record all three full inventories, target-duplication relationship (including the three generated IPC diagnostics at one macro-definition location), resolution classifications, exact staged files, drop-order audit, and focused test names/results;
 - license allowlist and any exact clarifications/exceptions;
 - actual duplicate baseline totals and cardinality changes;
 - fast/full/advisory command outputs;
@@ -1314,7 +1434,9 @@ git commit -m "docs: verify Rust infrastructure baseline"
 - `extractum-telegram`: private `ListedPeer`, public runtime default construction, test-module ordering, and feature-off surface.
 - `extractum-analysis`: report execution call shape, default analysis state, read-model helper, and test-only lint cleanup.
 - `extractum-prompt-packs`: persisted provider default/serialization, YouTube-summary helpers, test helpers, feature-off public-surface probe, and feature-off surface.
-- `extractum`: immediate consumer of Gemini Browser and Telegram APIs.
+- `extractum`: immediate consumer of Gemini Browser and Telegram APIs, plus
+  the 35-file application Clippy frontier (production helpers, Tauri/IPC
+  command inventory, process lifecycle, fixtures, and tests).
 - All seven packages: toolchain/MSRV and final locked workspace test.
 
 ### Narrow RED/GREEN and Behavior Tests
@@ -1324,6 +1446,11 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --li
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib tests::cancellation_smoke_services_remain_test_only --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib apalis_jobs::tests::apalis_jobs_list_filters_by_status_job_type_and_search --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::external_source_job_cancellation_reaps_its_managed_operation --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::injected_timeout_reap_detaches_stuck_child_and_keeps_cookie_until_release --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib takeout_import::tests::cancelled_job_emits_persisted_terminal_record --locked -- --exact
 ```
 
 Before trusting an exact filter, list tests if necessary and reject any run reporting zero tests.
@@ -1338,6 +1465,7 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --n
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --all-targets --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked
 ```
 
 ### Package Checkpoints and Immediate Dependents
@@ -1353,7 +1481,9 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --loc
 
 The post-frontier `extractum-analysis` and `extractum-prompt-packs` work does
 not change a public cross-crate shape, so their owner checkpoints are complete
-without an additional app-dependent checkpoint.
+without an additional app-dependent checkpoint. The root application frontier
+preserves all public/API/IPC signatures; its exact behavior tests and full
+`extractum` checkpoint own those internal changes.
 
 ### End-of-Slice Workspace Gates
 

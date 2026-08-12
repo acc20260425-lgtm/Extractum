@@ -158,13 +158,15 @@ pretending a compiler update is behavior-neutral.
 
 #### Clippy Baseline
 
-Discover the baseline in two stages. First, classify the eight initial findings
-before suppressing or changing code. After those are resolved, preserve the
-same `--keep-going --message-format=short` discovery command and its second
-inventory: 15 post-frontier target diagnostics at 14 unique source locations
-in `extractum-analysis` and `extractum-prompt-packs` (`snapshots.rs:335` is
-reported for lib and lib-test but has one source fix). The baseline commit and
-verification record retain both commands and both inventories.
+Discover the baseline in three stages. First, classify the eight initial
+findings before suppressing or changing code. After those are resolved,
+preserve the same `--keep-going --message-format=short` discovery command and
+its second inventory: 15 post-frontier target diagnostics at 14 unique source
+locations in `extractum-analysis` and `extractum-prompt-packs`
+(`snapshots.rs:335` is reported for lib and lib-test but has one source fix).
+After those are resolved, capture the root `extractum` frontier as the third
+stage. The baseline commit and verification record retain all three commands
+and all three inventories.
 
 The post-frontier inventory is: `extractum-analysis/report.rs:355`
 (`prepare_analysis_report_execution`, `too_many_arguments`),
@@ -235,6 +237,65 @@ are `report/tests/corpus_port.rs:136` (`vec_init_then_push`), `tests.rs:64`
 `result_validation.rs:622` (`needless_lifetimes`), `snapshots.rs:292`
 (`needless_borrow`), `synthesis_input.rs:87` (`redundant_closure`), and
 `runtime.rs:866` (`needless_maybe_sized`).
+
+The baseline discovery has a third stage after those package findings are
+resolved. A package-scoped diagnostic run for root `extractum` reports exactly
+62 lib-test target diagnostics at 60 unique file-and-line locations in 35 files. The
+library target emits 50 occurrences; lib-test repeats those 50 and adds 12
+test-only findings, for 112 occurrences across both compilations. Three
+generated IPC diagnostics share the one macro-definition location
+`src/lib.rs:402`; rustc's short output may coalesce the two 11/7 expansions,
+but the diagnostic total remains 62. The accepted
+lib-test totals are 22 `explicit_auto_deref`, 17 `too_many_arguments`, three
+`type_complexity`, three `unnecessary_literal_unwrap`, two each of
+`bool_assert_comparison`, `redundant_pattern_matching`, and
+`unwrap_or_default`, plus one each of `duplicate_mod`, `nonminimal_bool`,
+`manual_repeat_n`, `needless_question_mark`, `needless_borrow`,
+`unnecessary_unwrap`, `implied_bounds_in_impls`, `match_result_ok`,
+`field_reassign_with_default`, `get_first`, and `await_holding_lock`.
+
+The authorized application scope is exactly these 35 files:
+`prompt_packs/source_adapter.rs`, `apalis_jobs.rs`, `ingest_provenance.rs`,
+`job_helpers.rs`, `projects/read_model.rs`, `projects/mod.rs`,
+`topic_memberships.rs`, `prompt_packs/runtime_commands.rs`, `accounts.rs`,
+`takeout_import/recovery.rs`, `sources/items/query.rs`, `sources/items.rs`,
+`youtube/captions.rs`, `youtube/process_runtime.rs`,
+`youtube/source_metadata.rs`, `notebooklm_export/query.rs`, `llm/profiles.rs`,
+`llm/mod.rs`, `gemini_browser/jobs.rs`, `gemini_browser/sidecar.rs`,
+`analysis/fixtures/seed/runs.rs`, `analysis/fixtures/seed.rs`,
+`analysis/fixtures.rs`, `analysis/store/read_model.rs`,
+`analysis/store/setup.rs`, `analysis/mod.rs`, `lib.rs`, `external_process.rs`,
+`diagnostics/database.rs`, `library_sources/mod.rs`, `migrations.rs`,
+`telegram.rs`, `takeout_import/mod.rs`, `sources/store.rs`, and
+`analysis/tests_application.rs`, all below `src-tauri/src/`.
+
+Of the 62 third-stage target diagnostics, 43 are resolved only by
+behavior-preserving mechanical cleanup. The 17 `too_many_arguments`
+diagnostics at 15 recorded locations receive only owning-function or affected
+application-command-inventory-entry allows with nearby ownership comments.
+The three macro-generated IPC diagnostics are annotated at their affected
+inventory entries: `start_project_analysis` (11 arguments),
+`list_analysis_runs` (11 arguments), and `start_analysis_report` (12
+arguments), never at the macro, module, or crate. Parameter objects,
+public Rust or Tauri/IPC signature changes, and module/crate/global lint allows
+are forbidden.
+
+The remaining two `redundant_pattern_matching` diagnostics in the managed
+yt-dlp process lifecycle require an explicit temporary/drop-order audit.
+`is_err()` is used only if existing lifecycle tests prove equivalent ordering;
+otherwise the established pattern remains under the smallest function-local
+allow with an ordering comment. Focused non-empty RED/GREEN evidence covers
+the job-filter predicate, configured-key/base-URL option selection, process
+termination/reaping order, and release of the takeout event-recorder lock
+before the next await. The application package then runs its all-targets check
+and test checkpoint before the fail-fast workspace Clippy gate and full
+verifier.
+
+The Wave 0 verification record retains all three discovery commands and exact
+inventories. For the third stage it additionally records the 60-location
+table, library/lib-test duplication relationship, mechanical versus local-
+allow disposition, ownership comments, drop-order audit decision, focused
+test results, and the exact staged file set.
 
 The normal Clippy gate intentionally does not use `--all-features`, because
 `csp-verification`, `prompt-pack-dev-fixtures`, and `app-test-support` alter the
