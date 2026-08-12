@@ -37,12 +37,18 @@ local baseline is `rustc 1.95.0 (59807616e 2026-04-14)` on
 1.95.0 therefore freezes the observed compiler rather than changing it.
 
 `src-tauri/Cargo.lock` is synchronized with the manifests and contains 736
-cross-platform packages and no Git sources. The actionable duplicate metric is
-target-specific: `cargo tree -d --target x86_64-pc-windows-msvc` currently
-contains 51 unique duplicated package names and 151 duplicate-tree records.
-The complete lockfile count is evidence, not a deduplication target.
+cross-platform packages and no Git sources. Duplicate policy is derived from
+the versioned JSON returned by `cargo metadata --locked --filter-platform
+x86_64-pc-windows-msvc`, not from `cargo tree` rendering. The current filtered
+resolve graph contains 503 reachable package nodes, 37 names resolved at more
+than one version, 91 package-version instances across those names, and 54
+versions in excess of one per name. The previous `cargo tree` observation of
+51 names and 151 rendered records is superseded because rendered lines and
+`(*)` markers are not stable graph entities. The complete lockfile count is
+evidence, not a deduplication target.
 
-A Cargo dry run against the current manifests found 157 updates, 28 additions,
+A Cargo dry run on 2026-08-12 against the current manifests and then-current
+crates.io index found 157 updates, 28 additions,
 and 46 removals: 185 packages enter or change version and 231 lockfile
 positions change overall. Only 12 directly declared dependencies participate:
 `anyhow`, `jsonschema`, `reqwest`, `serde`, `serde_json`, `time`, `tokio-util`,
@@ -50,6 +56,10 @@ positions change overall. Only 12 directly declared dependencies participate:
 `tauri-plugin-mcp-bridge`. The other 145 updates are transitive. Direct changes
 therefore receive ownership decisions, while the residual transitive mass is
 reviewed as a lockfile refresh rather than 145 artificial precise updates.
+These counts and the 12-package inventory are planning evidence, not future
+acceptance constants. Every dependency wave re-measures its available direct
+updates and residual lockfile delta and records the new snapshot in that
+wave's verification record.
 
 The accepted Clippy command, without `--all-features`, currently reports five
 violations across three crates:
@@ -112,7 +122,10 @@ profile = "minimal"
 
 Add `rust-version = "1.95"` to `[workspace.package]`. The root application
 package and every one of the six extracted crates explicitly inherit it with
-`rust-version.workspace = true`. Edition remains 2021 until its own wave.
+`rust-version.workspace = true`. Add `publish = false` to the root `extractum`
+package; the six extracted crates already declare it. This makes all seven
+internal packages explicitly unpublished and allows the private-license policy
+to treat them consistently. Edition remains 2021 until its own wave.
 
 A repository rule checks the exact correspondence among the root toolchain
 channel, workspace MSRV, all seven package inheritance declarations, and the
@@ -174,17 +187,20 @@ Add root `deny.toml` with the Windows-only dependency graph:
 targets = ["x86_64-pc-windows-msvc"]
 ```
 
-The deterministic push and PR policy runs only:
+Every cargo-deny invocation passes the root config explicitly. This avoids any
+dependency on how cargo-deny resolves its default config relative to the
+current directory or `--manifest-path`. The deterministic push and PR policy
+runs only:
 
 ```powershell
-cargo deny --manifest-path src-tauri/Cargo.toml check bans licenses sources
+cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources
 ```
 
 Advisories remain a moving external data source and run separately on a
 schedule and before a release:
 
 ```powershell
-cargo deny --manifest-path src-tauri/Cargo.toml check advisories
+cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories
 ```
 
 A newly published advisory creates a security task and does not retroactively
@@ -210,8 +226,8 @@ cannot be satisfied through an already allowed branch of an `OR` expression:
 - `Unicode-3.0`;
 - `Zlib`.
 
-`[licenses.private] ignore = true` excludes the seven unpublished workspace
-packages, which currently have no license expression. The review explicitly
+`[licenses.private] ignore = true` excludes the seven explicitly unpublished
+workspace packages, which currently have no license expression. The review explicitly
 checks `ring`, `unicode-ident`, and `rustls-webpki`: their currently declared
 expressions are respectively `Apache-2.0 AND ISC`,
 `(MIT OR Apache-2.0) AND Unicode-3.0`, and `ISC`. If cargo-deny 0.20.2 cannot
@@ -228,17 +244,19 @@ policy is green.
 
 #### Duplicate Policy
 
-Set `bans.multiple-versions = "warn"`; do not hand-maintain roughly one hundred
-versioned `bans.skip` records for 51 transitive duplicate names. A generated
-Windows duplicate-baseline JSON records:
+Set `bans.multiple-versions = "warn"`; do not hand-maintain a large versioned
+`bans.skip` inventory for transitive duplicates. A generated Windows
+duplicate-baseline JSON records:
 
 - schema version;
 - target `x86_64-pc-windows-msvc`;
-- 51 unique duplicated package names;
-- 151 duplicate-tree records;
-- the sorted 51-name duplicate inventory used as audit evidence.
+- 37 unique duplicated package names;
+- 91 package-version instances across duplicated names;
+- the sorted 37-name duplicate inventory used as audit evidence.
 
-The generator uses locked Cargo tree data and stable ordering. It deliberately
+The generator uses `cargo metadata --locked --filter-platform
+x86_64-pc-windows-msvc --format-version 1`, the filtered `resolve.nodes`, and
+stable ordering. It deliberately
 omits resolved versions, which would add noise to every dependency wave without
 participating in the gate. A repository rule fails if either count grows. A
 decrease is accepted and should lower the committed baseline in the same
@@ -282,13 +300,16 @@ insufficient; it is not Wave 0 scope.
 
 Wave 0 creates Windows GitHub Actions automation with three execution paths.
 
-The fast push job runs:
+The fast push job requires no npm installation and runs:
 
-1. toolchain and locked-metadata policy checks;
-2. `cargo fmt --check`;
-3. workspace Clippy with `--locked` and `-D warnings`;
-4. the two producer `--no-default-features --locked` checks;
-5. deterministic cargo-deny checks for bans, licenses, and sources.
+1. `cargo fmt --check` under the pinned root toolchain;
+2. workspace Clippy with `--locked` and `-D warnings`;
+3. the two producer `--no-default-features --locked` checks;
+4. deterministic cargo-deny checks for bans, licenses, and sources.
+
+Repository-rule tests remain in the full PR job through `npm.cmd run verify`;
+they are routed through the `unit-node` Vitest project and are not duplicated
+in the fast job.
 
 The full PR job installs dependencies with `npm.cmd ci`, restores the canonical
 `src-tauri/target` cache, downloads and verifies the pinned cargo-deny binary,
@@ -308,9 +329,10 @@ wave's verification record before acceptance. Release tags invoke it
 automatically. This gives the release rule an executor rather than relying on
 operator memory.
 
-A scheduled workflow runs `cargo deny ... check advisories` against the current
-default branch. Failure opens or updates the security follow-up process; it
-does not rewrite dependency policy automatically.
+A scheduled workflow runs `cargo deny --config deny.toml --manifest-path
+src-tauri/Cargo.toml check advisories` against the current default branch.
+Failure opens or updates the security follow-up process; it does not rewrite
+dependency policy automatically.
 
 #### Wave 0 Verification and Rollback
 
@@ -327,13 +349,13 @@ evidence are not collapsed into one change.
 
 ### Wave 1: Compatible Direct Dependencies
 
-Make decisions for directly declared dependencies rather than pretending 145
-transitive packages are independently owned updates. Wave 1 has two reviewable
-groups:
+Make decisions for directly declared dependencies rather than pretending the
+measured 145 transitive updates are independently owned. Wave 1 has two
+reviewable groups with an initial measured inventory:
 
-1. compatible low-risk direct leaves that do not belong to the runtime, data,
-   or security boundary;
-2. the Tauri core/build/plugin family.
+1. low-risk leaves: `anyhow`, `serde`, `serde_json`, and `time`;
+2. the Tauri family: `tauri`, `tauri-build`, `tauri-plugin-dialog`,
+   `tauri-plugin-opener`, and `tauri-plugin-mcp-bridge` within `0.11`.
 
 Each direct package uses a precise update and records the transitive closure
 that Cargo necessarily moves with it. The Tauri group updates the Rust crates,
@@ -343,14 +365,18 @@ remain on compatible current minor releases. The group closes with the
 release/bundle job. `tauri-plugin-mcp-bridge` may move within `0.11`; its
 incompatible `0.12` boundary remains Wave 3 scope.
 
-### Wave 2: Runtime, Data, Security, and Residual Transitives
+### Wave 2: Risk-Owned Directs and Residual Transitives
 
-Treat Tokio, SQLx, Reqwest/rustls, Keyring, cryptography, and `windows-sys` as
-risk-owned groups even when Cargo considers their updates compatible. Each
-group receives focused owning-package tests and immediate-dependent checks.
-SQLx, Keyring, cryptography, and Windows integration changes include release
-build evidence; database changes preserve the single backend-owned SQLite path
-and additive migration policy.
+The measured direct scope is `reqwest` and `tokio-util`. Treat them as
+risk-owned even when Cargo considers their updates compatible; each receives
+focused owning-package tests and immediate-dependent checks. Tokio, SQLx,
+Keyring, `windows-sys`, secrecy, rustls, and cryptography remain future
+risk-owned policy categories, but the 2026-08-12 snapshot contains no pending
+compatible direct update for them and the implementation plan must not invent
+empty slices. If a re-measurement finds a new direct update in these categories,
+the verification record declares it and the corresponding focused/release gate
+applies. Database changes preserve the single backend-owned SQLite path and
+additive migration policy.
 
 Exact Grammers pins and Apalis RC pins remain unchanged unless separately
 approved. A prerelease move requires upstream release/API review, focused
@@ -358,15 +384,18 @@ runtime evidence, and its own design or explicitly scoped amendment.
 
 After all direct compatible decisions in Waves 1 and 2 are green, refresh the
 remaining compatible transitive resolution in one explicit `transitive
-refresh` commit. Its verification record carries the lockfile diff summary and
-the ordinary acceptance contract. This commit is attributable as the residual
-Cargo resolution, not decomposed into 145 manual `--precise` operations.
+refresh` final commit of Wave 2. Its verification record carries the re-measured
+lockfile diff summary and the ordinary acceptance contract. This commit is
+attributable as the residual Cargo resolution, not decomposed into the 145
+manual `--precise` operations suggested by the initial snapshot.
 
 ### Wave 3: Incompatible Dependency Upgrades
 
 Handle known incompatible candidates as independent slices after compatible
 updates are stable. Initial candidates include `jsonschema 0.46` to `0.49` and
-`tauri-plugin-mcp-bridge 0.11` to `0.12`.
+`tauri-plugin-mcp-bridge 0.11` to `0.12`. Skip the available compatible
+`jsonschema 0.46.x` refresh in Wave 1 so the package is reviewed and tested
+only once at its intended incompatible boundary.
 
 Before changing `tauri-plugin-mcp-bridge`, decide its production ownership.
 Although plugin registration is under `#[cfg(dev)]`, the current unconditional
@@ -416,7 +445,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
-cargo deny --manifest-path src-tauri/Cargo.toml check bans licenses sources
+cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources
 ```
 
 The full ordinary-wave contract then runs:
@@ -431,7 +460,7 @@ more strictly than the removed Cargo check. A high-risk or release wave also
 runs the release/bundle job. Release acceptance additionally requires:
 
 ```powershell
-cargo deny --manifest-path src-tauri/Cargo.toml check advisories
+cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories
 ```
 
 For changes to a public cross-crate interface, the owning package checkpoint
