@@ -230,7 +230,7 @@ Add these `package.json` scripts (the deny script becomes executable after Task 
 "check:rust:production": "cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked",
 "check:rust:supply-chain": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources",
 "check:rust:advisories": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories",
-"check:rust:fast": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked && cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources"
+"check:rust:fast": "npm run check:rustfmt && npm run check:rust:clippy && npm run check:rust:production && npm run check:rust:supply-chain"
 ```
 
 - [ ] **Step 4: Run GREEN tests**
@@ -853,7 +853,8 @@ Add fixture mutations for:
 - missing `rust-version.workspace = true` in one package;
 - toolchain channel changed to `1.96.0` while policy remains 1.95;
 - root package not private;
-- `@tauri-apps/cli` major differs from Cargo Tauri major;
+- `tauri-build` requirement changes to major 3 while `@tauri-apps/cli` remains
+  major 2, proving the build-dependency half of that exact pair is checked;
 - MCP bridge manifest widened/moved outside minor 0.11;
 - one Grammers exact pin widened;
 - unapproved prerelease introduced.
@@ -880,12 +881,19 @@ function normalizeText(source) {
 
 function dependencyByName(metadata, packageName, dependencyName) {
   const selected = workspacePackage(metadata, packageName);
-  return selected?.dependencies?.find(({ name, kind }) => name === dependencyName && kind === null);
+  return selected?.dependencies?.find(
+    ({ name, kind }) => name === dependencyName && (kind === null || kind === "build"),
+  );
 }
 
 function requirementMajor(requirement) {
   const match = /(?:^|[^0-9])(\d+)(?:\.|$)/.exec(String(requirement));
   return match ? Number(match[1]) : undefined;
+}
+
+function requirementMajorMinor(requirement) {
+  const match = /(?:^|[^0-9])(\d+)\.(\d+)(?:\.|$)/.exec(String(requirement));
+  return match ? [Number(match[1]), Number(match[2])] : undefined;
 }
 ```
 
@@ -918,7 +926,9 @@ packages, compare every `exactPins` requirement exactly, reject any `req`
 containing a prerelease segment unless its package/version pair is present in
 `approvedPrereleases`, require every `tauriFamily.pairs` Cargo/npm requirement
 to share configured major 2, and require
-`tauri-plugin-mcp-bridge` requirement major/minor `0.11`.
+`requirementMajorMinor(tauri-plugin-mcp-bridge.req)` to equal
+`[0, policy.tauriFamily.mcpBridgeMinor]`. A missing direct dependency is a
+violation; do not skip the pair when either side cannot be resolved.
 
 Register exactly:
 
