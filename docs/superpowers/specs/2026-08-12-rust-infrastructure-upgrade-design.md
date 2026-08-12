@@ -7,15 +7,15 @@
 ## Goal
 
 Upgrade Extractum's complete Rust development, dependency, verification, CI,
-and release infrastructure to a reproducible Rust 1.95 / Edition 2024 baseline
-without combining toolchain, edition, Tauri, and broad lockfile changes into an
-undiagnosable migration.
+and release infrastructure to a reproducible Rust 1.95 baseline, then modernize
+dependencies and adopt Edition 2024 without combining toolchain, edition,
+Tauri, and broad lockfile changes into an undiagnosable migration.
 
 The work uses a balanced risk profile: current stable tooling is pinned,
-Edition 2024 is adopted, SemVer-compatible dependencies are updated in bounded
-groups, incompatible dependency changes remain separate, and Windows is the
-only required build and release platform. Linux and macOS release support are
-outside this design.
+SemVer-compatible direct dependencies are updated by ownership, compatible
+transitive resolution is refreshed separately, incompatible changes and
+Edition 2024 remain later waves, and Windows is the only required build and
+release platform. Linux and macOS release support are outside this design.
 
 ## Current State and Measured Baseline
 
@@ -42,9 +42,14 @@ target-specific: `cargo tree -d --target x86_64-pc-windows-msvc` currently
 contains 51 unique duplicated package names and 151 duplicate-tree records.
 The complete lockfile count is evidence, not a deduplication target.
 
-A Cargo dry run against the current manifests found 185 SemVer-compatible
-lockfile changes, including Tauri `2.10.3` to `2.11.5`. This volume requires
-bounded dependency groups rather than one unconstrained `cargo update`.
+A Cargo dry run against the current manifests found 157 updates, 28 additions,
+and 46 removals: 185 packages enter or change version and 231 lockfile
+positions change overall. Only 12 directly declared dependencies participate:
+`anyhow`, `jsonschema`, `reqwest`, `serde`, `serde_json`, `time`, `tokio-util`,
+`tauri`, `tauri-build`, `tauri-plugin-dialog`, `tauri-plugin-opener`, and
+`tauri-plugin-mcp-bridge`. The other 145 updates are transitive. Direct changes
+therefore receive ownership decisions, while the residual transitive mass is
+reviewed as a lockfile refresh rather than 145 artificial precise updates.
 
 The accepted Clippy command, without `--all-features`, currently reports five
 violations across three crates:
@@ -59,7 +64,10 @@ finding. Baselines must therefore be measured with the exact accepted command,
 not with `--all-features`.
 
 The existing `npm.cmd run verify` already runs frontend, sidecar, Playwright,
-format, workspace Cargo check, and workspace Cargo test gates. It requires a
+format, workspace Cargo check, and workspace Cargo test gates. Wave 0 removes
+the redundant workspace `cargo check`: the following workspace
+`cargo test --all-targets` builds the same targets, while the fast Clippy gate
+checks that surface more strictly. `verify` requires a
 prebuilt Gemini Browser sidecar binary. Both Playwright configurations use
 Chromium against a Vite development server and require neither a Tauri bundle
 nor live credentials, so they can run on a Windows GitHub-hosted runner after
@@ -108,16 +116,18 @@ package and every one of the six extracted crates explicitly inherit it with
 
 A repository rule checks the exact correspondence among the root toolchain
 channel, workspace MSRV, all seven package inheritance declarations, and the
-Windows target. It also verifies that every Cargo command in the canonical
-verification scripts uses `src-tauri/Cargo.toml` and that check/test commands
-which consume the committed resolution use `--locked`.
+Windows target. The existing `scripts/verify.test.ts`, which owns
+`createVerifySteps`, asserts directly that the remaining Cargo test step uses
+`src-tauri/Cargo.toml` and `--locked`; this does not require a new repository
+rule.
 
 A future toolchain bump is its own migration wave. Within that wave, the commit
-that changes `rust-toolchain.toml` changes no other file; a CI changed-commit
-rule inspects each commit rather than only the aggregate PR diff. Any Clippy
-baseline adjustment, MSRV update, or source fix is a subsequent explicit
-commit in the same wave, with fresh lint evidence. This preserves attribution
-without pretending a compiler update is behavior-neutral.
+that changes `rust-toolchain.toml` changes no other file. Any Clippy baseline
+adjustment, MSRV update, or source fix is a subsequent explicit commit in the
+same wave, with fresh lint evidence. Wave 0 documents this constraint in
+`AGENTS.md`; commit-range automation is deferred to Wave 5 because it provides
+no protection until the next compiler bump. This preserves attribution without
+pretending a compiler update is behavior-neutral.
 
 #### Clippy Baseline
 
@@ -153,8 +163,9 @@ Use `cargo-deny` 0.20.2 as the sole dependency-policy tool. Do not add
 `cargo-audit`: both consume the RustSec advisory database, while cargo-deny also
 owns bans, licenses, and sources. Record the cargo-deny version and Windows
 release-asset checksum in a repository-owned tool manifest. CI downloads the
-prebuilt pinned binary and validates its checksum; it does not compile the tool
-with `cargo install` on every run.
+prebuilt pinned binary and validates its checksum; this CI step is the
+enforcement mechanism, so no repository rule compares the manifest with
+itself. CI does not compile the tool with `cargo install` on every run.
 
 Add root `deny.toml` with the Windows-only dependency graph:
 
@@ -205,10 +216,10 @@ checks `ring`, `unicode-ident`, and `rustls-webpki`: their currently declared
 expressions are respectively `Apache-2.0 AND ISC`,
 `(MIT OR Apache-2.0) AND Unicode-3.0`, and `ISC`. If cargo-deny 0.20.2 cannot
 validate the packaged license texts from those expressions, add version-bound
-`[[licenses.clarify]]` entries with verified license-file hashes. A
-clarification is accepted only with a verification record identifying the
-inspected crate archive and hash; it is not used to broaden the global
-allowlist.
+`[[licenses.clarify]]` entries with verified license-file hashes. The hash lives
+canonically in `deny.toml`; the supply-chain artifact links the inspected crate
+archive without duplicating the hash. A clarification is not used to broaden
+the global allowlist.
 
 License exceptions are crate- and version-bound. Each carries a reason, owner,
 and review date in the supply-chain baseline artifact. `unused-allowed-license`
@@ -225,15 +236,16 @@ Windows duplicate-baseline JSON records:
 - target `x86_64-pc-windows-msvc`;
 - 51 unique duplicated package names;
 - 151 duplicate-tree records;
-- the generated package names and resolved versions used as audit evidence.
+- the sorted 51-name duplicate inventory used as audit evidence.
 
-The generator uses locked Cargo metadata/tree data and stable ordering. A
-repository rule fails if either count grows. A decrease is accepted and should
-lower the committed baseline in the same dependency wave. A changed package
-set at the same count is reported for review but does not fail solely because
-one upstream duplicate replaced another. This policy blocks graph growth
-without claiming that Extractum can collapse mutually incompatible upstream
-major versions.
+The generator uses locked Cargo tree data and stable ordering. It deliberately
+omits resolved versions, which would add noise to every dependency wave without
+participating in the gate. A repository rule fails if either count grows. A
+decrease is accepted and should lower the committed baseline in the same
+dependency wave. A changed package set at the same count is reported for review
+but does not fail solely because one upstream duplicate replaced another. This
+policy blocks graph growth without claiming that Extractum can collapse
+mutually incompatible upstream major versions.
 
 Wildcard dependencies, unknown registries, and unknown Git sources are denied.
 The canonical crates.io registry is allowed. Exact pins, prerelease versions,
@@ -243,28 +255,28 @@ artifact so policy drift is executable rather than prose-only.
 #### Executable Repository Rules
 
 Extend the existing repository-index and repository-rule framework used by the
-Grammers feature baseline. Wave 0 adds rules for:
+Grammers feature baseline only where Cargo and CI do not already enforce the
+contract. Wave 0 adds three policy rules:
 
 - root toolchain, workspace MSRV, and inheritance by all seven packages;
-- locked manifest/lockfile consistency through `cargo metadata --locked`;
 - matching Tauri Rust and npm package families;
 - exact pins, prerelease dependencies, and their approved ownership policy;
-- canonical cargo-deny version and checksum;
-- the Windows duplicate baseline and license-policy metadata.
 
-Two policies require CI-aware changed-state checks rather than a Vitest
-repository rule:
+The Windows duplicate artifact has its own small generated-baseline evaluator.
+License acceptance is enforced directly by cargo-deny; exception ownership and
+review dates live in the supply-chain artifact rather than a second parser.
+Manifest/lockfile consistency is already enforced by every locked Cargo gate,
+and the cargo-deny checksum is enforced while downloading the CI binary.
 
-- every commit that changes `rust-toolchain.toml` changes no other file;
-- a dependency-wave PR declares the packages it owns, and its manifest plus
-  `Cargo.lock` diff may resolve only those packages and unavoidable transitive
-  descendants. The check compares the resolved before/after graphs against the
-  declaration; it does not attempt to infer which Cargo command was typed.
-
-This replaces the unenforceable prose rule "never run bare cargo update" with
-an observable lockfile-scope contract. The documented operator command remains
+Wave 0 does not build a before/after Cargo-graph comparator. `--locked` already
+detects manifest/lockfile drift, and lockfile scope remains visible in review.
+Every dependency-wave verification record instead includes the generated
+lockfile diff summary: number of additions, updates, removals, and the directly
+declared packages affected. The documented operator command remains
 `cargo update -p <package> --precise <version>`. For a SemVer-major change,
-modify the manifest requirement first, then run the precise update.
+modify the manifest requirement first, then run the precise update. A cheap
+changed-package-count check may be added later if review evidence proves
+insufficient; it is not Wave 0 scope.
 
 #### Windows CI and Release Executor
 
@@ -281,9 +293,10 @@ The fast push job runs:
 The full PR job installs dependencies with `npm.cmd ci`, restores the canonical
 `src-tauri/target` cache, downloads and verifies the pinned cargo-deny binary,
 runs `npm.cmd run bootstrap:testing`, installs Playwright Chromium, runs the
-fast Rust gate, and then runs `npm.cmd run verify`. `scripts/verify.mjs` adds
-`--locked` to its workspace Cargo check and test steps. The job does not repeat
-those two expensive workspace commands outside `verify`.
+fast Rust gate, and then runs `npm.cmd run verify`. `scripts/verify.mjs` removes
+its redundant workspace Cargo check and adds `--locked` to the workspace Cargo
+test step. The job does not repeat that expensive workspace command outside
+`verify`.
 
 The release/bundle path is an explicit workflow job available through
 `workflow_dispatch` and release tags. It runs the full PR gate, current
@@ -312,42 +325,25 @@ Each commit remains independently attributable: toolchain/MSRV, Clippy
 baseline, supply-chain policy, repository rules, CI, documentation, and final
 evidence are not collapsed into one change.
 
-### Wave 1: Edition 2024
+### Wave 1: Compatible Direct Dependencies
 
-Run the edition migration separately from all dependency updates. First run
-the Edition 2024 migration lints and `cargo fix --edition` while manifests
-still declare Edition 2021. Review generated source changes, run focused tests,
-then switch `[workspace.package].edition` to `"2024"` and make every package
-inherit it consistently.
+Make decisions for directly declared dependencies rather than pretending 145
+transitive packages are independently owned updates. Wave 1 has two reviewable
+groups:
 
-Edition 2024 requires Rust 1.85 or newer, so the pinned 1.95/MSRV baseline is
-compatible. The wave owns only edition-related manifests, source migrations,
-tests, repository rules, documentation, and the lockfile only if Cargo proves
-an edition-related change unavoidable. It does not update Tauri or other
-dependencies.
+1. compatible low-risk direct leaves that do not belong to the runtime, data,
+   or security boundary;
+2. the Tauri core/build/plugin family.
 
-### Wave 2: Compatible Lockfile Refresh
+Each direct package uses a precise update and records the transitive closure
+that Cargo necessarily moves with it. The Tauri group updates the Rust crates,
+`tauri-build`, npm CLI/API, and same-name frontend plugins as one compatibility
+family. Official Tauri guidance expects `tauri`, `tauri-build`, and the CLI to
+remain on compatible current minor releases. The group closes with the
+release/bundle job. `tauri-plugin-mcp-bridge` may move within `0.11`; its
+incompatible `0.12` boundary remains Wave 3 scope.
 
-Refresh SemVer-compatible dependencies in declared groups, using precise
-package updates and a lockfile-scope declaration for each group. Suggested
-groups are:
-
-1. build/proc-macro and platform-neutral leaf dependencies;
-2. async/network runtime dependencies;
-3. data, serialization, compression, and cryptography dependencies;
-4. Tauri core/runtime/plugin family;
-5. remaining compatible transitive changes.
-
-Group boundaries may be tightened after Cargo resolution. They may not be
-collapsed into one 185-package update merely because every version satisfies
-its existing manifest requirement.
-
-The Tauri group updates the Rust crates, `tauri-build`, npm CLI/API, and
-same-name frontend plugins as one compatibility family. Official Tauri guidance
-expects `tauri`, `tauri-build`, and the CLI to remain on compatible current
-minor releases. The group closes with the release/bundle job.
-
-### Wave 3: Runtime, Data, and Security Dependencies
+### Wave 2: Runtime, Data, Security, and Residual Transitives
 
 Treat Tokio, SQLx, Reqwest/rustls, Keyring, cryptography, and `windows-sys` as
 risk-owned groups even when Cargo considers their updates compatible. Each
@@ -360,7 +356,13 @@ Exact Grammers pins and Apalis RC pins remain unchanged unless separately
 approved. A prerelease move requires upstream release/API review, focused
 runtime evidence, and its own design or explicitly scoped amendment.
 
-### Wave 4: Incompatible Dependency Upgrades
+After all direct compatible decisions in Waves 1 and 2 are green, refresh the
+remaining compatible transitive resolution in one explicit `transitive
+refresh` commit. Its verification record carries the lockfile diff summary and
+the ordinary acceptance contract. This commit is attributable as the residual
+Cargo resolution, not decomposed into 145 manual `--precise` operations.
+
+### Wave 3: Incompatible Dependency Upgrades
 
 Handle known incompatible candidates as independent slices after compatible
 updates are stable. Initial candidates include `jsonschema 0.46` to `0.49` and
@@ -374,6 +376,21 @@ intentional or move the dependency behind a feature/dev-only boundary and
 prove release behavior. The version upgrade cannot silently make that
 architectural decision.
 
+### Wave 4: Edition 2024
+
+Run the edition migration after the infrastructure and dependency waves. First
+run the Edition 2024 migration lints and `cargo fix --edition` while manifests
+still declare Edition 2021. Review generated source changes, run focused tests,
+then switch `[workspace.package].edition` to `"2024"` and make every package
+inherit it consistently.
+
+Edition 2024 requires Rust 1.85 or newer, so the pinned 1.95/MSRV baseline is
+compatible. The wave owns only edition-related manifests, source migrations,
+tests, repository rules, documentation, and the lockfile only if Cargo proves
+an edition-related change unavoidable. It does not update Tauri or other
+dependencies. Moving it here keeps the mass source migration off the critical
+path to a reproducible infrastructure baseline.
+
 ### Wave 5: Maintenance Automation
 
 After the upgrade waves are green, establish an ongoing cadence:
@@ -382,6 +399,8 @@ After the upgrade waves are green, establish an ongoing cadence:
 - scheduled dependency inventory reporting without automatic manifest writes;
 - periodic toolchain-bump waves with isolated pin commits and fresh Clippy
   classification;
+- commit-range enforcement for isolated toolchain-pin commits if the first
+  post-baseline compiler migration shows the documentation rule is insufficient;
 - periodic downward refresh of duplicate and license baselines;
 - release/bundle verification on tags and manually for high-risk waves.
 
@@ -406,8 +425,9 @@ The full ordinary-wave contract then runs:
 npm.cmd run verify
 ```
 
-`verify` owns the workspace Cargo check/test invocations and both use
-`--locked`; callers do not duplicate them. A high-risk or release wave also
+`verify` owns the workspace Cargo test invocation and uses `--locked`; callers
+do not duplicate it. The preceding fast Clippy job covers all workspace targets
+more strictly than the removed Cargo check. A high-risk or release wave also
 runs the release/bundle job. Release acceptance additionally requires:
 
 ```powershell
@@ -450,8 +470,6 @@ Implementation updates:
 - `AGENTS.md` for canonical local and CI loops;
 - `docs/project.md` for toolchain, dependency, supply-chain, and release policy;
 - `README.md` or the active developer setup page for bootstrap prerequisites;
-- `docs/value-registry.md` only if implementation introduces or changes a
-  registry-owned string value;
 - a verification record per completed wave under
   `docs/superpowers/verification/`.
 
@@ -465,7 +483,9 @@ The program is complete when:
 
 - every developer and CI run uses the root-pinned Rust 1.95.0 toolchain and
   declared MSRV 1.95;
-- all seven workspace packages build and test on Edition 2024;
+- Wave 0 produces a green reproducible baseline without depending on the later
+  Edition 2024 migration;
+- after Wave 4, all seven workspace packages build and test on Edition 2024;
 - accepted Clippy, production-surface, locked-resolution, supply-chain, and
   full verification gates are green;
 - license decisions and the Windows duplicate baseline are machine-enforced;
