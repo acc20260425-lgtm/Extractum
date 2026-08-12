@@ -70,9 +70,9 @@ acceptance constants. Every dependency wave re-measures its available direct
 updates and residual lockfile delta and records the new snapshot in that
 wave's verification record.
 
-The accepted Clippy command, without `--all-features` and with `--keep-going`
-so one package cannot hide later findings, currently reports eight violations
-across three crates:
+The diagnostic Clippy inventory, run without `--all-features` and without
+fail-fast behavior so one package cannot hide later findings, currently reports
+eight violations across three crates:
 
 - four `clippy::large_enum_variant` findings: public `CancelRunOutcome`,
   private `ExecutionSelection`, public sidecar wire type
@@ -275,7 +275,6 @@ duplicate-baseline JSON records:
 
 - schema version;
 - target `x86_64-pc-windows-msvc`;
-- 448 unique package versions and 400 unique names in the active graph;
 - 32 unique duplicated package names;
 - 80 package-version instances across duplicated names;
 - a sorted mapping from each duplicated name to its version count, such as
@@ -345,7 +344,7 @@ requires no npm installation and runs:
 1. `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` under the
    pinned root toolchain;
 2. `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets
-   --locked --keep-going --message-format=short -- -D warnings`;
+   --locked -- -D warnings`;
 3. the canonical `cargo check --manifest-path src-tauri/Cargo.toml -p
    <producer> --lib --no-default-features --locked` checks for the two
    producers;
@@ -494,7 +493,7 @@ The fast deterministic Rust contract, issued from the repository root, is:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked
 cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources

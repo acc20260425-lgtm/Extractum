@@ -80,7 +80,6 @@
 - Create: `rust-toolchain.toml`
 - Modify: `src-tauri/Cargo.toml`
 - Modify: all six `src-tauri/crates/*/Cargo.toml`
-- Test: `scripts/testing/repository-rules.test.ts` (rule implementation lands in Task 6)
 
 **Interfaces:**
 - Produces: root toolchain `1.95.0`, workspace `rust-version = "1.95"`, seven inherited package declarations, seven unpublished packages.
@@ -227,11 +226,11 @@ In `createVerifySteps`, delete the workspace Cargo check object and replace the 
 Add these `package.json` scripts (the deny script becomes executable after Task 4):
 
 ```json
-"check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings",
+"check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings",
 "check:rust:production": "cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked",
 "check:rust:supply-chain": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources",
 "check:rust:advisories": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories",
-"check:rust:fast": "npm run check:rustfmt && npm run check:rust:clippy && npm run check:rust:production && npm run check:rust:supply-chain"
+"check:rust:fast": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked && cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources"
 ```
 
 - [ ] **Step 4: Run GREEN tests**
@@ -308,7 +307,6 @@ fn sidecar_run_result_response_keeps_wire_shape() {
     let json = serde_json::to_value(&response).expect("serialize sidecar response");
     assert_eq!(json["type"], "run_result");
     assert_eq!(json["result"]["run_id"], "run-1");
-    assert!(json.get("result").is_some());
     let decoded: GeminiBrowserSidecarResponse =
         serde_json::from_value(json).expect("deserialize sidecar response");
     assert_eq!(decoded, response);
@@ -458,7 +456,7 @@ Expected: all pass; the feature-off check proves production surface, app tests p
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
 npm.cmd run verify
 ```
 
@@ -600,13 +598,6 @@ try {
 }
 ```
 
-The two policy commands executed inside the `try` block are:
-
-```powershell
-cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources
-cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories
-```
-
 Expected: both commands execute cargo-deny 0.20.2. Resolve license failures by narrowing exact exceptions/clarifications, never by setting a blanket allow.
 
 - [ ] **Step 6: Run the complete fast gate**
@@ -661,8 +652,6 @@ describe("Rust duplicate baseline", () => {
     expect(baseline).toEqual({
       schemaVersion: 1,
       target: "x86_64-pc-windows-msvc",
-      packageVersionCount: 4,
-      packageNameCount: 3,
       duplicateNameCount: 1,
       duplicateVersionInstanceCount: 2,
       duplicateCardinality: { getrandom: 2 },
@@ -707,8 +696,6 @@ export function generateRustDuplicateBaseline(treeText) {
   return {
     schemaVersion: 1,
     target: "x86_64-pc-windows-msvc",
-    packageVersionCount: identities.size,
-    packageNameCount: versionsByName.size,
     duplicateNameCount: Object.keys(duplicateCardinality).length,
     duplicateVersionInstanceCount: Object.values(duplicateCardinality).reduce((sum, count) => sum + count, 0),
     duplicateCardinality,
@@ -735,7 +722,11 @@ node scripts/rust-duplicate-baseline.mjs --write scripts/testing/rust-duplicate-
 Get-Content -Raw scripts/testing/rust-duplicate-baseline.json
 ```
 
-Expected initial snapshot: `448`, `400`, `32`, `80`, and sorted per-name counts. If current graph differs, record the re-measurement; do not force stale design numbers.
+Expected initial policy snapshot: `32`, `80`, and sorted per-name counts. Record
+the current total package-version and package-name counts (`448` and `400` in
+the design measurement) only in the Wave 0 verification record; they are
+evidence, not policy fields. If the current graph differs, record the
+re-measurement; do not force stale design numbers.
 
 - [ ] **Step 5: Extend the repository index with injected Cargo-tree loading**
 
@@ -818,7 +809,6 @@ Create:
     "rustVersion": "1.95",
     "edition": "2021",
     "target": "x86_64-pc-windows-msvc",
-    "components": ["clippy", "rustfmt"],
     "workspacePackages": [
       "extractum",
       "extractum-analysis",
@@ -878,7 +868,7 @@ Expected: RED until evaluators exist.
 
 - [ ] **Step 3: Implement the two evaluators**
 
-Use `index.getText("rust-toolchain.toml")`, `index.getCargoMetadata()`, `index.getJson("package.json")`, and `index.getJson("scripts/testing/rust-dependency-policy.json")`. The toolchain evaluator checks exact channel/components/target, seven package `rust_version`, edition 2021, and seven `publish = []/false` metadata states. The dependency evaluator checks direct manifest requirements for exact pins, approved prerelease inventory, Tauri/npm major compatibility, and MCP bridge minor 11.
+Use `index.getText("rust-toolchain.toml")`, `index.getCargoMetadata()`, `index.getJson("package.json")`, and `index.getJson("scripts/testing/rust-dependency-policy.json")`. The toolchain evaluator checks the complete canonical toolchain file, seven package `rust_version` values, edition 2021, and seven `publish = []/false` metadata states. The dependency evaluator checks direct manifest requirements for exact pins, approved prerelease inventory, Tauri/npm major compatibility, and MCP bridge minor 11.
 
 Compare the normalized toolchain file as one canonical artifact; do not build a
 partial TOML parser from regular expressions:
@@ -1159,7 +1149,7 @@ Populate the verification document with no placeholders:
 
 - commit range for Wave 0;
 - `rustc -Vv`, `cargo -V`, cargo-deny version and SHA-256;
-- eight Clippy classifications and exact focused test names/results;
+- the diagnostic inventory command `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings`, its eight Clippy classifications, and exact focused test names/results;
 - license allowlist and any exact clarifications/exceptions;
 - actual duplicate baseline totals and cardinality changes;
 - fast/full/advisory command outputs;
@@ -1231,7 +1221,7 @@ Every Rust-source task ends with:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked --keep-going --message-format=short -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
 npm.cmd run verify
 ```
 
