@@ -38,17 +38,19 @@ local baseline is `rustc 1.95.0 (59807616e 2026-04-14)` on
 
 `src-tauri/Cargo.lock` is synchronized with the manifests and contains 736
 cross-platform packages and no Git sources. Duplicate policy is derived from
-the feature-resolved Windows build graph emitted by `cargo tree --target
-x86_64-pc-windows-msvc --workspace --prefix none --format "{p}" --no-dedupe`.
+the feature-resolved Windows build graph emitted by `cargo tree --manifest-path
+src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --workspace
+--prefix none --format "{p}"`.
 The generator extracts and uniquifies only `name@version`; it does not parse
 tree frames or `(*)` markers. The current graph contains 448 package versions,
 400 unique names, 32 names resolved at more than one version, 80
 package-version instances across those names, and 48 versions in excess of one
 per name.
 
-The previous `cargo tree -d` observation of 51 names and 151 rendered records
-is superseded because it counted build units, including host/target and feature
-slices, rather than unique versions. A later Cargo metadata measurement of 37
+The previous `cargo tree --manifest-path src-tauri/Cargo.toml --locked -d`
+observation of 51 names and 151 rendered records is superseded because it
+counted build units, including host/target and feature slices, rather than
+unique versions. A later Cargo metadata measurement of 37
 names and 91 instances is also superseded: `resolve.nodes` included optional
 packages not reached by the active feature graph, including duplicate branches
 for `ahash`, `const-oid`, `hmac`, `schemars`, and `toml_datetime`. The complete
@@ -82,9 +84,10 @@ not with `--all-features`.
 
 The existing `npm.cmd run verify` already runs frontend, sidecar, Playwright,
 format, workspace Cargo check, and workspace Cargo test gates. Wave 0 removes
-the redundant workspace `cargo check`: the following workspace
-`cargo test --all-targets` builds the same targets, while the fast Clippy gate
-checks that surface more strictly. `verify` requires a
+the redundant workspace Cargo check: the following
+`cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+--locked` builds the same targets, while the fast Clippy gate checks that
+surface more strictly. `verify` requires a
 prebuilt Gemini Browser sidecar binary. Both Playwright configurations use
 Chromium against a Vite development server and require neither a Tauri bundle
 nor live credentials, so they can run on a Windows GitHub-hosted runner after
@@ -172,10 +175,11 @@ default exists. Global allows and unrelated refactors are forbidden.
 
 The normal Clippy gate intentionally does not use `--all-features`, because
 `csp-verification`, `prompt-pack-dev-fixtures`, and `app-test-support` alter the
-surface under test. The separate `cargo check --no-default-features` commands
-prove that selected producer libraries compile feature-off; they do not lint
-those feature-off configurations. This is an explicit coverage limitation, not
-an accidental claim.
+surface under test. The separate `cargo check --manifest-path
+src-tauri/Cargo.toml -p <producer> --lib --no-default-features --locked`
+commands prove that selected producer libraries compile feature-off; they do
+not lint those feature-off configurations. This is an explicit coverage
+limitation, not an accidental claim.
 
 #### Supply-Chain Tooling
 
@@ -260,17 +264,19 @@ duplicate-baseline JSON records:
 - 448 unique package versions and 400 unique names in the active graph;
 - 32 unique duplicated package names;
 - 80 package-version instances across duplicated names;
-- the sorted 32-name duplicate inventory used as audit evidence.
+- a sorted mapping from each duplicated name to its version count, such as
+  `getrandom: 4`, `hashbrown: 4`, and `windows-sys: 5`.
 
-The generator streams the normalized `cargo tree` output so the fully expanded
-`--no-dedupe` tree is not retained in memory, extracts package identities from
-the `{p}` records, and applies stable ordering. It deliberately omits the
-resolved versions from the committed artifact, which would add noise to every
-dependency wave without participating in the gate. A repository rule fails if
-either duplicate count grows. A decrease is accepted and should lower the
+The generator reads the compact normalized `cargo tree` output, extracts and
+uniquifies package identities from the `{p}` records, groups by name, and
+applies stable ordering. It records cardinality per duplicated name but omits
+the version values themselves: compatible version replacement creates no
+artifact noise, while a newly duplicated name or third/fourth version is
+self-localizing. A repository rule fails if either duplicate count grows or a
+per-name cardinality grows. A decrease is accepted and should lower the
 committed baseline in the same dependency wave. A changed package set at the
-same count is reported for review but does not fail solely because one upstream
-duplicate replaced another.
+same aggregate count is reported for review but does not fail solely because
+one upstream duplicate replaced another.
 
 A baseline increase has an explicit reviewed path. The dependency wave updates
 the committed counters and adds a supply-chain artifact entry for every newly
@@ -294,7 +300,7 @@ contract. Wave 0 adds three policy rules:
 
 - root toolchain, workspace MSRV, and inheritance by all seven packages;
 - matching Tauri Rust and npm package families;
-- exact pins, prerelease dependencies, and their approved ownership policy;
+- exact pins, prerelease dependencies, and their approved ownership policy.
 
 The Windows duplicate artifact has its own small generated-baseline evaluator.
 License acceptance is enforced directly by cargo-deny; exception ownership and
@@ -307,32 +313,40 @@ detects manifest/lockfile drift, and lockfile scope remains visible in review.
 Every dependency-wave verification record instead includes the generated
 lockfile diff summary: number of additions, updates, removals, and the directly
 declared packages affected. The documented operator command remains
-`cargo update -p <package> --precise <version>`. For a SemVer-major change,
-modify the manifest requirement first, then run the precise update. A cheap
-changed-package-count check may be added later if review evidence proves
-insufficient; it is not Wave 0 scope.
+`cargo update --manifest-path src-tauri/Cargo.toml -p <package> --precise
+<version>`. For a SemVer-major change, modify the manifest requirement first,
+then run the precise update. A cheap changed-package-count check may be added
+later if review evidence proves insufficient; it is not Wave 0 scope.
 
 #### Windows CI and Release Executor
 
 Wave 0 creates Windows GitHub Actions automation with three execution paths.
 
-The fast push job requires no npm installation and runs:
+Both the fast push and full PR jobs first invoke one repository-owned composite
+setup action that downloads the pinned cargo-deny Windows binary, verifies the
+recorded checksum, and exposes it on `PATH`. The fast push job otherwise
+requires no npm installation and runs:
 
-1. `cargo fmt --check` under the pinned root toolchain;
-2. workspace Clippy with `--locked` and `-D warnings`;
-3. the two producer `--no-default-features --locked` checks;
-4. deterministic cargo-deny checks for bans, licenses, and sources.
+1. `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` under the
+   pinned root toolchain;
+2. `cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+   --locked -- -D warnings`;
+3. the canonical `cargo check --manifest-path src-tauri/Cargo.toml -p
+   <producer> --lib --no-default-features --locked` checks for the two
+   producers;
+4. `cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check
+   bans licenses sources`.
 
 Repository-rule tests remain in the full PR job through `npm.cmd run verify`;
 they are routed through the `unit-node` Vitest project and are not duplicated
 in the fast job.
 
 The full PR job installs dependencies with `npm.cmd ci`, restores the canonical
-`src-tauri/target` cache, downloads and verifies the pinned cargo-deny binary,
-runs `npm.cmd run bootstrap:testing`, installs Playwright Chromium, runs the
-fast Rust gate, and then runs `npm.cmd run verify`. `scripts/verify.mjs` removes
-its redundant workspace Cargo check and adds `--locked` to the workspace Cargo
-test step. The job does not repeat that expensive workspace command outside
+`src-tauri/target` cache, invokes the shared cargo-deny setup action, runs
+`npm.cmd run bootstrap:testing`, installs Playwright Chromium, runs the fast
+Rust gate, and then runs `npm.cmd run verify`. `scripts/verify.mjs` removes its
+redundant workspace Cargo check and adds `--locked` to the workspace Cargo test
+step. The job does not repeat that expensive workspace command outside
 `verify`.
 
 The release/bundle path is an explicit workflow job available through
@@ -405,7 +419,8 @@ remaining compatible transitive resolution in one explicit `transitive
 refresh` final commit of Wave 2. Its verification record carries the re-measured
 lockfile diff summary and the ordinary acceptance contract. This commit is
 attributable as the residual Cargo resolution, not decomposed into the 145
-manual `--precise` operations suggested by the initial snapshot.
+manual `cargo update --manifest-path src-tauri/Cargo.toml -p <package>
+--precise <version>` operations suggested by the initial snapshot.
 
 ### Wave 3: Incompatible Dependency Upgrades
 
@@ -426,10 +441,11 @@ architectural decision.
 ### Wave 4: Edition 2024
 
 Run the edition migration after the infrastructure and dependency waves. First
-run the Edition 2024 migration lints and `cargo fix --edition` while manifests
-still declare Edition 2021. Review generated source changes, run focused tests,
-then switch `[workspace.package].edition` to `"2024"` and make every package
-inherit it consistently.
+run the Edition 2024 migration lints and `cargo fix --manifest-path
+src-tauri/Cargo.toml --workspace --all-targets --edition` while manifests still
+declare Edition 2021. Review generated source changes, run focused tests, then
+switch `[workspace.package].edition` to `"2024"` and make every package inherit
+it consistently.
 
 Edition 2024 requires Rust 1.85 or newer, so the pinned 1.95/MSRV baseline is
 compatible. The wave owns only edition-related manifests, source migrations,
@@ -495,7 +511,7 @@ For a source change, begin with a non-empty exact RED/GREEN test in the owning
 package:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> --locked -- --exact
 ```
 
 Then run the focused package check and checkpoint:
