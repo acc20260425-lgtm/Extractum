@@ -64,6 +64,8 @@
 - `package.json` — named fast Rust and supply-chain scripts used locally and by CI.
 - `AGENTS.md`, `docs/project.md`, `README.md` — canonical pinned/locked/CI/release workflow.
 
+Task 5 owns the `scripts/testing/test-conventions.test.ts` entry for `rule:rust-duplicate-baseline`; Task 6 later adds only its two toolchain/dependency-policy rule entries.
+
 ## Interfaces Between Tasks
 
 - `generateRustDuplicateBaseline(treeText: string): RustDuplicateBaseline` produces the canonical JSON shape consumed by repository rules.
@@ -897,6 +899,7 @@ git commit -m "build: add Rust supply-chain policy"
 - Modify: `scripts/testing/repository-index.mjs`
 - Modify: `scripts/testing/repository-rules.mjs`
 - Modify: `scripts/testing/repository-rules.test.ts`
+- Modify: `scripts/testing/test-conventions.test.ts`
 - Modify: `package.json`
 
 **Interfaces:**
@@ -1036,12 +1039,12 @@ for (const [name, count] of Object.entries(actual.duplicateCardinality)) {
 }
 ```
 
-Register `rule:rust-duplicate-baseline`. Fixtures must cover a positive snapshot, a new duplicate name, a third version of an existing duplicate, and a version replacement at unchanged cardinality.
+Register `rule:rust-duplicate-baseline` and add its entry to the explicit registered-rule inventory in `scripts/testing/test-conventions.test.ts`. Fixtures must cover a positive snapshot, a new duplicate name, a third version of an existing duplicate, and a version replacement at unchanged cardinality.
 
 - [ ] **Step 7: Run generator/rule GREEN tests and real snapshot**
 
 ```powershell
-npm.cmd run test:unit -- scripts/rust-duplicate-baseline.test.ts scripts/testing/repository-rules.test.ts
+npm.cmd run test:unit -- scripts/rust-duplicate-baseline.test.ts scripts/testing/repository-rules.test.ts scripts/testing/test-conventions.test.ts
 npm.cmd run test:unit
 ```
 
@@ -1050,7 +1053,7 @@ Expected: PASS; current repository rule accepts current canonical baseline.
 - [ ] **Step 8: Commit duplicate enforcement**
 
 ```powershell
-git add scripts/rust-duplicate-baseline.mjs scripts/rust-duplicate-baseline.test.ts scripts/testing/rust-duplicate-baseline.json scripts/testing/repository-index.mjs scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts package.json
+git add scripts/rust-duplicate-baseline.mjs scripts/rust-duplicate-baseline.test.ts scripts/testing/rust-duplicate-baseline.json scripts/testing/repository-index.mjs scripts/testing/repository-rules.mjs scripts/testing/repository-rules.test.ts scripts/testing/test-conventions.test.ts package.json
 git commit -m "test: enforce Rust duplicate baseline"
 ```
 
@@ -1062,7 +1065,7 @@ git commit -m "test: enforce Rust duplicate baseline"
 - Create: `scripts/testing/rust-dependency-policy.json`
 - Modify: `scripts/testing/repository-rules.mjs`
 - Modify: `scripts/testing/repository-rules.test.ts`
-- Modify: `scripts/testing/test-conventions.test.ts`
+- Modify: `scripts/testing/test-conventions.test.ts` (only the Task 6 toolchain/dependency-policy rule entries; the duplicate-baseline entry belongs to Task 5)
 
 **Interfaces:**
 - Produces: `rule:rust-toolchain-policy`, `rule:rust-dependency-policy`.
@@ -1208,17 +1211,20 @@ Register exactly:
 ["rule:rust-dependency-policy", evaluateRustDependencyPolicy],
 ```
 
-- [ ] **Step 4: Update the registry inventory test**
+- [ ] **Step 4: Extend the registry inventories for Task 6 policy rules**
 
-Expected `registeredRuleIds` becomes sorted and includes the three new Rust IDs:
+Keep the Task 5 `rule:rust-duplicate-baseline` entry intact. Extend the sorted
+`registeredRuleIds` expectations in the repository-rule and convention tests
+with the two Task 6 policy IDs only:
 
 ```ts
 "rule:rust-dependency-policy",
-"rule:rust-duplicate-baseline",
 "rule:rust-toolchain-policy",
 ```
 
-Keep the existing three rules unchanged.
+The convention-test edit stages only these Task 6 additions; it does not
+re-stage or claim the Task 5 duplicate-baseline inventory addition. Keep the
+existing rules unchanged.
 
 - [ ] **Step 5: Run rule and convention GREEN tests**
 

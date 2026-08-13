@@ -463,6 +463,13 @@ review dates live in the supply-chain artifact rather than a second parser.
 Manifest/lockfile consistency is already enforced by every locked Cargo gate,
 and the cargo-deny checksum is enforced while downloading the CI binary.
 
+The duplicate-baseline task owns the corresponding
+`scripts/testing/test-conventions.test.ts` registered-rule inventory entry and
+must take the full unit gate green after registering that evaluator. The later
+toolchain/dependency-policy task extends the same inventory only for its two
+new policy rules; it neither stages nor claims the earlier duplicate-baseline
+inventory addition.
+
 Wave 0 does not build a before/after Cargo-graph comparator. `--locked` already
 detects manifest/lockfile drift, and lockfile scope remains visible in review.
 Every dependency-wave verification record instead includes the generated
