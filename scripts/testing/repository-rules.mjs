@@ -1,10 +1,12 @@
 import { generateFeatureBaseline } from "../telegram-grammers-feature-baseline.mjs";
+import { generateRustDuplicateBaseline } from "../rust-duplicate-baseline.mjs";
 
 const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
 const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
 const GRID_RUNTIME_PATH = "src/lib/components/extractum-ui/data-grid-date-format.ts";
 const APPROVED_SVAR_GRID_PATHS = new Set([DATA_GRID_PATH, TREE_DATA_GRID_PATH, GRID_RUNTIME_PATH]);
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
+const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
 const EXPECTED_PRODUCER_DEPENDENCIES = [
   ["base64", null, [], true, null, null],
   ["chacha20poly1305", null, ["std"], true, null, null],
@@ -270,8 +272,23 @@ function evaluateTelegramCrateDependencyOwnership(index) {
   return violations;
 }
 
+function evaluateRustDuplicateBaseline(index) {
+  const baseline = index.getJson(RUST_DUPLICATE_BASELINE_PATH);
+  const actual = generateRustDuplicateBaseline(index.getCargoTree());
+  const violations = [];
+  if (actual.duplicateNameCount > baseline.duplicateNameCount) violations.push("Rust duplicate-name count grew");
+  if (actual.duplicateVersionInstanceCount > baseline.duplicateVersionInstanceCount) violations.push("Rust duplicate version-instance count grew");
+  for (const [name, count] of Object.entries(actual.duplicateCardinality)) {
+    if (count > (baseline.duplicateCardinality[name] ?? 1)) {
+      violations.push(`${name}: duplicate version cardinality grew to ${count}`);
+    }
+  }
+  return violations;
+}
+
 const evaluators = new Map([
   ["rule:extractum-grid-wrapper-boundary", evaluateExtractumGridWrapperBoundary],
+  ["rule:rust-duplicate-baseline", evaluateRustDuplicateBaseline],
   ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
   ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],
 ]);

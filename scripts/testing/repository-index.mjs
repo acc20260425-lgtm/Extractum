@@ -413,6 +413,19 @@ function defaultCargoMetadata(root) {
   });
 }
 
+function defaultCargoTree(root) {
+  return execFileSync("cargo", [
+    "tree", "--manifest-path", "src-tauri/Cargo.toml", "--locked",
+    "--target", "x86_64-pc-windows-msvc", "--workspace",
+    "--prefix", "none", "--format", "{p}",
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    windowsHide: true,
+  });
+}
+
 function defaultRepositoryFiles(root) {
   return execFileSync("git", ["ls-files", "-z"], {
     cwd: root,
@@ -428,6 +441,7 @@ export function createRepositoryIndex({
   ts = tsCompiler,
   svelte = svelteCompiler,
   loadCargoMetadata = () => defaultCargoMetadata(root),
+  loadCargoTree = () => defaultCargoTree(root),
   listFiles = () => defaultRepositoryFiles(root),
 }) {
   const repositoryRoot = path.resolve(root);
@@ -438,6 +452,9 @@ export function createRepositoryIndex({
   let cargoMetadata;
   let cargoError;
   let cargoLoaded = false;
+  let cargoTree;
+  let cargoTreeError;
+  let cargoTreeLoaded = false;
   let repositoryFiles;
 
   const cachedRawSource = (selected) => {
@@ -519,6 +536,20 @@ export function createRepositoryIndex({
       } catch (error) {
         cargoError = errorFor(CARGO_MANIFEST_PATH, error);
         throw cargoError;
+      }
+    },
+    getCargoTree() {
+      if (cargoTreeLoaded) {
+        if (cargoTreeError) throw cargoTreeError;
+        return cargoTree;
+      }
+      cargoTreeLoaded = true;
+      try {
+        cargoTree = String(loadCargoTree());
+        return cargoTree;
+      } catch (error) {
+        cargoTreeError = errorFor(CARGO_MANIFEST_PATH, error);
+        throw cargoTreeError;
       }
     },
   });

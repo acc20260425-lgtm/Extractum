@@ -8,6 +8,20 @@ import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 
 const root = path.resolve("repository-rule-fixture");
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
+const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
+const rustDuplicateBaseline = {
+  schemaVersion: 1,
+  target: "x86_64-pc-windows-msvc",
+  duplicateNameCount: 1,
+  duplicateVersionInstanceCount: 2,
+  duplicateCardinality: { alpha: 2 },
+};
+const rustDuplicateTree = [
+  "extractum v0.2.0 (C:\\repo\\src-tauri)",
+  "alpha v1.0.0",
+  "alpha v2.0.0 (*)",
+  "serde v1.0.229",
+].join("\n");
 const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
 const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
 const GRID_SELECT_CELL_PATH = "src/lib/components/extractum-ui/GridSelectCell.svelte";
@@ -206,17 +220,19 @@ function cargoMetadata() {
   };
 }
 
-function cargoIndex(metadata = cargoMetadata()) {
+function cargoIndex(metadata = cargoMetadata(), cargoTree = rustDuplicateTree) {
   return createRepositoryIndex({
     root,
     readFile(absolutePath: string) {
       const relativePath = path.relative(root, absolutePath).replaceAll("\\", "/");
       if (relativePath === GRAMMERS_BASELINE_PATH) return JSON.stringify(grammersBaseline);
+      if (relativePath === RUST_DUPLICATE_BASELINE_PATH) return JSON.stringify(rustDuplicateBaseline);
       throw new Error(`missing fixture: ${relativePath}`);
     },
     ts,
     svelte,
     loadCargoMetadata: () => metadata,
+    loadCargoTree: () => cargoTree,
   });
 }
 
@@ -343,12 +359,59 @@ const telegramStructuredFixtures = {
   },
 } as const;
 
+const rustDuplicateStructuredFixtures = {
+  "rule:rust-duplicate-baseline": {
+    positive: () => cargoIndex(),
+    mutations: {
+      "adds a new duplicate package name": () => cargoIndex(cargoMetadata(), [
+        rustDuplicateTree,
+        "beta v1.0.0",
+        "beta v2.0.0 (*)",
+      ].join("\n")),
+      "adds a third version of an existing duplicate": () => cargoIndex(cargoMetadata(), [
+        rustDuplicateTree,
+        "alpha v3.0.0",
+      ].join("\n")),
+    },
+    compatibleReplacement: () => cargoIndex(cargoMetadata(), [
+      "extractum v0.2.0 (C:\\repo\\src-tauri)",
+      "alpha v1.0.0",
+      "alpha v3.0.0 (*)",
+      "serde v1.0.229",
+    ].join("\n")),
+  },
+} as const;
+
 function expectSemanticViolations(violations: string[], label: string) {
   expect(violations, label).not.toEqual([]);
   expect(violations.some((violation) => violation.startsWith("INFRA_ERROR:")), label).toBe(false);
 }
 
 describe("repository rule registry", () => {
+  it("caches Cargo tree snapshots and errors for duplicate evaluation", () => {
+    let calls = 0;
+    const index = createRepositoryIndex({
+      root,
+      loadCargoTree: () => {
+        calls += 1;
+        return rustDuplicateTree;
+      },
+    });
+
+    expect(index.getCargoTree()).toBe(rustDuplicateTree);
+    expect(index.getCargoTree()).toBe(rustDuplicateTree);
+    expect(calls).toBe(1);
+
+    const failing = createRepositoryIndex({
+      root,
+      loadCargoTree: () => {
+        throw new Error("cargo tree failed");
+      },
+    });
+    expect(() => failing.getCargoTree()).toThrow(/src-tauri\/Cargo\.toml: cargo tree failed/);
+    expect(() => failing.getCargoTree()).toThrow(/src-tauri\/Cargo\.toml: cargo tree failed/);
+  });
+
   it(
     "accepts the current repository snapshot for every registered rule",
     () => {
@@ -379,17 +442,19 @@ describe("repository rule registry", () => {
   it("registers every current repository rule", () => {
     expect(registeredRuleIds).toEqual([
       "rule:extractum-grid-wrapper-boundary",
+      "rule:rust-duplicate-baseline",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
     ]);
   });
 
   it("gives every registered evaluator its own positive fixture and violating mutation", () => {
-    expect([...Object.keys(ruleFixtures), ...Object.keys(telegramStructuredFixtures)].sort()).toEqual(registeredRuleIds);
+    expect([...Object.keys(ruleFixtures), ...Object.keys(telegramStructuredFixtures), ...Object.keys(rustDuplicateStructuredFixtures)].sort()).toEqual(registeredRuleIds);
 
     for (const id of registeredRuleIds) {
       const fixture = ruleFixtures[id];
-      const structured = telegramStructuredFixtures[id as keyof typeof telegramStructuredFixtures];
+      const structured = telegramStructuredFixtures[id as keyof typeof telegramStructuredFixtures]
+        ?? rustDuplicateStructuredFixtures[id as keyof typeof rustDuplicateStructuredFixtures];
       const positiveIndex = structured ? structured.positive() : indexFor(fixture.positive);
       expect(evaluateRule({ id, index: positiveIndex }), `${id} positive`).toEqual({
         id,
@@ -402,6 +467,18 @@ describe("repository rule registry", () => {
         expectSemanticViolations(evaluateRule({ id, index: mutationIndex }).violations, `${id}: ${name}`);
       }
     }
+  });
+
+  it("rule:rust-duplicate-baseline permits version replacement at unchanged cardinality", () => {
+    const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
+
+    expect(evaluateRule({
+      id: "rule:rust-duplicate-baseline",
+      index: fixture.compatibleReplacement(),
+    })).toEqual({
+      id: "rule:rust-duplicate-baseline",
+      violations: [],
+    });
   });
 
   it("rule:telegram-crate-dependency-ownership rejects reordered generated direct packages", () => {

@@ -39,6 +39,7 @@
     "test:gemini-browser-sidecar:build": "tsc -p sidecars/gemini-browser/tsconfig.build.json",
     "test:gemini-browser-sidecar": "npm run test:gemini-browser-sidecar:typecheck && npm run test:gemini-browser-sidecar:unit && npm run test:gemini-browser-sidecar:build",
     "test:rust:prompt-pack-runs": "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run",
+    "generate:rust-duplicate-baseline": "node scripts/rust-duplicate-baseline.mjs --write scripts/testing/rust-duplicate-baseline.json",
     "test:watch": "node scripts/run-vitest.mjs watch",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:rustfmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",

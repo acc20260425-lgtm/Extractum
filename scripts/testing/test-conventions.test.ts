@@ -179,6 +179,7 @@ describe("test conventions", () => {
     expect(typeof evaluateRule).toBe("function");
     expect(registeredRuleIds).toEqual([
       "rule:extractum-grid-wrapper-boundary",
+      "rule:rust-duplicate-baseline",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
     ]);
