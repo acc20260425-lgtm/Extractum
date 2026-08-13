@@ -340,6 +340,8 @@ async fn run_ytdlp_managed_with<L: YtdlpLauncher>(
     .await
 }
 
+// Process ownership inputs remain explicit to preserve the established lifecycle seam in Wave 0.
+#[allow(clippy::too_many_arguments)]
 async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
     registry: &YoutubeProcessRegistry,
     shutdown: &ExternalProcessShutdownState,
@@ -382,7 +384,7 @@ async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
                 stdout,
                 stderr,
                 cancellation,
-                external_cancellation.unwrap_or_else(CancellationToken::new),
+                external_cancellation.unwrap_or_default(),
                 timeout_budget,
                 timeout_message,
             )
@@ -398,6 +400,8 @@ async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
     })?
 }
 
+// Process and cookie ownership are deliberately explicit at this lifecycle boundary.
+#[allow(clippy::too_many_arguments)]
 async fn manage_spawned_ytdlp(
     mut spawned: Box<dyn SpawnedYtdlp>,
     operation: ManagedYtdlpGuard,
@@ -444,7 +448,7 @@ async fn manage_spawned_ytdlp(
         Outcome::Cancelled => {
             stdout_task.abort();
             stderr_task.abort();
-            if let Err(_) = terminate_and_reap(&mut *spawned).await {
+            if terminate_and_reap(&mut *spawned).await.is_err() {
                 detach_owned_reap(spawned, cookie, operation);
                 return Err(AppError::network("yt-dlp operation cancelled".to_string()));
             }
@@ -453,7 +457,7 @@ async fn manage_spawned_ytdlp(
         Outcome::TimedOut => {
             stdout_task.abort();
             stderr_task.abort();
-            if let Err(_) = terminate_and_reap(&mut *spawned).await {
+            if terminate_and_reap(&mut *spawned).await.is_err() {
                 detach_owned_reap(spawned, cookie, operation);
                 return Err(AppError::network(timeout_message));
             }

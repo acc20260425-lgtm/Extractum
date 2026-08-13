@@ -17,6 +17,8 @@ pub(super) struct FixtureIds {
     pub(super) source_group_id: i64,
 }
 
+// Fixture rows mirror the persisted analysis-run schema used by the dev seed.
+#[allow(clippy::too_many_arguments)]
 async fn insert_run(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     label: &str,
@@ -62,6 +64,8 @@ async fn insert_run(
     .map_err(AppError::database)
 }
 
+// Fixture rows mirror the persisted analysis-message schema used by the dev seed.
+#[allow(clippy::too_many_arguments)]
 async fn insert_snapshot_message(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     run_id: i64,

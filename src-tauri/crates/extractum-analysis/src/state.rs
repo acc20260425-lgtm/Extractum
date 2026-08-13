@@ -8,6 +8,12 @@ pub struct AnalysisState {
     report_run_tokens: Mutex<HashMap<i64, CancellationToken>>,
 }
 
+impl Default for AnalysisState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct AnalysisReportCancellationWait {
     token: CancellationToken,
 }

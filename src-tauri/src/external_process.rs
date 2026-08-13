@@ -284,11 +284,13 @@ mod tests {
     use std::time::{Duration, Instant};
     use tokio::sync::Barrier;
 
-    fn recording_scheduler() -> (
+    type RecordingScheduler = (
         WatchdogScheduler,
         Arc<Mutex<Vec<ShutdownTiming>>>,
         Arc<Mutex<Option<WatchdogTask>>>,
-    ) {
+    );
+
+    fn recording_scheduler() -> RecordingScheduler {
         let timings = Arc::new(Mutex::new(Vec::new()));
         let watchdog = Arc::new(Mutex::new(None));
         let recorded_timings = timings.clone();

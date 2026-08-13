@@ -138,6 +138,8 @@ impl YoutubeSummaryExecutionPort for TauriYoutubeSummaryExecutionPort {
 }
 
 #[tauri::command]
+// Preserve the established IPC request shape rather than introducing a Wave 0 wire change.
+#[allow(clippy::too_many_arguments)]
 pub async fn preflight_youtube_summary_run(
     handle: AppHandle,
     project_id: Option<i64>,
@@ -172,6 +174,8 @@ pub async fn preflight_youtube_summary_run(
 }
 
 #[tauri::command]
+// Preserve the established IPC request shape rather than introducing a Wave 0 wire change.
+#[allow(clippy::too_many_arguments)]
 pub async fn start_youtube_summary_run(
     handle: AppHandle,
     state: State<'_, PromptPackRunState>,

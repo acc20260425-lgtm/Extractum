@@ -289,7 +289,7 @@ async fn insert_material_snapshots(
             "description",
             None,
             1,
-            &description,
+            description,
             None,
             now,
         )
@@ -332,6 +332,8 @@ fn compress_metadata_json(value: &serde_json::Value) -> AppResult<Vec<u8>> {
     compress_text(&value.to_string()).map_err(AppError::internal)
 }
 
+// Snapshot row fields stay explicit to keep the storage call sites readable in Wave 0.
+#[allow(clippy::too_many_arguments)]
 async fn insert_material(
     pool: &SqlitePool,
     run_id: i64,

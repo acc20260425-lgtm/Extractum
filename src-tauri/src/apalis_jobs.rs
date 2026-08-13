@@ -726,8 +726,8 @@ fn push_where<'a>(
     include_status: bool,
     include_job_type: bool,
 ) {
-    if !(include_status && filters.status.is_some())
-        && !(include_job_type && filters.job_type.is_some())
+    if !(include_status && filters.status.is_some()
+        || include_job_type && filters.job_type.is_some())
         && filters.search.is_none()
     {
         return;

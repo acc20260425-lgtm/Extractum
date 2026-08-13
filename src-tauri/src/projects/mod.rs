@@ -519,7 +519,7 @@ pub(crate) async fn delete_project_in_pool(
     project_id: i64,
 ) -> AppResult<()> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    delete_project_analysis_runs(&mut *transaction, project_id).await?;
+    delete_project_analysis_runs(&mut transaction, project_id).await?;
     sqlx::query("DELETE FROM project_sources WHERE project_id = ?")
         .bind(project_id)
         .execute(&mut *transaction)

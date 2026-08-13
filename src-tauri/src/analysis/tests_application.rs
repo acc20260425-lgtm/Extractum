@@ -58,6 +58,8 @@ async fn application_read_pool_with_max_connections(max_connections: u32) -> sql
     pool
 }
 
+// The application read-model test keeps each persisted column visible at call sites.
+#[allow(clippy::too_many_arguments)]
 async fn insert_run(
     pool: &sqlx::SqlitePool,
     id: i64,

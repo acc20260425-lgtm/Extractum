@@ -51,6 +51,8 @@ impl BrowsableItemRow {
     }
 }
 
+// The read-model entry point keeps its query dimensions explicit in Wave 0.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn load_item_rows_from_pool(
     pool: &sqlx::SqlitePool,
     source_id: i64,
@@ -158,6 +160,8 @@ async fn load_scoped_telegram_item_rows(
     .await
 }
 
+// The scoped SQL helper retains its explicit pagination and history dimensions in Wave 0.
+#[allow(clippy::too_many_arguments)]
 async fn load_scoped_item_rows(
     pool: &sqlx::SqlitePool,
     source_id: i64,

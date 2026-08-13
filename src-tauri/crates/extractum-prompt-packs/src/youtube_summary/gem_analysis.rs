@@ -641,7 +641,7 @@ where
     let raw_output = completion.text.clone();
     let mut metrics = GemPartMetrics::succeeded(part, &completion);
     match parse_gem_analysis_part_output(&completion.text, part) {
-        Ok(output) => return Ok((output, metrics)),
+        Ok(output) => Ok((output, metrics)),
         Err(error) => {
             let repair_request = GemAnalysisPartRepairRequest {
                 run_id: request.run_id,

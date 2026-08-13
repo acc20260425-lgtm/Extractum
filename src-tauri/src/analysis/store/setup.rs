@@ -80,10 +80,10 @@ pub(crate) async fn list_analysis_source_groups_in_pool(
     pool: &SqlitePool,
 ) -> AppResult<Vec<AnalysisSourceGroup>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let records = load_analysis_source_groups_for_enrichment(&mut *transaction).await?;
+    let records = load_analysis_source_groups_for_enrichment(&mut transaction).await?;
     let mut groups = Vec::with_capacity(records.len());
     for record in records {
-        groups.push(enrich_analysis_source_group(&mut *transaction, record).await?);
+        groups.push(enrich_analysis_source_group(&mut transaction, record).await?);
     }
     transaction.commit().await.map_err(AppError::database)?;
     Ok(groups)
@@ -94,9 +94,9 @@ pub(crate) async fn get_analysis_source_group_response_in_pool(
     group_id: i64,
 ) -> AppResult<Option<AnalysisSourceGroup>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let record = load_analysis_source_group_for_enrichment(&mut *transaction, group_id).await?;
+    let record = load_analysis_source_group_for_enrichment(&mut transaction, group_id).await?;
     let group = match record {
-        Some(record) => Some(enrich_analysis_source_group(&mut *transaction, record).await?),
+        Some(record) => Some(enrich_analysis_source_group(&mut transaction, record).await?),
         None => None,
     };
     transaction.commit().await.map_err(AppError::database)?;

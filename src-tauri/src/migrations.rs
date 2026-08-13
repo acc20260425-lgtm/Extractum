@@ -1032,7 +1032,7 @@ mod tests {
             .await
             .expect("connect memory sqlite");
         let migrations = build_migrations();
-        let baseline = migrations.get(0).expect("baseline migration");
+        let baseline = migrations.first().expect("baseline migration");
         let post_baseline = migrations.get(1).expect("post-baseline migration");
 
         sqlx::raw_sql(baseline.sql)

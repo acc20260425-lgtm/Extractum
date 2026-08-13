@@ -50,6 +50,8 @@ struct AnalysisRunRow {
     completed_at: Option<i64>,
 }
 
+// Keep the read-model query columns explicit rather than introducing a Wave 0 parameter type.
+#[allow(clippy::too_many_arguments)]
 fn resolve_run_scope_label_parts(
     scope_type: &str,
     source_id: Option<i64>,

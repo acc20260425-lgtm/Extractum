@@ -255,7 +255,7 @@ pub struct GeminiBrowserSidecarEnvelope {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GeminiBrowserSidecarResponse {
     Status { status: GeminiBrowserProviderStatus },
-    RunResult { result: GeminiBrowserRunResult },
+    RunResult { result: Box<GeminiBrowserRunResult> },
     Ack,
     Error { message: String },
 }
@@ -263,6 +263,28 @@ pub enum GeminiBrowserSidecarResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sidecar_run_result_response_keeps_wire_shape() {
+        let response = GeminiBrowserSidecarResponse::RunResult {
+            result: Box::new(GeminiBrowserRunResult {
+                run_id: "run-1".to_string(),
+                status: GeminiBrowserRunStatus::Ok,
+                text: Some("answer".to_string()),
+                message: None,
+                manual_action: None,
+                artifacts: GeminiBrowserArtifactRefs::default(),
+                elapsed_ms: 42,
+                debug_summary: None,
+            }),
+        };
+        let json = serde_json::to_value(&response).expect("serialize sidecar response");
+        assert_eq!(json["type"], "run_result");
+        assert_eq!(json["result"]["run_id"], "run-1");
+        let decoded: GeminiBrowserSidecarResponse =
+            serde_json::from_value(json).expect("deserialize sidecar response");
+        assert_eq!(decoded, response);
+    }
 
     #[test]
     fn success_statuses_include_ready_and_ok() {

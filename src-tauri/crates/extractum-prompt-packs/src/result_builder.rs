@@ -1111,6 +1111,8 @@ mod tests {
         Ok(())
     }
 
+    // This test fixture keeps its artifact fields explicit for scenario readability.
+    #[allow(clippy::too_many_arguments)]
     async fn insert_intermediate_entities_artifact(
         pool: &sqlx::SqlitePool,
         run_id: i64,

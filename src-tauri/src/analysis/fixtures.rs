@@ -179,9 +179,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
     let external_pattern = format!("{FIXTURE_EXTERNAL_PREFIX}%");
     let profile_settings_pattern = format!("llm.profile.{FIXTURE_PROFILE_ID}.%");
 
-    let mut summary = AnalysisRedesignFixtureSummary::default();
-
-    summary.chat_messages = rows_to_i64(
+    let chat_messages = rows_to_i64(
         sqlx::query(
             "DELETE FROM analysis_chat_messages
              WHERE run_id IN (
@@ -197,7 +195,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
         .rows_affected(),
     );
 
-    summary.snapshot_messages = rows_to_i64(
+    let snapshot_messages = rows_to_i64(
         sqlx::query(
             "DELETE FROM analysis_run_messages
              WHERE run_id IN (
@@ -213,7 +211,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
         .rows_affected(),
     );
 
-    summary.runs = rows_to_i64(
+    let runs = rows_to_i64(
         sqlx::query(
             "DELETE FROM analysis_runs
              WHERE scope_label_snapshot LIKE ? OR provider_profile = ?",
@@ -237,13 +235,13 @@ async fn clear_analysis_redesign_fixtures_in_pool(
         .execute(&mut *tx)
         .await
         .map_err(AppError::database)?;
-    summary.llm_profiles = if fixture_profile_setting_count > 0 {
+    let llm_profiles = if fixture_profile_setting_count > 0 {
         1
     } else {
         0
     };
 
-    summary.prompt_templates = rows_to_i64(
+    let prompt_templates = rows_to_i64(
         sqlx::query("DELETE FROM analysis_prompt_templates WHERE name LIKE ?")
             .bind(&marker_pattern)
             .execute(&mut *tx)
@@ -266,7 +264,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
     .await
     .map_err(AppError::database)?;
 
-    summary.source_groups = rows_to_i64(
+    let source_groups = rows_to_i64(
         sqlx::query("DELETE FROM analysis_source_groups WHERE name LIKE ?")
             .bind(&marker_pattern)
             .execute(&mut *tx)
@@ -275,7 +273,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
             .rows_affected(),
     );
 
-    summary.youtube_playlist_items = rows_to_i64(
+    let youtube_playlist_items = rows_to_i64(
         sqlx::query(
             "DELETE FROM youtube_playlist_items
              WHERE playlist_source_id IN (
@@ -297,7 +295,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
         .rows_affected(),
     );
 
-    summary.youtube_transcript_segments = rows_to_i64(
+    let youtube_transcript_segments = rows_to_i64(
         sqlx::query(
             "DELETE FROM youtube_transcript_segments
              WHERE source_id IN (
@@ -344,7 +342,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
     .await
     .map_err(AppError::database)?;
 
-    summary.sources = rows_to_i64(
+    let sources = rows_to_i64(
         sqlx::query("DELETE FROM sources WHERE title LIKE ? OR external_id LIKE ?")
             .bind(&marker_pattern)
             .bind(&external_pattern)
@@ -354,7 +352,7 @@ async fn clear_analysis_redesign_fixtures_in_pool(
             .rows_affected(),
     );
 
-    summary.accounts = rows_to_i64(
+    let accounts = rows_to_i64(
         sqlx::query("DELETE FROM accounts WHERE label LIKE ?")
             .bind(&marker_pattern)
             .execute(&mut *tx)
@@ -364,7 +362,18 @@ async fn clear_analysis_redesign_fixtures_in_pool(
     );
 
     tx.commit().await.map_err(AppError::database)?;
-    Ok(summary)
+    Ok(AnalysisRedesignFixtureSummary {
+        accounts,
+        sources,
+        source_groups,
+        runs,
+        snapshot_messages,
+        chat_messages,
+        prompt_templates,
+        llm_profiles,
+        youtube_transcript_segments,
+        youtube_playlist_items,
+    })
 }
 
 fn rows_to_i64(rows: u64) -> i64 {

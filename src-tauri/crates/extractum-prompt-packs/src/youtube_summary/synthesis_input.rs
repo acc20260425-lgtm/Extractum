@@ -84,7 +84,7 @@ pub(crate) async fn build_synthesis_stage_input(
                 "evidence": graph.get("evidence").cloned().unwrap_or_else(|| serde_json::json!([]))
             })
         })
-        .unwrap_or_else(|| empty_canonical_graph());
+        .unwrap_or_else(empty_canonical_graph);
     let allowed_refs = merged_graph
         .as_ref()
         .and_then(|graph| graph.get("allowed_refs").cloned())

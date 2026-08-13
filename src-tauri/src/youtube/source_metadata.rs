@@ -782,11 +782,9 @@ pub(crate) async fn upsert_video_source_metadata(
     metadata: &YoutubeVideoMetadata,
 ) -> AppResult<()> {
     let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
-    insert_video_source_columns(&mut **tx, source_id, &columns).await?;
-    crate::analysis_documents::upsert_youtube_description_document_on_connection(
-        &mut **tx, source_id,
-    )
-    .await
+    insert_video_source_columns(tx, source_id, &columns).await?;
+    crate::analysis_documents::upsert_youtube_description_document_on_connection(tx, source_id)
+        .await
 }
 
 #[cfg(test)]
@@ -809,7 +807,7 @@ pub(crate) async fn upsert_playlist_source_metadata(
     metadata: &YoutubePlaylistMetadata,
 ) -> AppResult<()> {
     let columns = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
-    insert_playlist_source_columns(&mut **tx, source_id, &columns).await
+    insert_playlist_source_columns(tx, source_id, &columns).await
 }
 
 async fn insert_video_source_columns(

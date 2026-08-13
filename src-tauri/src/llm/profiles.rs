@@ -58,10 +58,10 @@ fn profile_id_from_provider_key(key: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn credential_scope(
-    provider: ProviderKind,
-    base_url: &str,
-) -> AppResult<(ProviderKind, Option<(String, String, u16)>)> {
+type CredentialScopeOrigin = (String, String, u16);
+type CredentialScope = (ProviderKind, Option<CredentialScopeOrigin>);
+
+fn credential_scope(provider: ProviderKind, base_url: &str) -> AppResult<CredentialScope> {
     if provider == ProviderKind::Gemini {
         return Ok((provider, None));
     }

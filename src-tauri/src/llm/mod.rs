@@ -253,6 +253,36 @@ pub async fn delete_llm_profile(
     load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
+fn configured_provider_access(
+    provider: ProviderKind,
+    api_key: &Option<SecretString>,
+    base_url: &Option<String>,
+) -> AppResult<Option<LlmProviderAccess>> {
+    match (api_key, base_url) {
+        (Some(api_key), Some(base_url)) => Ok(Some(LlmProviderAccess::new(
+            provider,
+            api_key.clone(),
+            normalize_base_url(provider, Some(base_url))?,
+        ))),
+        _ => Ok(None),
+    }
+}
+
+fn normalize_configured_provider_overrides(
+    api_key: Option<&str>,
+    base_url: Option<&str>,
+) -> (Option<SecretString>, Option<String>) {
+    let api_key = api_key
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| SecretString::new(value.to_string()));
+    let base_url = base_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    (api_key, base_url)
+}
+
 #[tauri::command]
 pub async fn list_llm_provider_models(
     handle: AppHandle,
@@ -263,23 +293,13 @@ pub async fn list_llm_provider_models(
     base_url: Option<String>,
 ) -> AppResult<Vec<LlmProviderModel>> {
     let provider_kind = ProviderKind::parse(&provider)?;
-    let configured_key = api_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| SecretString::new(value.to_string()));
-    let configured_base_url = base_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string);
+    let (configured_key, configured_base_url) =
+        normalize_configured_provider_overrides(api_key.as_deref(), base_url.as_deref());
 
-    let access = if configured_key.is_some() && configured_base_url.is_some() {
-        LlmProviderAccess::new(
-            provider_kind,
-            configured_key.expect("configured key checked"),
-            normalize_base_url(provider_kind, configured_base_url.as_deref())?,
-        )
+    let access = if let Some(access) =
+        configured_provider_access(provider_kind, &configured_key, &configured_base_url)?
+    {
+        access
     } else {
         let pool = get_pool(&handle).await?;
         resolve_provider_access_from_pool(
@@ -466,10 +486,12 @@ pub async fn cancel_llm_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        cancelled_stream_event, failed_stream_event, load_provider_diagnostics_from_pool,
-        save_profile_to_pool, LlmUsage, StreamEvent,
+        cancelled_stream_event, configured_provider_access, failed_stream_event,
+        load_provider_diagnostics_from_pool, normalize_configured_provider_overrides,
+        save_profile_to_pool, LlmUsage, ProviderKind, StreamEvent,
     };
     use crate::error::AppError;
+    use secrecy::SecretString;
 
     #[tokio::test]
     async fn secure_profile_and_transport_ownership_remains_application_scoped() {
@@ -573,6 +595,55 @@ mod tests {
             serde_json::to_value(AppError::network("transport failed"))
                 .expect("serialize command error"),
             serde_json::json!({"kind": "network", "message": "transport failed"})
+        );
+    }
+
+    #[test]
+    fn configured_provider_access_requires_key_and_base_url_together() {
+        let provider = ProviderKind::OpenAiCompatible;
+
+        assert!(configured_provider_access(
+            provider,
+            &Some(SecretString::new("configured-key".to_string())),
+            &Some("https://api.example.test/v1".to_string()),
+        )
+        .expect("normalize complete configured access")
+        .is_some());
+        assert!(configured_provider_access(
+            provider,
+            &Some(SecretString::new("configured-key".to_string())),
+            &None,
+        )
+        .expect("preserve key-only profile resolution")
+        .is_none());
+        assert!(configured_provider_access(
+            provider,
+            &None,
+            &Some("https://api.example.test/v1".to_string()),
+        )
+        .expect("preserve base-url-only profile resolution")
+        .is_none());
+
+        let (empty_key, configured_base_url) = normalize_configured_provider_overrides(
+            Some("   "),
+            Some(" https://api.example.test/v1 "),
+        );
+        assert!(empty_key.is_none());
+        assert!(configured_base_url.is_some());
+        assert!(
+            configured_provider_access(provider, &empty_key, &configured_base_url)
+                .expect("preserve profile resolution for an empty configured key")
+                .is_none()
+        );
+
+        let (configured_key, empty_base_url) =
+            normalize_configured_provider_overrides(Some(" configured-key "), Some(""));
+        assert!(configured_key.is_some());
+        assert!(empty_base_url.is_none());
+        assert!(
+            configured_provider_access(provider, &configured_key, &empty_base_url)
+                .expect("preserve profile resolution for an empty configured base URL")
+                .is_none()
         );
     }
 

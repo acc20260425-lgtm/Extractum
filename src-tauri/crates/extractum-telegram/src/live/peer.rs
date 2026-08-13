@@ -7,7 +7,7 @@ use super::super::dto::PeerDescriptor;
 use super::avatar::peer_photo_bytes_with_timeout;
 
 enum ListedPeer {
-    Grammers(Peer),
+    Grammers(Box<Peer>),
     #[cfg(test)]
     Test(TestPeer),
 }
@@ -59,7 +59,9 @@ impl DialogListingBackend {
             Self::Grammers { dialogs, .. } => dialogs
                 .next()
                 .await
-                .map(|dialog| dialog.map(|dialog| ListedPeer::Grammers(dialog.peer().clone())))
+                .map(|dialog| {
+                    dialog.map(|dialog| ListedPeer::Grammers(Box::new(dialog.peer().clone())))
+                })
                 .map_err(|error| AppError::network(error.to_string())),
             #[cfg(test)]
             Self::Test(transport) => transport

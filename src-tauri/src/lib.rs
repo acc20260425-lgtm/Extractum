@@ -250,6 +250,7 @@ macro_rules! application_command_inventory {
                 add_project_sources,
                 remove_project_sources,
                 delete_project_youtube_video_source_from_library,
+                // Preserve this established IPC request shape in the Wave 0 inventory.
                 start_project_analysis => (crate::projects::start_project_analysis; ((
                     handle: tauri::AppHandle,
                     state: tauri::State<'_, extractum_analysis::AnalysisState>,
@@ -347,6 +348,7 @@ macro_rules! application_command_inventory {
                 create_analysis_source_group => (crate::analysis::create_analysis_source_group; ((handle: tauri::AppHandle, name: String, source_type: String, source_ids: Vec<i64>) -> crate::error::AppResult<extractum_analysis::AnalysisSourceGroup>; ["name", "sourceType", "sourceIds"])),
                 update_analysis_source_group => (crate::analysis::update_analysis_source_group; ((handle: tauri::AppHandle, group_id: i64, name: String, source_type: String, source_ids: Vec<i64>) -> crate::error::AppResult<extractum_analysis::AnalysisSourceGroup>; ["groupId", "name", "sourceType", "sourceIds"])),
                 delete_analysis_source_group => (crate::analysis::delete_analysis_source_group; ((handle: tauri::AppHandle, group_id: i64) -> crate::error::AppResult<()>; ["groupId"])),
+                // Preserve this established IPC request shape in the Wave 0 inventory.
                 list_analysis_runs => (crate::analysis::list_analysis_runs; ((handle: tauri::AppHandle, source_id: Option<i64>, source_group_id: Option<i64>, limit: Option<i64>, query: Option<String>, status: Option<String>, provider: Option<String>, model: Option<String>, template: Option<String>, date_from: Option<String>, date_to: Option<String>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisRunSummary>>; ["sourceId", "sourceGroupId", "limit", "query", "status", "provider", "model", "template", "dateFrom", "dateTo"])),
                 list_active_analysis_runs => (crate::analysis::list_active_analysis_runs; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisRunSummary>>; [])),
                 get_analysis_run => (crate::analysis::get_analysis_run; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<Option<extractum_analysis::AnalysisRunDetail>>; ["runId"])),
@@ -357,6 +359,7 @@ macro_rules! application_command_inventory {
                 list_analysis_chat_messages => (crate::analysis::list_analysis_chat_messages; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<Vec<extractum_analysis::AnalysisChatMessage>>; ["runId"])),
                 clear_analysis_chat_messages => (crate::analysis::clear_analysis_chat_messages; ((handle: tauri::AppHandle, run_id: i64) -> crate::error::AppResult<()>; ["runId"])),
                 ask_analysis_run_question => (crate::analysis::ask_analysis_run_question; ((handle: tauri::AppHandle, run_id: i64, question: String, model_override: Option<String>, profile_id: Option<String>) -> crate::error::AppResult<String>; ["runId", "question", "modelOverride", "profileId"])),
+                // Preserve this established IPC request shape in the Wave 0 inventory.
                 start_analysis_report => (crate::analysis::start_analysis_report; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>, source_id: Option<i64>, source_group_id: Option<i64>, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool) -> crate::error::AppResult<i64>; ["sourceId", "sourceGroupId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"])),
                 cancel_analysis_run => (crate::analysis::cancel_analysis_run; ((handle: tauri::AppHandle, state: tauri::State<'_, extractum_analysis::AnalysisState>, scheduler: tauri::State<'_, std::sync::Arc<extractum_llm::LlmSchedulerState>>, run_id: i64) -> crate::error::AppResult<()>; ["runId"])),
                 #[cfg(dev)]
@@ -392,7 +395,7 @@ macro_rules! application_command_inventory {
     };
 }
 
-macro_rules! define_application_ipc_wrapper {
+macro_rules! define_application_ipc_wrapper_body {
     (
         $(#[$attribute:meta])* $command:ident =>
         ($implementation:path; (($($parameter:ident : $parameter_type:ty),* $(,)?) -> $result:ty; [$($wire:literal),* $(,)?]))
@@ -402,6 +405,34 @@ macro_rules! define_application_ipc_wrapper {
         pub(super) async fn $command($($parameter: $parameter_type),*) -> $result {
             $implementation($($parameter),*).await
         }
+    };
+    ($(#[$attribute:meta])* $command:ident) => {};
+}
+
+macro_rules! define_application_ipc_wrapper {
+    (start_project_analysis => $signature:tt) => {
+        define_application_ipc_wrapper_body!(
+            #[allow(clippy::too_many_arguments)]
+            start_project_analysis => $signature
+        );
+    };
+    (list_analysis_runs => $signature:tt) => {
+        define_application_ipc_wrapper_body!(
+            #[allow(clippy::too_many_arguments)]
+            list_analysis_runs => $signature
+        );
+    };
+    (start_analysis_report => $signature:tt) => {
+        define_application_ipc_wrapper_body!(
+            #[allow(clippy::too_many_arguments)]
+            start_analysis_report => $signature
+        );
+    };
+    ($(#[$attribute:meta])* $command:ident => $signature:tt) => {
+        define_application_ipc_wrapper_body!(
+            $(#[$attribute])*
+            $command => $signature
+        );
     };
     ($(#[$attribute:meta])* $command:ident) => {};
 }

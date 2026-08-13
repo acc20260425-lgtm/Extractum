@@ -286,8 +286,7 @@ pub(crate) async fn resolve_scoped_topic_memberships_on_connection(
         return Ok(());
     }
 
-    let placeholders = std::iter::repeat("?")
-        .take(inserted_item_ids.len())
+    let placeholders = std::iter::repeat_n("?", inserted_item_ids.len())
         .collect::<Vec<_>>()
         .join(", ");
     let scoped_select = RESOLVED_MEMBERSHIP_SELECT_SQL.replace(
@@ -517,6 +516,8 @@ async fn inserted_membership_count(conn: &mut SqliteConnection, source_id: i64) 
         .map_err(AppError::database)
 }
 
+// Keep the persisted resolution-state columns explicit in the Wave 0 storage seam.
+#[allow(clippy::too_many_arguments)]
 async fn upsert_resolution_state(
     conn: &mut SqliteConnection,
     source_id: i64,

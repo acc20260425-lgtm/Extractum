@@ -585,7 +585,7 @@ mod tests {
         STATUS_NOT_INITIALIZED, STATUS_READY, STATUS_REAUTH_REQUIRED, STATUS_RESTORE_FAILED,
         STATUS_RESTORING, TELEGRAM_ACCOUNT_STATUS_EVENT, TELEGRAM_RESTORE_FAILURE_EVENT,
     };
-    use crate::error::{AppError, AppErrorKind, AppResult};
+    use crate::error::{AppError, AppErrorKind};
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
     use secrecy::{ExposeSecret, SecretString};
@@ -1021,15 +1021,12 @@ mod tests {
             r#"{"kind":"network","message":"Telegram request failed: transport disconnected"}"#
         );
 
-        let code_sent_result: AppResult<String> = Ok("Code sent".to_string());
-        assert_eq!(
-            code_sent_result.expect("successful send-code result"),
-            "Code sent"
-        );
-        let sign_in_result: AppResult<bool> = Ok(true);
-        let logout_result: AppResult<bool> = Ok(true);
-        assert!(sign_in_result.expect("successful sign-in result"));
-        assert!(logout_result.expect("successful logout result"));
+        let code_sent_result = "Code sent".to_string();
+        assert_eq!(code_sent_result, "Code sent");
+        let sign_in_result = true;
+        let logout_result = true;
+        assert!(sign_in_result);
+        assert!(logout_result);
     }
 
     #[tokio::test]

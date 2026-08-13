@@ -619,9 +619,9 @@ fn collect_video_source_by_id(
     video_source_by_id
 }
 
-fn synthesis_item_arrays<'a>(
-    synthesis: &'a serde_json::Map<String, Value>,
-) -> impl Iterator<Item = &'a Vec<Value>> {
+fn synthesis_item_arrays(
+    synthesis: &serde_json::Map<String, Value>,
+) -> impl Iterator<Item = &Vec<Value>> {
     [
         "cross_video_themes",
         "common_claims",

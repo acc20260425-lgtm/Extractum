@@ -182,11 +182,11 @@ async fn latest_takeout_batches(
         "#,
     );
 
-    Ok(query
+    query
         .build_query_as::<LatestTakeoutBatchRow>()
         .fetch_all(pool)
         .await
-        .map_err(AppError::database)?)
+        .map_err(AppError::database)
 }
 
 fn recovery_kind<'a>(

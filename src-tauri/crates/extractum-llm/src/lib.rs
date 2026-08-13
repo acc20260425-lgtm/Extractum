@@ -45,8 +45,8 @@ mod public_api_tests {
     trait AmbiguousIfDeserialize<A> {
         fn marker() {}
     }
-    impl<T: ?Sized> AmbiguousIfDeserialize<()> for T {}
-    impl<T: ?Sized + DeserializeOwned> AmbiguousIfDeserialize<u8> for T {}
+    impl<T> AmbiguousIfDeserialize<()> for T {}
+    impl<T: DeserializeOwned> AmbiguousIfDeserialize<u8> for T {}
 
     trait AmbiguousIfDebug<A> {
         fn marker() {}

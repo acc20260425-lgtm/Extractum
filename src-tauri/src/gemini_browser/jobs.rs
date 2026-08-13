@@ -73,8 +73,8 @@ pub(crate) async fn setup_gemini_browser_apalis_storage(
 pub(crate) async fn open_gemini_browser_job_storage(
     pool: &sqlx::SqlitePool,
 ) -> crate::error::AppResult<
-    impl apalis::prelude::TaskSink<GeminiBrowserJob>
-        + apalis::prelude::Backend<
+    impl apalis::prelude::TaskSink<
+            GeminiBrowserJob,
             Args = GeminiBrowserJob,
             Context = apalis_sqlite::SqliteContext,
             Error = sqlx::Error,
@@ -105,13 +105,13 @@ pub(crate) async fn enqueue_gemini_browser_job_to_storage<S>(
     job: GeminiBrowserJob,
 ) -> crate::error::AppResult<QueuedGeminiBrowserJob>
 where
-    S: apalis::prelude::TaskSink<GeminiBrowserJob>
-        + apalis::prelude::Backend<
+    S: apalis::prelude::TaskSink<
+            GeminiBrowserJob,
             Args = GeminiBrowserJob,
             Context = apalis_sqlite::SqliteContext,
             Error = sqlx::Error,
+            IdType: Send + Sync + 'static,
         > + GeminiBrowserApalisStorageAccess,
-    S::IdType: Send + 'static,
 {
     let run_id = job.run_id.clone();
     if gemini_browser_job_idempotency_exists(storage.pool(), &run_id).await? {

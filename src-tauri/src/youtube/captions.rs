@@ -328,7 +328,7 @@ pub(crate) async fn replace_transcript_segments(
     }
 
     crate::analysis_documents::rebuild_youtube_transcript_documents_for_item_on_connection(
-        &mut **tx, item_id,
+        tx, item_id,
     )
     .await?;
 

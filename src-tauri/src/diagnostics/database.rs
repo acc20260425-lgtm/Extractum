@@ -342,7 +342,7 @@ mod tests {
             .expect("load diagnostics");
         let account_ids = load_account_ids(&pool).await.expect("load account ids");
 
-        assert_eq!(database.sqlite_available, true);
+        assert!(database.sqlite_available);
         assert_eq!(database.account_count, 1);
         assert_eq!(database.migrations.status, "current");
         assert_eq!(database.migrations.expected_versions, expected_versions);
@@ -359,7 +359,7 @@ mod tests {
             Some("supergroup")
         );
         assert_eq!(sources.counts[0].sync_state, "synced");
-        assert_eq!(items.counts[0].has_content, true);
+        assert!(items.counts[0].has_content);
         assert_eq!(analysis_runs.counts[0].error_kind, "network");
         assert_eq!(ingest.batches[0].error_kind, "internal");
         assert_eq!(ingest.warnings[0].warning_code, "export_dc_fallback");

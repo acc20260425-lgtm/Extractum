@@ -133,8 +133,7 @@ async fn report_execution_uses_distinct_preflight_and_capture_corpus_reads() -> 
     )
     .await?;
     let expected_started = expected_started_message(&preflight);
-    let mut events = Vec::new();
-    events.push(super::super::started_load_items_event(run_id, &preflight).event);
+    let events = [super::super::started_load_items_event(run_id, &preflight).event];
     let capture = capture_analysis_corpus(&pool, &reader, run_id, "Frozen B scope", &request)
         .await
         .expect("capture corpus through production seam");

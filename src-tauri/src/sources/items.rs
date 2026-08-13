@@ -247,7 +247,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation_in_context(
     let identity = draft.telegram_identity.as_ref().ok_or_else(|| {
         AppError::validation("Parsed Takeout Telegram item is missing native message identity")
     })?;
-    let provider_identity = crate::ingest_provenance::telegram_provider_identity(&identity);
+    let provider_identity = crate::ingest_provenance::telegram_provider_identity(identity);
     let mut conn = begin_immediate(pool).await?;
 
     let result: AppResult<TelegramItemInsertOutcome> = async {
@@ -559,8 +559,7 @@ pub(crate) async fn upsert_youtube_comment_item(
     .await
     .map_err(AppError::database)?;
 
-    crate::analysis_documents::upsert_item_backed_document_on_connection(&mut **tx, item_id)
-        .await?;
+    crate::analysis_documents::upsert_item_backed_document_on_connection(tx, item_id).await?;
     Ok(item_id)
 }
 

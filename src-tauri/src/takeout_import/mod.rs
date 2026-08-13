@@ -2051,26 +2051,29 @@ mod tests {
                 format!("emit:{STATUS_CANCELLED}"),
             ]
         );
-        let early_events = early_events.lock().expect("early event recorder");
+        let (early_statuses, early_events_match, early_phase) = {
+            let early_events = early_events.lock().expect("early event recorder");
+            (
+                early_events
+                    .iter()
+                    .map(|(_, emitted)| emitted.0.clone())
+                    .collect::<Vec<_>>(),
+                early_events
+                    .iter()
+                    .all(|(persisted, emitted)| persisted == emitted),
+                early_events.last().expect("terminal event").1 .1.clone(),
+            )
+        };
         assert_eq!(
-            early_events
-                .iter()
-                .map(|(_, emitted)| emitted.0.as_str())
-                .collect::<Vec<_>>(),
-            vec![
+            early_statuses,
+            [
                 STATUS_CANCEL_REQUESTED,
                 super::STATUS_RUNNING,
                 STATUS_CANCELLED
             ]
         );
-        assert!(early_events
-            .iter()
-            .all(|(persisted, emitted)| persisted == emitted));
-        assert_eq!(
-            early_events.last().expect("terminal event").1 .1,
-            PHASE_CANCELLED
-        );
-        drop(early_events);
+        assert!(early_events_match);
+        assert_eq!(early_phase, PHASE_CANCELLED);
 
         let cancelled_error_state = TakeoutImportState::new();
         let cancelled_error_job = cancelled_error_state

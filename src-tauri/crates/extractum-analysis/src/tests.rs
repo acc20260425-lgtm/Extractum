@@ -61,7 +61,7 @@ async fn completed_run_without_snapshot_marker_is_capture_failed() {
         .acquire()
         .await
         .expect("acquire analysis test connection");
-    let enrichment = super::store::prepare_analysis_run_detail(&mut *connection, 1)
+    let enrichment = super::store::prepare_analysis_run_detail(&mut connection, 1)
         .await
         .expect("prepare run detail");
     let labels = super::models::AnalysisForeignLabels::new(Vec::new(), Vec::new())

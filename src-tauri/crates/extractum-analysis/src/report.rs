@@ -352,6 +352,8 @@ impl AnalysisReportExecutionTicket {
     }
 }
 
+// This public cross-crate entry point retains its established call shape in Wave 0.
+#[allow(clippy::too_many_arguments)]
 pub async fn prepare_analysis_report_execution(
     pool: &SqlitePool,
     state: &AnalysisState,

@@ -108,7 +108,7 @@ pub(crate) async fn load_export_source_group_in_pool(
     source_group_id: i64,
 ) -> AppResult<NotebookLmExportSourceGroup> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let record = load_analysis_source_group_for_enrichment(&mut *transaction, source_group_id)
+    let record = load_analysis_source_group_for_enrichment(&mut transaction, source_group_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Source group {source_group_id} not found")))?;
 

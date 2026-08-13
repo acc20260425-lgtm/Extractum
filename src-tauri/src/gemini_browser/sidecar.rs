@@ -205,7 +205,7 @@ impl Drop for GeminiBrowserSidecarProcess {
                 let _ = process_tree.terminate();
                 if let Some(mut child) = child.take() {
                     let _ = child.start_kill();
-                    if let Some(handle) = Handle::try_current().ok() {
+                    if let Ok(handle) = Handle::try_current() {
                         handle.spawn(async move {
                             let _ = child.kill().await;
                         });
@@ -414,7 +414,7 @@ pub(crate) async fn send_single(
     )
     .await?
     {
-        GeminiBrowserSidecarResponse::RunResult { result } => Ok(result),
+        GeminiBrowserSidecarResponse::RunResult { result } => Ok(*result),
         _ => Err(GeminiBrowserError::invariant(
             "Unexpected Gemini sidecar send_single response",
         )),

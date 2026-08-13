@@ -141,7 +141,7 @@ pub(crate) async fn list_research_projects_in_pool(
     .map_err(AppError::database)?;
 
     let project_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
-    let aggregates = load_project_analysis_run_aggregates(&mut *transaction, &project_ids).await?;
+    let aggregates = load_project_analysis_run_aggregates(&mut transaction, &project_ids).await?;
     let aggregates_by_project_id = aggregates
         .into_iter()
         .map(|aggregate| (aggregate.project_id(), aggregate))

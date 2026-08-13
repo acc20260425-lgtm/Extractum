@@ -318,6 +318,12 @@ pub struct LlmSchedulerState {
     state_changed: Notify,
 }
 
+impl Default for LlmSchedulerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LlmSchedulerState {
     pub fn new() -> Self {
         Self {

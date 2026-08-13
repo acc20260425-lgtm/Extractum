@@ -130,6 +130,8 @@ pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> AppResul
 }
 
 #[tauri::command]
+// Account deletion coordinates owned runtime states; retain the established command signature.
+#[allow(clippy::too_many_arguments)]
 pub async fn delete_account(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,

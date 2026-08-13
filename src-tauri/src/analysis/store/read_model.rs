@@ -128,9 +128,9 @@ pub(crate) async fn list_analysis_runs_in_pool(
 ) -> AppResult<Vec<AnalysisRunSummary>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
     let matches =
-        match_foreign_labels(&mut *transaction, filters.foreign_label_search_terms()).await?;
-    let enrichment = prepare_analysis_run_summaries(&mut *transaction, filters, matches).await?;
-    let labels = load_foreign_labels(&mut *transaction, enrichment.foreign_label_refs()).await?;
+        match_foreign_labels(&mut transaction, filters.foreign_label_search_terms()).await?;
+    let enrichment = prepare_analysis_run_summaries(&mut transaction, filters, matches).await?;
+    let labels = load_foreign_labels(&mut transaction, enrichment.foreign_label_refs()).await?;
     let runs = enrichment.finish(labels)?;
     transaction.commit().await.map_err(AppError::database)?;
     Ok(runs)
@@ -141,8 +141,8 @@ pub(crate) async fn list_active_analysis_runs_in_pool(
     run_ids: &HashSet<i64>,
 ) -> AppResult<Vec<AnalysisRunSummary>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let enrichment = prepare_active_analysis_run_summaries(&mut *transaction, run_ids).await?;
-    let labels = load_foreign_labels(&mut *transaction, enrichment.foreign_label_refs()).await?;
+    let enrichment = prepare_active_analysis_run_summaries(&mut transaction, run_ids).await?;
+    let labels = load_foreign_labels(&mut transaction, enrichment.foreign_label_refs()).await?;
     let runs = enrichment.finish(labels)?;
     transaction.commit().await.map_err(AppError::database)?;
     Ok(runs)
@@ -153,8 +153,8 @@ pub(crate) async fn get_analysis_run_in_pool(
     run_id: i64,
 ) -> AppResult<Option<AnalysisRunDetail>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let enrichment = prepare_analysis_run_detail(&mut *transaction, run_id).await?;
-    let labels = load_foreign_labels(&mut *transaction, enrichment.foreign_label_refs()).await?;
+    let enrichment = prepare_analysis_run_detail(&mut transaction, run_id).await?;
+    let labels = load_foreign_labels(&mut transaction, enrichment.foreign_label_refs()).await?;
     let run = enrichment.finish(labels)?;
     transaction.commit().await.map_err(AppError::database)?;
     Ok(run)
@@ -165,8 +165,8 @@ pub(crate) async fn resolve_legacy_analysis_chat_run_in_pool(
     run_id: i64,
 ) -> AppResult<AnalysisChatRun> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let enrichment = prepare_legacy_analysis_chat_run(&mut *transaction, run_id).await?;
-    let labels = load_foreign_labels(&mut *transaction, enrichment.foreign_label_refs()).await?;
+    let enrichment = prepare_legacy_analysis_chat_run(&mut transaction, run_id).await?;
+    let labels = load_foreign_labels(&mut transaction, enrichment.foreign_label_refs()).await?;
     let run = enrichment
         .finish(labels)?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;

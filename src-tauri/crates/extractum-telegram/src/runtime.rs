@@ -205,6 +205,12 @@ pub struct TelegramRuntime {
     test_callbacks: Option<Arc<TelegramRuntimeTestCallbacks>>,
 }
 
+impl Default for TelegramRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TelegramRuntime {
     pub fn new() -> Self {
         Self {
@@ -477,6 +483,30 @@ struct TelegramRuntimeTestRunnerDropProbe {
 impl Drop for TelegramRuntimeTestRunnerDropProbe {
     fn drop(&mut self) {
         (self.on_drop)(self.account_id);
+    }
+}
+
+#[cfg(test)]
+impl TelegramRuntimeTestCallbacks {
+    fn spawn_pending_runner(&self, account_id: i64) -> JoinHandle<()> {
+        let probe = TelegramRuntimeTestRunnerDropProbe {
+            account_id,
+            on_drop: Arc::clone(&self.on_runner_drop),
+        };
+        tokio::spawn(async move {
+            let _probe = probe;
+            std::future::pending::<()>().await;
+        })
+    }
+}
+
+#[cfg(test)]
+impl TelegramRuntime {
+    fn with_test_callbacks(callbacks: TelegramRuntimeTestCallbacks) -> Self {
+        Self {
+            accounts: Mutex::new(HashMap::new()),
+            test_callbacks: Some(Arc::new(callbacks)),
+        }
     }
 }
 
@@ -1441,29 +1471,5 @@ mod tests {
             unauthenticated.message, "Account 7 is not authenticated",
             "RED: CP5 authorized client"
         );
-    }
-}
-
-#[cfg(test)]
-impl TelegramRuntimeTestCallbacks {
-    fn spawn_pending_runner(&self, account_id: i64) -> JoinHandle<()> {
-        let probe = TelegramRuntimeTestRunnerDropProbe {
-            account_id,
-            on_drop: Arc::clone(&self.on_runner_drop),
-        };
-        tokio::spawn(async move {
-            let _probe = probe;
-            std::future::pending::<()>().await;
-        })
-    }
-}
-
-#[cfg(test)]
-impl TelegramRuntime {
-    fn with_test_callbacks(callbacks: TelegramRuntimeTestCallbacks) -> Self {
-        Self {
-            accounts: Mutex::new(HashMap::new()),
-            test_callbacks: Some(Arc::new(callbacks)),
-        }
     }
 }

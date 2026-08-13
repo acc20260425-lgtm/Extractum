@@ -526,6 +526,8 @@ mod tests {
         assert_eq!(detail, None);
     }
 
+    // Keep the test fixture call sites explicit while preserving their setup shape.
+    #[allow(clippy::too_many_arguments)]
     async fn insert_source(
         pool: &sqlx::SqlitePool,
         id: i64,

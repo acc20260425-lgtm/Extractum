@@ -281,6 +281,8 @@ async fn insert_fixture_source_group(
     Ok(group_id)
 }
 
+// Fixture rows mirror the persisted item schema used by the dev seed.
+#[allow(clippy::too_many_arguments)]
 async fn insert_item(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     source_id: i64,

@@ -863,7 +863,7 @@ mod tests {
     }
 
     impl<T: ?Sized> AmbiguousIfClone<()> for T {}
-    impl<T: ?Sized + Clone> AmbiguousIfClone<u8> for T {}
+    impl<T: Clone> AmbiguousIfClone<u8> for T {}
 
     #[tokio::test]
     async fn start_service_rejects_empty_id_before_browser_or_source_ports() {

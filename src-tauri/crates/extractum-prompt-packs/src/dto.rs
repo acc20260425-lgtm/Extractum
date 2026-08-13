@@ -1,16 +1,11 @@
 use extractum_gemini_browser::GeminiBrowserProviderConfig;
 
-#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptPackRuntimeProvider {
+    #[default]
     Api,
     GeminiBrowser,
-}
-
-impl Default for PromptPackRuntimeProvider {
-    fn default() -> Self {
-        Self::Api
-    }
 }
 
 impl PromptPackRuntimeProvider {
@@ -332,6 +327,19 @@ mod tests {
         progress_total: Option<i64>,
         message: Option<String>,
         error: Option<String>,
+    }
+
+    #[test]
+    fn prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api() {
+        assert_eq!(
+            PromptPackRuntimeProvider::default(),
+            PromptPackRuntimeProvider::Api
+        );
+        assert_eq!(
+            serde_json::to_value(PromptPackRuntimeProvider::default())
+                .expect("serialize default runtime provider"),
+            serde_json::json!("api")
+        );
     }
 
     #[test]

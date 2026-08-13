@@ -138,6 +138,8 @@ pub async fn list_analysis_sources(
     .map_err(AppError::database)
 }
 
+// Preserve the public analysis-filter command contract in Wave 0.
+#[allow(clippy::too_many_arguments)]
 pub async fn list_analysis_runs(
     handle: AppHandle,
     source_id: Option<i64>,

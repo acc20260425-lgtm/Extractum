@@ -44,14 +44,14 @@ pub enum CancelRunOutcome {
         stop_error: Option<GeminiBrowserError>,
     },
     QueuedCancelled {
-        result: GeminiBrowserRunResult,
+        result: Box<GeminiBrowserRunResult>,
     },
     AlreadyTerminal,
     Missing,
 }
 
 enum ExecutionSelection {
-    Completed(GeminiBrowserResult<GeminiBrowserRunResult>),
+    Completed(Box<GeminiBrowserResult<GeminiBrowserRunResult>>),
     Cancelled,
     TimedOut,
 }
@@ -103,20 +103,22 @@ pub async fn execute_delivered_job(
         biased;
         _ = cancellation.cancelled() => ExecutionSelection::Cancelled,
         _ = tokio::time::sleep(timeout) => ExecutionSelection::TimedOut,
-        result = &mut send => ExecutionSelection::Completed(result),
+        result = &mut send => ExecutionSelection::Completed(Box::new(result)),
     };
     drop(send);
 
     match selected {
-        ExecutionSelection::Completed(Ok(result)) => {
-            terminalize(runtime, state, observer, &input, result.clone()).await?;
-            Ok(DeliveryOutcome::Completed { result })
-        }
-        ExecutionSelection::Completed(Err(error)) => {
-            let result = failed_result(&input.job.run_id, error.to_string());
-            terminalize(runtime, state, observer, &input, result.clone()).await?;
-            Ok(DeliveryOutcome::Failed { result })
-        }
+        ExecutionSelection::Completed(result) => match *result {
+            Ok(result) => {
+                terminalize(runtime, state, observer, &input, result.clone()).await?;
+                Ok(DeliveryOutcome::Completed { result })
+            }
+            Err(error) => {
+                let result = failed_result(&input.job.run_id, error.to_string());
+                terminalize(runtime, state, observer, &input, result.clone()).await?;
+                Ok(DeliveryOutcome::Failed { result })
+            }
+        },
         ExecutionSelection::Cancelled => {
             let stop_error = stop_executor_once(
                 &active,
@@ -190,7 +192,9 @@ pub async fn cancel_run(
             .map(|status| status.browser_profile_dir)
             .unwrap_or_default();
         publish_terminal(state, observer, profile, &result);
-        return Ok(CancelRunOutcome::QueuedCancelled { result });
+        return Ok(CancelRunOutcome::QueuedCancelled {
+            result: Box::new(result),
+        });
     }
     Ok(CancelRunOutcome::Missing)
 }
@@ -607,7 +611,7 @@ mod tests {
                 .await
                 .expect("waiter channel")
                 .expect("waiter result"),
-            result
+            *result
         );
         assert!(executor.stop_reasons.lock().is_empty());
         assert_eq!(

@@ -369,7 +369,7 @@ pub(crate) async fn record_ingest_observation(
     observation: IngestObservation,
 ) -> AppResult<()> {
     let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    record_ingest_observation_on_connection(&mut *conn, observation).await
+    record_ingest_observation_on_connection(&mut conn, observation).await
 }
 
 pub(crate) async fn record_ingest_observation_on_connection(

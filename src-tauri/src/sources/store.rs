@@ -1166,7 +1166,7 @@ mod tests {
         .await
         .expect("upsert telegram source");
 
-        let row: (
+        type TelegramSourceIdentityRow = (
             i64,
             String,
             String,
@@ -1175,7 +1175,8 @@ mod tests {
             Option<String>,
             Option<i64>,
             Option<String>,
-        ) = sqlx::query_as(
+        );
+        let row: TelegramSourceIdentityRow = sqlx::query_as(
             r#"
             SELECT account_id, source_subtype, peer_kind, peer_id,
                    resolution_strategy, username, access_hash, avatar_cache_key

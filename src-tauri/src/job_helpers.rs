@@ -63,10 +63,7 @@ impl CancellationState {
     }
 
     fn token(&mut self, job_id: impl Into<String>) -> CancellationToken {
-        self.tokens
-            .entry(job_id.into())
-            .or_insert_with(CancellationToken::new)
-            .clone()
+        self.tokens.entry(job_id.into()).or_default().clone()
     }
 }
 
