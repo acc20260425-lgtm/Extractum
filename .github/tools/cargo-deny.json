@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "version": "0.20.2",
+  "target": "x86_64-pc-windows-msvc",
+  "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-pc-windows-msvc.tar.gz",
+  "sha256": "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc"
+}

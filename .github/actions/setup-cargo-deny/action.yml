@@ -1,0 +1,10 @@
+name: Setup pinned cargo-deny
+description: Download and verify the repository-pinned Windows cargo-deny binary
+runs:
+  using: composite
+  steps:
+    - name: Download and verify cargo-deny
+      shell: pwsh
+      run: |
+        $toolDir = Join-Path $env:RUNNER_TEMP 'extractum-cargo-deny'
+        & './scripts/setup-cargo-deny.ps1' -InstallDirectory $toolDir -AddToGitHubPath
