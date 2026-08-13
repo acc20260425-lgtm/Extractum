@@ -329,12 +329,21 @@ prebuilt pinned binary and validates its checksum; this CI step is the
 enforcement mechanism, so no repository rule compares the manifest with
 itself. CI does not compile the tool with `cargo install` on every run.
 
-Add root `deny.toml` with the Windows-only dependency graph:
+Add root `deny.toml` with the Windows-only dependency graph and bans policy:
 
 ```toml
 [graph]
 targets = ["x86_64-pc-windows-msvc"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
 ```
+
+`allow-wildcard-paths = true` permits versionless path dependencies only in
+private workspace packages. Registry dependencies remain subject to
+`wildcards = "deny"`, and Git dependencies remain denied by `[sources]`.
 
 Every cargo-deny invocation passes the root config explicitly. This avoids any
 dependency on how cargo-deny resolves its default config relative to the
@@ -356,6 +365,15 @@ A newly published advisory creates a security task and does not retroactively
 block an unrelated PR. A release cannot proceed while the advisory job is red
 unless a reviewed, time-bounded advisory exception is committed with owner,
 reason, and review date.
+
+The Task 4 bootstrap records the moving advisory database as red for
+`RUSTSEC-2026-0190` (`anyhow 1.0.102`), `RUSTSEC-2026-0221`
+(`event-listener 5.4.1`), and `RUSTSEC-2026-0097` (`rand 0.7.3`). Task 4 adds
+neither an advisory exception nor a dependency update for these findings. Its
+acceptance requires the deterministic `bans licenses sources` command to be
+green; the known advisory failures remain scheduled/release evidence and
+follow the security-task or reviewed time-bounded exception path before any
+release can be accepted.
 
 #### License Policy
 
@@ -507,7 +525,11 @@ operator memory.
 A scheduled workflow runs `cargo deny --config deny.toml --manifest-path
 src-tauri/Cargo.toml check advisories` against the current default branch.
 Failure opens or updates the security follow-up process; it does not rewrite
-dependency policy automatically.
+dependency policy automatically. The initial scheduled run is expected to
+reproduce the three Task 4 RustSec findings until a later security/dependency
+slice resolves them or commits reviewed, time-bounded exceptions; this expected
+red result validates the executor but does not make the deterministic PR gate
+red. Release acceptance remains blocked while the advisory command is red.
 
 #### Wave 0 Verification and Rollback
 

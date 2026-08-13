@@ -737,7 +737,7 @@ git commit -m "refactor: establish Rust Clippy baseline"
 - Modify: `package.json`
 
 **Interfaces:**
-- Produces: pinned `cargo-deny.exe` bootstrap and green deterministic/advisory commands.
+- Produces: pinned `cargo-deny.exe` bootstrap, a green deterministic `bans licenses sources` command, and recorded moving-database advisory evidence that currently fails the scheduled advisory job and blocks release acceptance.
 - Consumes: Task 1 `publish = false` for all workspace packages; Task 2 scripts.
 
 - [ ] **Step 1: Add the pinned tool manifest**
@@ -793,6 +793,7 @@ yanked = "warn"
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [licenses]
 unused-allowed-license = "warn"
@@ -817,6 +818,10 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 ```
+
+`allow-wildcard-paths = true` permits versionless path dependencies only in
+private workspace packages. Registry dependencies remain subject to
+`wildcards = "deny"`, and Git dependencies remain denied by `[sources]`.
 
 Do not add `[[licenses.clarify]]` unless cargo-deny 0.20.2 proves a specific packaged expression cannot be validated. If required for `ring`, `unicode-ident`, or `rustls-webpki`, hash the exact cached license file and bind the clarification to the exact crate version; record the inspected archive URL in the exception artifact.
 
@@ -853,7 +858,18 @@ try {
 }
 ```
 
-Expected: both commands execute cargo-deny 0.20.2. Resolve license failures by narrowing exact exceptions/clarifications, never by setting a blanket allow.
+Expected: both commands execute cargo-deny 0.20.2, and the deterministic
+`bans licenses sources` command is green. Resolve license failures by narrowing
+exact exceptions/clarifications, never by setting a blanket allow.
+
+The advisory command is moving-database evidence, not a Task 4 green gate. At
+the Task 4 bootstrap snapshot it intentionally records `RUSTSEC-2026-0190` for
+`anyhow 1.0.102`, `RUSTSEC-2026-0221` for `event-listener 5.4.1`, and
+`RUSTSEC-2026-0097` for `rand 0.7.3` as failures. Task 4 adds neither an
+advisory exception nor a dependency update for those findings; scheduled and
+release execution owns the security follow-up, and release acceptance remains
+blocked until the findings are resolved or reviewed, time-bounded exceptions
+are committed.
 
 - [ ] **Step 6: Run the complete fast gate**
 
@@ -1399,7 +1415,16 @@ npm.cmd run verify
 npm.cmd run check:rust:advisories
 ```
 
-Expected: all pass. If advisory state changes independently, record the exact RustSec finding and follow the approved exception/security-task path; do not silently suppress it.
+Expected: bootstrap, the deterministic fast gate, and `verify` pass. The
+advisory command is expected to reproduce the Task 4 moving-database findings
+`RUSTSEC-2026-0190` (`anyhow 1.0.102`), `RUSTSEC-2026-0221`
+(`event-listener 5.4.1`), and `RUSTSEC-2026-0097` (`rand 0.7.3`) until a later
+security/dependency slice resolves them or commits reviewed, time-bounded
+exceptions. Record the exact output and the scheduled-job URL; a red advisory
+job proves the executor and opens or updates security follow-up, but it does not
+invalidate the ordinary deterministic PR gate. Do not silently suppress an
+existing or newly published advisory. Release acceptance remains blocked while
+the advisory command is red.
 
 - [ ] **Step 4: Dispatch and verify CI executors**
 
