@@ -279,11 +279,18 @@ function evaluateRustDuplicateBaseline(index) {
   if (actual.duplicateNameCount > baseline.duplicateNameCount) violations.push("Rust duplicate-name count grew");
   if (actual.duplicateVersionInstanceCount > baseline.duplicateVersionInstanceCount) violations.push("Rust duplicate version-instance count grew");
   for (const [name, count] of Object.entries(actual.duplicateCardinality)) {
-    if (count > (baseline.duplicateCardinality[name] ?? 1)) {
+    if (Object.hasOwn(baseline.duplicateCardinality, name)
+      && count > baseline.duplicateCardinality[name]) {
       violations.push(`${name}: duplicate version cardinality grew to ${count}`);
     }
   }
-  return violations;
+  const baselineNames = Object.keys(baseline.duplicateCardinality);
+  const actualNames = Object.keys(actual.duplicateCardinality);
+  const addedDuplicateNames = actualNames.filter((name) => !baselineNames.includes(name)).sort();
+  const removedDuplicateNames = baselineNames.filter((name) => !actualNames.includes(name)).sort();
+  return addedDuplicateNames.length || removedDuplicateNames.length
+    ? { violations, review: { addedDuplicateNames, removedDuplicateNames } }
+    : { violations };
 }
 
 const evaluators = new Map([
@@ -299,7 +306,8 @@ export function evaluateRule({ id, index }) {
   const evaluator = evaluators.get(id);
   if (!evaluator) throw new Error(`Unknown repository rule ID: ${id}`);
   try {
-    return { id, violations: evaluator(index) };
+    const result = evaluator(index);
+    return Array.isArray(result) ? { id, violations: result } : { id, ...result };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     return { id, violations: [`INFRA_ERROR: ${detail}`] };

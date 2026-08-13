@@ -220,13 +220,17 @@ function cargoMetadata() {
   };
 }
 
-function cargoIndex(metadata = cargoMetadata(), cargoTree = rustDuplicateTree) {
+function cargoIndex(
+  metadata = cargoMetadata(),
+  cargoTree = rustDuplicateTree,
+  duplicateBaseline = rustDuplicateBaseline,
+) {
   return createRepositoryIndex({
     root,
     readFile(absolutePath: string) {
       const relativePath = path.relative(root, absolutePath).replaceAll("\\", "/");
       if (relativePath === GRAMMERS_BASELINE_PATH) return JSON.stringify(grammersBaseline);
-      if (relativePath === RUST_DUPLICATE_BASELINE_PATH) return JSON.stringify(rustDuplicateBaseline);
+      if (relativePath === RUST_DUPLICATE_BASELINE_PATH) return JSON.stringify(duplicateBaseline);
       throw new Error(`missing fixture: ${relativePath}`);
     },
     ts,
@@ -379,6 +383,25 @@ const rustDuplicateStructuredFixtures = {
       "alpha v3.0.0 (*)",
       "serde v1.0.229",
     ].join("\n")),
+    packageSetReplacement: () => cargoIndex(cargoMetadata(), [
+      "extractum v0.2.0 (C:\\repo\\src-tauri)",
+      "beta v1.0.0",
+      "beta v2.0.0 (*)",
+      "serde v1.0.229",
+    ].join("\n")),
+    multiplePackageSetReplacement: () => cargoIndex(cargoMetadata(), [
+      "extractum v0.2.0 (C:\\repo\\src-tauri)",
+      "gamma v1.0.0",
+      "gamma v2.0.0 (*)",
+      "beta v1.0.0",
+      "beta v2.0.0 (*)",
+    ].join("\n"), {
+      schemaVersion: 1,
+      target: "x86_64-pc-windows-msvc",
+      duplicateNameCount: 2,
+      duplicateVersionInstanceCount: 4,
+      duplicateCardinality: { zeta: 2, alpha: 2 },
+    }),
   },
 } as const;
 
@@ -478,6 +501,58 @@ describe("repository rule registry", () => {
     })).toEqual({
       id: "rule:rust-duplicate-baseline",
       violations: [],
+    });
+  });
+
+  it("rule:rust-duplicate-baseline reports a same-aggregate duplicate package-set replacement for review", () => {
+    const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
+
+    expect(evaluateRule({
+      id: "rule:rust-duplicate-baseline",
+      index: fixture.packageSetReplacement(),
+    })).toEqual({
+      id: "rule:rust-duplicate-baseline",
+      violations: [],
+      review: {
+        addedDuplicateNames: ["beta"],
+        removedDuplicateNames: ["alpha"],
+      },
+    });
+
+    expect(evaluateRule({
+      id: "rule:rust-duplicate-baseline",
+      index: fixture.multiplePackageSetReplacement(),
+    }).review).toEqual({
+      addedDuplicateNames: ["beta", "gamma"],
+      removedDuplicateNames: ["alpha", "zeta"],
+    });
+  });
+
+  it("rule:rust-duplicate-baseline keeps aggregate and existing-name cardinality growth blocking", () => {
+    const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
+
+    const newDuplicate = evaluateRule({
+      id: "rule:rust-duplicate-baseline",
+      index: fixture.mutations["adds a new duplicate package name"](),
+    });
+    expect(newDuplicate.violations).toEqual([
+      "Rust duplicate-name count grew",
+      "Rust duplicate version-instance count grew",
+    ]);
+    expect(newDuplicate.review).toEqual({
+      addedDuplicateNames: ["beta"],
+      removedDuplicateNames: [],
+    });
+
+    expect(evaluateRule({
+      id: "rule:rust-duplicate-baseline",
+      index: fixture.mutations["adds a third version of an existing duplicate"](),
+    })).toEqual({
+      id: "rule:rust-duplicate-baseline",
+      violations: [
+        "Rust duplicate version-instance count grew",
+        "alpha: duplicate version cardinality grew to 3",
+      ],
     });
   });
 
