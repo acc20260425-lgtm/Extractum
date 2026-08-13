@@ -5,10 +5,20 @@ import { describe, expect, it } from "vitest";
 
 import { createRepositoryIndex } from "./repository-index.mjs";
 import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
+import rustDependencyPolicy from "./rust-dependency-policy.json";
 
 const root = path.resolve("repository-rule-fixture");
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
+const RUST_DEPENDENCY_POLICY_PATH = "scripts/testing/rust-dependency-policy.json";
+const canonicalToolchain = [
+  "[toolchain]",
+  'channel = "1.95.0"',
+  'components = ["rustfmt", "clippy"]',
+  'targets = ["x86_64-pc-windows-msvc"]',
+  'profile = "minimal"',
+  "",
+].join("\n");
 const rustDuplicateBaseline = {
   schemaVersion: 1,
   target: "x86_64-pc-windows-msvc",
@@ -224,6 +234,9 @@ function cargoIndex(
   metadata = cargoMetadata(),
   cargoTree = rustDuplicateTree,
   duplicateBaseline = rustDuplicateBaseline,
+  policy = rustDependencyPolicy,
+  toolchain = canonicalToolchain,
+  packageJson = { private: true, dependencies: {}, devDependencies: {} },
 ) {
   return createRepositoryIndex({
     root,
@@ -231,6 +244,9 @@ function cargoIndex(
       const relativePath = path.relative(root, absolutePath).replaceAll("\\", "/");
       if (relativePath === GRAMMERS_BASELINE_PATH) return JSON.stringify(grammersBaseline);
       if (relativePath === RUST_DUPLICATE_BASELINE_PATH) return JSON.stringify(duplicateBaseline);
+      if (relativePath === RUST_DEPENDENCY_POLICY_PATH) return JSON.stringify(policy);
+      if (relativePath === "rust-toolchain.toml") return toolchain;
+      if (relativePath === "package.json") return JSON.stringify(packageJson);
       throw new Error(`missing fixture: ${relativePath}`);
     },
     ts,
@@ -238,6 +254,58 @@ function cargoIndex(
     loadCargoMetadata: () => metadata,
     loadCargoTree: () => cargoTree,
   });
+}
+
+function rustPolicyCargoMetadata() {
+  const metadata = clone(cargoMetadata());
+  const app = metadata.packages.find(({ name }: any) => name === "extractum")!;
+  const producer = metadata.packages.find(({ name }: any) => name === "extractum-telegram")!;
+  const packages = [app, producer];
+  for (const name of rustDependencyPolicy.toolchain.workspacePackages) {
+    let selected = packages.find((candidate) => candidate.name === name);
+    if (!selected) {
+      selected = {
+        id: `path+file:///repo/src-tauri/crates/${name}#0.2.0`,
+        name,
+        source: null,
+        manifest_path: `C:/repo/src-tauri/crates/${name}/Cargo.toml`,
+        features: {},
+        targets: [{ kind: ["lib"], name: name.replaceAll("-", "_") }],
+        dependencies: [],
+      };
+      metadata.packages.push(selected);
+      metadata.resolve.nodes.push({ id: selected.id, features: [], deps: [] });
+      packages.push(selected);
+    }
+    selected.rust_version = "1.95";
+    selected.edition = "2021";
+    selected.publish = [];
+  }
+  metadata.workspace_members = packages.map(({ id }) => id);
+  app.dependencies.push(
+    { name: "apalis", kind: null, req: "=1.0.0-rc.8" },
+    { name: "apalis-sqlite", kind: null, req: "=1.0.0-rc.8" },
+    { name: "tauri", kind: null, req: "2" },
+    { name: "tauri-build", kind: "build", req: "2" },
+    { name: "tauri-plugin-dialog", kind: null, req: "2" },
+    { name: "tauri-plugin-opener", kind: null, req: "2" },
+    { name: "tauri-plugin-sql", kind: null, req: "2" },
+    { name: "tauri-plugin-mcp-bridge", kind: null, req: "^0.11" },
+  );
+  return metadata;
+}
+
+function rustPolicyIndex(metadata = rustPolicyCargoMetadata(), toolchain = canonicalToolchain, packageJson = {
+  private: true,
+  dependencies: {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-sql": "^2.4.0",
+  },
+  devDependencies: { "@tauri-apps/cli": "^2" },
+}) {
+  return cargoIndex(metadata, rustDuplicateTree, rustDuplicateBaseline, rustDependencyPolicy, toolchain, packageJson);
 }
 
 function realAuthorityIndex() {
@@ -405,6 +473,58 @@ const rustDuplicateStructuredFixtures = {
   },
 } as const;
 
+const rustPolicyStructuredFixtures = {
+  "rule:rust-toolchain-policy": {
+    positive: () => rustPolicyIndex(),
+    mutations: {
+      "drops workspace MSRV inheritance from one package": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum-analysis")!.rust_version = null;
+        return rustPolicyIndex(metadata);
+      },
+      "changes the canonical toolchain channel": () => rustPolicyIndex(
+        rustPolicyCargoMetadata(),
+        canonicalToolchain.replace('channel = "1.95.0"', 'channel = "1.96.0"'),
+      ),
+      "makes the root package publishable": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum")!.publish = ["crates-io"];
+        return rustPolicyIndex(metadata);
+      },
+    },
+  },
+  "rule:rust-dependency-policy": {
+    positive: () => rustPolicyIndex(),
+    mutations: {
+      "moves tauri-build outside the CLI major": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies
+          .find(({ name, kind }: any) => name === "tauri-build" && kind === "build")!.req = "3";
+        return rustPolicyIndex(metadata);
+      },
+      "moves the MCP bridge outside minor 0.11": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies
+          .find(({ name }: any) => name === "tauri-plugin-mcp-bridge")!.req = "^0.12";
+        return rustPolicyIndex(metadata);
+      },
+      "widens a Grammers exact pin": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum-telegram")!.dependencies
+          .find(({ name }: any) => name === "grammers-client")!.req = "^0.10.0";
+        return rustPolicyIndex(metadata);
+      },
+      "introduces an unapproved prerelease": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies.push({
+          name: "unapproved-release", kind: null, req: "=1.2.3-beta.1",
+        });
+        return rustPolicyIndex(metadata);
+      },
+    },
+  },
+} as const;
+
 function expectSemanticViolations(violations: string[], label: string) {
   expect(violations, label).not.toEqual([]);
   expect(violations.some((violation) => violation.startsWith("INFRA_ERROR:")), label).toBe(false);
@@ -465,19 +585,27 @@ describe("repository rule registry", () => {
   it("registers every current repository rule", () => {
     expect(registeredRuleIds).toEqual([
       "rule:extractum-grid-wrapper-boundary",
+      "rule:rust-dependency-policy",
       "rule:rust-duplicate-baseline",
+      "rule:rust-toolchain-policy",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
     ]);
   });
 
   it("gives every registered evaluator its own positive fixture and violating mutation", () => {
-    expect([...Object.keys(ruleFixtures), ...Object.keys(telegramStructuredFixtures), ...Object.keys(rustDuplicateStructuredFixtures)].sort()).toEqual(registeredRuleIds);
+    expect([
+      ...Object.keys(ruleFixtures),
+      ...Object.keys(telegramStructuredFixtures),
+      ...Object.keys(rustDuplicateStructuredFixtures),
+      ...Object.keys(rustPolicyStructuredFixtures),
+    ].sort()).toEqual(registeredRuleIds);
 
     for (const id of registeredRuleIds) {
       const fixture = ruleFixtures[id];
       const structured = telegramStructuredFixtures[id as keyof typeof telegramStructuredFixtures]
-        ?? rustDuplicateStructuredFixtures[id as keyof typeof rustDuplicateStructuredFixtures];
+        ?? rustDuplicateStructuredFixtures[id as keyof typeof rustDuplicateStructuredFixtures]
+        ?? rustPolicyStructuredFixtures[id as keyof typeof rustPolicyStructuredFixtures];
       const positiveIndex = structured ? structured.positive() : indexFor(fixture.positive);
       expect(evaluateRule({ id, index: positiveIndex }), `${id} positive`).toEqual({
         id,

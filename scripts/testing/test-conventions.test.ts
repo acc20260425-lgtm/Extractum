@@ -179,7 +179,9 @@ describe("test conventions", () => {
     expect(typeof evaluateRule).toBe("function");
     expect(registeredRuleIds).toEqual([
       "rule:extractum-grid-wrapper-boundary",
+      "rule:rust-dependency-policy",
       "rule:rust-duplicate-baseline",
+      "rule:rust-toolchain-policy",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
     ]);

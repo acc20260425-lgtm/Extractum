@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "toolchain": {
+    "channel": "1.95.0",
+    "rustVersion": "1.95",
+    "edition": "2021",
+    "target": "x86_64-pc-windows-msvc",
+    "workspacePackages": [
+      "extractum",
+      "extractum-analysis",
+      "extractum-core",
+      "extractum-gemini-browser",
+      "extractum-llm",
+      "extractum-prompt-packs",
+      "extractum-telegram"
+    ]
+  },
+  "exactPins": {
+    "apalis": "=1.0.0-rc.8",
+    "apalis-sqlite": "=1.0.0-rc.8",
+    "grammers-client": "=0.10.0",
+    "grammers-mtsender": "=0.10.0",
+    "grammers-session": "=0.10.0",
+    "grammers-tl-types": "=0.10.0"
+  },
+  "approvedPrereleases": {
+    "apalis": "1.0.0-rc.8",
+    "apalis-sqlite": "1.0.0-rc.8"
+  },
+  "tauriFamily": {
+    "cargoMajor": 2,
+    "npmMajor": 2,
+    "mcpBridgeMinor": 11,
+    "pairs": [
+      ["tauri", "@tauri-apps/api"],
+      ["tauri-build", "@tauri-apps/cli"],
+      ["tauri-plugin-dialog", "@tauri-apps/plugin-dialog"],
+      ["tauri-plugin-opener", "@tauri-apps/plugin-opener"],
+      ["tauri-plugin-sql", "@tauri-apps/plugin-sql"]
+    ]
+  }
+}

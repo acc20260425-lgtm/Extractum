@@ -7,6 +7,7 @@ const GRID_RUNTIME_PATH = "src/lib/components/extractum-ui/data-grid-date-format
 const APPROVED_SVAR_GRID_PATHS = new Set([DATA_GRID_PATH, TREE_DATA_GRID_PATH, GRID_RUNTIME_PATH]);
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
+const RUST_DEPENDENCY_POLICY_PATH = "scripts/testing/rust-dependency-policy.json";
 const EXPECTED_PRODUCER_DEPENDENCIES = [
   ["base64", null, [], true, null, null],
   ["chacha20poly1305", null, ["std"], true, null, null],
@@ -272,6 +273,119 @@ function evaluateTelegramCrateDependencyOwnership(index) {
   return violations;
 }
 
+function normalizeText(source) {
+  return source.replaceAll("\r\n", "\n").trimEnd() + "\n";
+}
+
+function dependencyByName(metadata, packageName, dependencyName) {
+  const selected = workspacePackage(metadata, packageName);
+  return selected?.dependencies?.find(
+    ({ name, kind }) => name === dependencyName && (kind === null || kind === "build"),
+  );
+}
+
+function requirementMajor(requirement) {
+  const match = /(?:^|[^0-9])(\d+)(?:\.|$)/.exec(String(requirement));
+  return match ? Number(match[1]) : undefined;
+}
+
+function requirementMajorMinor(requirement) {
+  const match = /(?:^|[^0-9])(\d+)\.(\d+)(?:\.|$)/.exec(String(requirement));
+  return match ? [Number(match[1]), Number(match[2])] : undefined;
+}
+
+function prereleaseVersion(requirement) {
+  const match = /(\d+\.\d+\.\d+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)/.exec(String(requirement));
+  return match?.[1];
+}
+
+function workspaceDependencies(metadata) {
+  const members = new Set(metadata?.workspace_members ?? []);
+  return (metadata?.packages ?? [])
+    .filter(({ id }) => members.has(id))
+    .flatMap(({ dependencies = [] }) => dependencies)
+    .filter(({ kind }) => kind === null || kind === "build");
+}
+
+function npmRequirement(packageJson, name) {
+  return packageJson?.dependencies?.[name] ?? packageJson?.devDependencies?.[name];
+}
+
+function evaluateRustToolchainPolicy(index) {
+  const policy = index.getJson(RUST_DEPENDENCY_POLICY_PATH);
+  const metadata = index.getCargoMetadata();
+  const violations = [];
+  const expectedToolchain = `[toolchain]
+channel = "${policy.toolchain.channel}"
+components = ["rustfmt", "clippy"]
+targets = ["${policy.toolchain.target}"]
+profile = "minimal"
+`;
+  if (normalizeText(index.getText("rust-toolchain.toml")) !== expectedToolchain) {
+    violations.push("rust-toolchain.toml: canonical content drifted");
+  }
+  for (const name of policy.toolchain.workspacePackages) {
+    const pkg = workspacePackage(metadata, name);
+    if (!pkg) {
+      violations.push(`${name}: missing workspace package`);
+      continue;
+    }
+    if (pkg.rust_version !== policy.toolchain.rustVersion) violations.push(`${name}: rust-version drifted`);
+    if (pkg.edition !== policy.toolchain.edition) violations.push(`${name}: edition drifted during Wave 0`);
+    if (JSON.stringify(pkg.publish) !== "[]") violations.push(`${name}: package must be unpublished`);
+  }
+  return violations;
+}
+
+function evaluateRustDependencyPolicy(index) {
+  const policy = index.getJson(RUST_DEPENDENCY_POLICY_PATH);
+  const metadata = index.getCargoMetadata();
+  const packageJson = index.getJson("package.json");
+  const dependencies = workspaceDependencies(metadata);
+  const violations = [];
+
+  for (const [name, requirement] of Object.entries(policy.exactPins)) {
+    const direct = dependencies.filter((dependency) => dependency.name === name);
+    if (!direct.length) {
+      violations.push(`${name}: missing direct dependency`);
+      continue;
+    }
+    for (const dependency of direct) {
+      if (dependency.req !== requirement) {
+        violations.push(`${name}: direct manifest requirement must be ${requirement}`);
+      }
+    }
+  }
+
+  for (const dependency of dependencies) {
+    const version = prereleaseVersion(dependency.req);
+    if (version && policy.approvedPrereleases[dependency.name] !== version) {
+      violations.push(`${dependency.name}: unapproved prerelease ${version}`);
+    }
+  }
+
+  for (const [cargoName, npmName] of policy.tauriFamily.pairs) {
+    const cargoDependency = dependencyByName(metadata, "extractum", cargoName);
+    const npmVersion = npmRequirement(packageJson, npmName);
+    if (!cargoDependency) violations.push(`${cargoName}: missing direct dependency`);
+    else if (requirementMajor(cargoDependency.req) !== policy.tauriFamily.cargoMajor) {
+      violations.push(`${cargoName}: Cargo requirement must use major ${policy.tauriFamily.cargoMajor}`);
+    }
+    if (!npmVersion) violations.push(`${npmName}: missing npm dependency`);
+    else if (requirementMajor(npmVersion) !== policy.tauriFamily.npmMajor) {
+      violations.push(`${npmName}: npm requirement must use major ${policy.tauriFamily.npmMajor}`);
+    }
+  }
+
+  const mcpBridge = dependencyByName(metadata, "extractum", "tauri-plugin-mcp-bridge");
+  const expectedMcpBridge = [0, policy.tauriFamily.mcpBridgeMinor];
+  if (!mcpBridge) violations.push("tauri-plugin-mcp-bridge: missing direct dependency");
+  else if (JSON.stringify(requirementMajorMinor(mcpBridge.req)) !== JSON.stringify(expectedMcpBridge)) {
+    violations.push(`tauri-plugin-mcp-bridge: requirement must stay within 0.${policy.tauriFamily.mcpBridgeMinor}`);
+  }
+  return violations;
+}
+
 function evaluateRustDuplicateBaseline(index) {
   const baseline = index.getJson(RUST_DUPLICATE_BASELINE_PATH);
   const actual = generateRustDuplicateBaseline(index.getCargoTree());
@@ -295,7 +409,9 @@ function evaluateRustDuplicateBaseline(index) {
 
 const evaluators = new Map([
   ["rule:extractum-grid-wrapper-boundary", evaluateExtractumGridWrapperBoundary],
+  ["rule:rust-dependency-policy", evaluateRustDependencyPolicy],
   ["rule:rust-duplicate-baseline", evaluateRustDuplicateBaseline],
+  ["rule:rust-toolchain-policy", evaluateRustToolchainPolicy],
   ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
   ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],
 ]);
