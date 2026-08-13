@@ -293,6 +293,7 @@ git commit -m "build: lock and streamline Rust verification"
 - Modify: `src-tauri/crates/extractum-prompt-packs/src/runtime.rs`
 - Modify: `src-tauri/crates/extractum-prompt-packs/src/lib.rs`
 - Modify: `src-tauri/src/prompt_packs/source_adapter.rs`
+- Modify: `src-tauri/src/prompt_packs/youtube_summary/mod.rs`
 - Modify: `src-tauri/src/apalis_jobs.rs`
 - Modify: `src-tauri/src/ingest_provenance.rs`
 - Modify: `src-tauri/src/job_helpers.rs`
@@ -638,6 +639,15 @@ test-support module once, private production/test type aliases where needed,
 and limiting the `MutexGuard` lifetime before the next await. Do not turn a
 mechanical cleanup into a public type or API change.
 
+For `duplicate_mod`, keep `youtube_summary/test_support.rs` as the single
+canonical module load. In `prompt_packs/youtube_summary/mod.rs`, add only a
+`#[cfg(test)] pub(crate)` adapter-support seam whose narrow wrappers delegate
+to the existing private `pub(super)` helpers. In
+`prompt_packs/source_adapter.rs`, delete the copied helper implementation and
+import those test-only wrappers. The seam exposes fixture construction only to
+crate tests, compiles out of production, and must not expose any production
+capability or broaden the canonical helpers outside test builds.
+
 Resolve the 17 `too_many_arguments` diagnostics at their 15 recorded source
 locations only with owning-function or affected application-command-inventory
 entry `#[allow(clippy::too_many_arguments)]` attributes and nearby ownership
@@ -674,6 +684,17 @@ state whether the mechanical rewrite preserved drop order or why the local
 allow was required. The takeout test must remain non-empty and prove the event
 recorder releases its lock before awaiting persisted state.
 
+Run every adapter test exactly after replacing the copied helpers:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_source_preserves_caller_order_missing_rows_and_nullables --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_video_maps_full_nullable_metadata_and_missing_rows --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_playlist_items_orders_position_then_row_id_and_preserves_unlinked_rows --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_transcript_segments_orders_segment_index_then_row_id --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::select_comment_candidates_applies_limit_order_and_decompression_fallback --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_comment_body_performs_a_fresh_read_with_decompression_fallback --locked -- --exact
+```
+
 Then run the owning package gates:
 
 ```powershell
@@ -699,6 +720,7 @@ Clippy command remains canonical and has no diagnostic flags.
 
 ```powershell
 git add src-tauri/crates/extractum-gemini-browser/src/execution.rs src-tauri/crates/extractum-gemini-browser/src/types.rs src-tauri/src/gemini_browser/sidecar.rs src-tauri/crates/extractum-llm/src/lib.rs src-tauri/crates/extractum-llm/src/scheduler.rs src-tauri/crates/extractum-telegram/src/live/peer.rs src-tauri/crates/extractum-telegram/src/runtime.rs src-tauri/crates/extractum-analysis/src/report.rs src-tauri/crates/extractum-analysis/src/state.rs src-tauri/crates/extractum-analysis/src/store/read_model.rs src-tauri/crates/extractum-analysis/src/report/tests/corpus_port.rs src-tauri/crates/extractum-analysis/src/tests.rs src-tauri/crates/extractum-prompt-packs/src/dto.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/gem_analysis.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs src-tauri/crates/extractum-prompt-packs/src/youtube_summary/synthesis_input.rs src-tauri/crates/extractum-prompt-packs/src/result_builder.rs src-tauri/crates/extractum-prompt-packs/src/runtime.rs src-tauri/crates/extractum-prompt-packs/src/lib.rs src-tauri/src/prompt_packs/source_adapter.rs src-tauri/src/apalis_jobs.rs src-tauri/src/ingest_provenance.rs src-tauri/src/job_helpers.rs src-tauri/src/projects/read_model.rs src-tauri/src/projects/mod.rs src-tauri/src/topic_memberships.rs src-tauri/src/prompt_packs/runtime_commands.rs src-tauri/src/accounts.rs src-tauri/src/takeout_import/recovery.rs src-tauri/src/sources/items/query.rs src-tauri/src/sources/items.rs src-tauri/src/youtube/captions.rs src-tauri/src/youtube/process_runtime.rs src-tauri/src/youtube/source_metadata.rs src-tauri/src/notebooklm_export/query.rs src-tauri/src/llm/profiles.rs src-tauri/src/llm/mod.rs src-tauri/src/gemini_browser/jobs.rs src-tauri/src/analysis/fixtures/seed/runs.rs src-tauri/src/analysis/fixtures/seed.rs src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/store/read_model.rs src-tauri/src/analysis/store/setup.rs src-tauri/src/analysis/mod.rs src-tauri/src/lib.rs src-tauri/src/external_process.rs src-tauri/src/diagnostics/database.rs src-tauri/src/library_sources/mod.rs src-tauri/src/migrations.rs src-tauri/src/telegram.rs src-tauri/src/takeout_import/mod.rs src-tauri/src/sources/store.rs src-tauri/src/analysis/tests_application.rs
+git add src-tauri/src/prompt_packs/youtube_summary/mod.rs
 git commit -m "refactor: establish Rust Clippy baseline"
 ```
 

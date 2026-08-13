@@ -254,8 +254,11 @@ lib-test totals are 22 `explicit_auto_deref`, 17 `too_many_arguments`, three
 `unnecessary_unwrap`, `implied_bounds_in_impls`, `match_result_ok`,
 `field_reassign_with_default`, `get_first`, and `await_holding_lock`.
 
-The authorized application scope is exactly these 35 files:
-`prompt_packs/source_adapter.rs`, `apalis_jobs.rs`, `ingest_provenance.rs`,
+The diagnostic inventory occupies exactly 35 files. The authorized application
+implementation scope is those 35 files plus one test-support ownership file,
+for 36 application files total:
+`prompt_packs/source_adapter.rs`, `prompt_packs/youtube_summary/mod.rs`,
+`apalis_jobs.rs`, `ingest_provenance.rs`,
 `job_helpers.rs`, `projects/read_model.rs`, `projects/mod.rs`,
 `topic_memberships.rs`, `prompt_packs/runtime_commands.rs`, `accounts.rs`,
 `takeout_import/recovery.rs`, `sources/items/query.rs`, `sources/items.rs`,
@@ -268,6 +271,17 @@ The authorized application scope is exactly these 35 files:
 `diagnostics/database.rs`, `library_sources/mod.rs`, `migrations.rs`,
 `telegram.rs`, `takeout_import/mod.rs`, `sources/store.rs`, and
 `analysis/tests_application.rs`, all below `src-tauri/src/`.
+
+The additional `prompt_packs/youtube_summary/mod.rs` authorization is limited
+to a test-only reuse seam: `youtube_summary/test_support.rs` remains the single
+canonical private module load, its existing `pub(super)` helpers remain
+private, and a `#[cfg(test)] pub(crate)` adapter-support wrapper surface may
+delegate to them for the sibling `source_adapter` tests. The copied fixture SQL
+and helper implementation in `source_adapter.rs` is forbidden. The wrapper
+surface compiles out of production and exposes no production capability. All
+six exact `prompt_packs::source_adapter::tests::*` cases, the application
+all-targets check/test checkpoint, workspace Clippy, and the full verifier own
+this correction. The complete Task 3 staging scope is 55 source files.
 
 Of the 62 third-stage target diagnostics, 43 are resolved only by
 behavior-preserving mechanical cleanup. The 17 `too_many_arguments`
