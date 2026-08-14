@@ -264,11 +264,28 @@ src-tauri/src/youtube/process_runtime.rs
 src-tauri/src/youtube/source_metadata.rs
 ```
 
-Focused non-empty tests passed for the sidecar wire shape, queued cancellation,
-prompt-pack provider default/serialization, prompt-pack feature-off surface,
-job filtering, configured credential/base-URL pairing, cancellation reaping,
-injected-timeout detach/cookie lifetime, and takeout cancellation persistence.
-The six exact `prompt_packs::source_adapter` canonical-fixture tests also passed.
+The following fully qualified exact focused tests passed; every command selected
+one non-empty test (1 passed, 0 failed). The six
+`prompt_packs::source_adapter` commands prove the canonical-fixture seam:
+
+| Command | Result |
+| --- | --- |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib tests::cancellation_smoke_services_remain_test_only --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib apalis_jobs::tests::apalis_jobs_list_filters_by_status_job_type_and_search --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::external_source_job_cancellation_reaps_its_managed_operation --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::injected_timeout_reap_detaches_stuck_child_and_keeps_cookie_until_release --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib takeout_import::tests::cancelled_job_emits_persisted_terminal_record --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_source_preserves_caller_order_missing_rows_and_nullables --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_video_maps_full_nullable_metadata_and_missing_rows --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_playlist_items_orders_position_then_row_id_and_preserves_unlinked_rows --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_transcript_segments_orders_segment_index_then_row_id --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::select_comment_candidates_applies_limit_order_and_decompression_fallback --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_packs::source_adapter::tests::load_comment_body_performs_a_fresh_read_with_decompression_fallback --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
+
 The final workspace Clippy command without diagnostic flags passed.
 
 ## License and duplicate policy
@@ -339,11 +356,12 @@ resolved or reviewed, time-bounded exceptions are committed.
 
 ## CI and release evidence boundary
 
-The executors are available at:
+Committed workflow definitions (local source links; these are not remote
+executor entry pages):
 
-- [Rust Fast workflow](https://github.com/acc20260425-lgtm/Extractum/actions/workflows/rust-fast.yml)
-- [Rust Full workflow](https://github.com/acc20260425-lgtm/Extractum/actions/workflows/rust-full.yml)
-- [scheduled advisory and Rust Release workflow](https://github.com/acc20260425-lgtm/Extractum/actions/workflows/rust-release.yml)
+- [Rust Fast workflow](../../../.github/workflows/rust-fast.yml)
+- [Rust Full workflow](../../../.github/workflows/rust-full.yml)
+- [scheduled advisory and Rust Release workflow](../../../.github/workflows/rust-release.yml)
 
 At the local evidence cutoff, the Wave 0 branch had not been pushed and no PR
 or manual release run existed, so there are no truthful GitHub Actions run URLs

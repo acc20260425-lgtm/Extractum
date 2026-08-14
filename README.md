@@ -257,7 +257,7 @@ Before running verification in a fresh checkout or worktree, and after sidecar
 packaging changes, bootstrap the ignored sidecar binary explicitly:
 
 ```powershell
-npm ci
+npm.cmd ci
 npm.cmd run bootstrap:testing
 npm.cmd run verify
 ```

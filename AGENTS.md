@@ -69,7 +69,7 @@
 <!-- cargo-test-support-features -->
 - Cross-package test-only seams use a narrow, non-default `*-test-support` feature enabled for the package only through the consumer's `[dev-dependencies]`; keep its normal `[dependencies]` edge feature-free. This provides development isolation, not a security boundary: expose only behavior-neutral helpers, never production capabilities or security controls.
 - With Cargo resolver v2, consumer tests, examples, benches, and consumer `cargo check --all-targets` / `cargo test --all-targets` activate and unify the dev feature. Both `--all-targets` commands are feature-on evidence and cannot prove feature-off.
-- Prove the producer's production surface with `cargo check --manifest-path src-tauri/Cargo.toml -p <producer> --lib --no-default-features`; prove the seam from its consumer with `cargo test --manifest-path src-tauri/Cargo.toml -p <consumer> --all-targets`. See `docs/superpowers/specs/2026-08-01-telegram-8c-extraction-design.md` for the worked example.
+- Prove the producer's production surface with `cargo check --manifest-path src-tauri/Cargo.toml -p <producer> --lib --no-default-features --locked`; prove the seam from its consumer with `cargo test --manifest-path src-tauri/Cargo.toml -p <consumer> --all-targets --locked`. See `docs/superpowers/specs/2026-08-01-telegram-8c-extraction-design.md` for the worked example.
 
 ## 5. Data Grid & Date Formatting
 - `ExtractumDataGrid` date/time columns use raw ISO strings, Unix seconds, Unix milliseconds, or `Date` values and opt into shared formatting only through an explicitly set `dateTimeFormat`.

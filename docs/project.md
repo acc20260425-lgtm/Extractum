@@ -78,7 +78,7 @@ Before the first `verify` in a fresh checkout or worktree, and after changing
 sidecar packaging, bootstrap its ignored Gemini Browser sidecar binary:
 
 ```powershell
-npm ci
+npm.cmd ci
 npm.cmd run bootstrap:testing
 npm.cmd run verify
 ```
@@ -94,10 +94,12 @@ The moving RustSec database is checked separately:
 npm.cmd run check:rust:advisories
 ```
 
-An advisory failure opens or updates the scheduled security follow-up and does
-not retroactively fail an unrelated deterministic PR gate. It blocks release
-until the dependency is updated or a reviewed, time-bounded exception records
-an owner, reason, and review date.
+A failed scheduled or manually dispatched advisory executor opens or updates
+the security follow-up; local advisory commands and tag-triggered release
+failures do not perform that action. An advisory failure does not retroactively
+fail an unrelated deterministic PR gate, but it blocks release until the
+dependency is updated or a reviewed, time-bounded exception records an owner,
+reason, and review date.
 
 <!-- daily-development-loop -->
 For the daily loop after a small change, choose the narrowest applicable command:
