@@ -31,17 +31,40 @@
   `build:tauri-prereqs`.
 
 <!-- focused-rust-loop -->
+- Run Rust commands from the repository root. The root `rust-toolchain.toml`
+  pins Rust `1.95.0`; all seven workspace packages inherit MSRV `1.95` and
+  Edition 2021 from `src-tauri/Cargo.toml`.
+- Use `npm.cmd run check:rust:fast` for the deterministic local/PR Rust gate:
+  rustfmt, locked workspace/all-target Clippy, the two producer feature-off
+  checks, and cargo-deny `bans licenses sources`.
+- Before the full gate in a fresh checkout/worktree, run
+  `npm.cmd run bootstrap:testing`; it owns `svelte-kit sync` and sidecar
+  packaging. Then run `npm.cmd run verify`. `verify` owns exactly one locked
+  workspace/all-target Cargo test and does not run a redundant workspace check.
+- Cargo-deny advisories are a separate moving-database command:
+  `npm.cmd run check:rust:advisories`. They run on schedule and before release,
+  not in the deterministic PR gate. A red advisory result blocks release unless
+  resolved or covered by a reviewed, time-bounded exception.
 - Every implementation plan that changes Rust must include a `## Rust Verification Loops` section naming affected packages, narrow RED/GREEN tests, focused checks, package checkpoints, and end-of-slice workspace gates.
 - After a small Rust change, use the owning package explicitly:
-  - exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact`;
-  - focused check: `cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets`;
-  - task checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets`.
+  - exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> --locked -- --exact`;
+  - focused check: `cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets --locked`;
+  - task checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets --locked`.
 - Changed, related, and focused package commands are accelerators, not completion evidence. An empty or unexpectedly small selection requires an explicit test or a wider run; `npm.cmd run verify` is the full gate and must run at the end of every Rust slice.
 - Use `-p extractum` while code belongs to the application; use the extracted domain package after it moves. Check every directly affected package separately.
 - A filtered Cargo run that reports `0 tests` is not verification. List tests first when the exact name is unknown, then run a non-empty selection.
 - When a public cross-crate interface changes, checkpoint the immediate dependent package; unchanged internal work does not pay that cost after every edit.
 - Every workspace member shares canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
 - For rare dependency-level native debugging, follow the [native-debug procedure](docs/project.md#native-dependency-debugging) rather than changing the normal build loop.
+- A toolchain bump is a dedicated migration wave: the commit changing
+  `rust-toolchain.toml` changes no other file; MSRV, lint, and source updates
+  follow in separately attributable commits with fresh evidence.
+- Update direct Rust dependencies with the explicit workspace manifest and a
+  precise package selection: `cargo update --manifest-path src-tauri/Cargo.toml -p <package> --precise <version>`. Change the manifest requirement first for a
+  SemVer-major update. Do not use broad incidental lockfile refreshes.
+- Any wave touching Tauri, `windows-sys`, Keyring, or SQLx requires a successful
+  manual Windows release job with bundle, MSI/NSIS artifacts, and application
+  and sidecar smoke evidence before acceptance.
 
 <!-- cargo-test-support-features -->
 - Cross-package test-only seams use a narrow, non-default `*-test-support` feature enabled for the package only through the consumer's `[dev-dependencies]`; keep its normal `[dependencies]` edge feature-free. This provides development isolation, not a security boundary: expose only behavior-neutral helpers, never production capabilities or security controls.

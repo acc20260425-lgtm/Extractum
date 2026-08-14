@@ -12,6 +12,22 @@ This document is the shortest current-state snapshot of the repository.
 
 ## Verification
 
+Rust commands issued from the repository root use the pinned Rust `1.95.0`
+toolchain in `rust-toolchain.toml`. The workspace declares MSRV `1.95` and
+Edition 2021 in `src-tauri/Cargo.toml`; the application and all six extracted
+crates inherit both values.
+
+For the deterministic Rust gate used locally and in pull requests, run:
+
+```powershell
+npm.cmd run check:rust:fast
+```
+
+It runs rustfmt, locked workspace/all-target Clippy, separate feature-off
+production checks for `extractum-telegram` and `extractum-prompt-packs`, and
+cargo-deny `bans licenses sources`. The feature-off checks are intentionally
+separate because consumer `--all-targets` builds activate test-support features.
+
 Run complete local verification before committing or merging:
 
 ```bash
@@ -33,16 +49,30 @@ The first four commands own the `unit-node`, `component`, `architecture`, and
 `os-integration` Vitest projects. `test:e2e` owns the Gemini Browser adapter
 Playwright suite, and `test:app:e2e` owns the application Playwright suite.
 
-`npm.cmd run verify` runs, in order:
+`npm.cmd run verify` runs the exact `createVerifySteps` sequence:
 
 1. `npm.cmd run check:gemini-browser-sidecar-binary`;
-2. all six owner commands above;
-3. `npm.cmd run check` and `npm.cmd run check:rustfmt`;
-4. `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
-5. `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
-6. `git diff HEAD --check`.
+2. `npm.cmd run test:unit`;
+3. `npm.cmd run test:component`;
+4. `npm.cmd run test:architecture`;
+5. `npm.cmd run test:integration:os`;
+6. `npm.cmd run test:e2e`;
+7. `npm.cmd run test:app:e2e`;
+8. `npm.cmd run check`;
+9. `npm.cmd run check:rustfmt`;
+10. `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked`;
+11. `git diff HEAD --check`.
 
-The repository has no CI workflow; `verify` is the complete repository gate.
+`verify` owns the sole locked workspace Cargo test. It does not run a
+workspace check first, and callers must not duplicate that test outside the
+verifier. The preceding fast Clippy gate compiles all workspace targets more
+strictly.
+
+CI is split by purpose: `Rust Fast` runs the deterministic Rust gate on pull
+requests and pushes to `main`; `Rust Full` bootstraps and runs the fast gate plus
+`verify`; `Rust Release` runs moving advisories and gates an optional Windows
+bundle job. Advisory monitoring is scheduled weekly and is not a deterministic
+PR gate.
 
 Before the first `verify` in a fresh checkout or worktree, and after changing
 sidecar packaging, bootstrap its ignored Gemini Browser sidecar binary:
@@ -53,9 +83,21 @@ npm.cmd run bootstrap:testing
 npm.cmd run verify
 ```
 
-`bootstrap:testing` may download the `pkg` runtime cache. `verify` only
-inspects this prerequisite; it never builds the sidecar automatically. Release
-builds remain separate: `tauri build` invokes `build:tauri-prereqs`.
+`bootstrap:testing` owns `svelte-kit sync`, then builds and checks the sidecar;
+it may download the `pkg` runtime cache. `verify` only inspects the sidecar
+prerequisite and never builds it automatically. Release builds remain separate:
+`tauri build` invokes `build:tauri-prereqs`.
+
+The moving RustSec database is checked separately:
+
+```powershell
+npm.cmd run check:rust:advisories
+```
+
+An advisory failure opens or updates the scheduled security follow-up and does
+not retroactively fail an unrelated deterministic PR gate. It blocks release
+until the dependency is updated or a reviewed, time-bounded exception records
+an owner, reason, and review date.
 
 <!-- daily-development-loop -->
 For the daily loop after a small change, choose the narrowest applicable command:
@@ -77,9 +119,9 @@ work.
 For a small Rust change, use the owning package explicitly while iterating:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact
-cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets
+cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> --locked -- --exact
+cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets --locked
+cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets --locked
 npm.cmd run test:rust:prompt-pack-runs
 ```
 
@@ -197,6 +239,30 @@ when retention is required, and record only sanitized source ids, counters,
 states, or warning codes in committed documentation.
 
 ## Dependency policy
+
+Update a direct Rust dependency from the repository root with the explicit
+workspace manifest and a precise package/version selection:
+
+```powershell
+cargo update --manifest-path src-tauri/Cargo.toml -p <package> --precise <version>
+```
+
+For a SemVer-major update, change the manifest requirement first. Keep direct
+updates attributable by owner; review any necessary transitive closure as part
+of that direct update, and reserve a broad residual transitive refresh for its
+own explicit commit. Do not intentionally update dependencies during toolchain,
+lint, or documentation work.
+
+A compiler/toolchain bump is a dedicated future migration wave. Its pin-only
+commit changes `rust-toolchain.toml` and no other file; MSRV changes, Clippy
+baseline work, and source changes follow separately with fresh evidence.
+
+The deterministic supply-chain policy is the pinned cargo-deny `0.20.2`
+`bans licenses sources` check included by `npm.cmd run check:rust:fast`.
+Advisories use the separate scheduled/release cadence described above. Changes
+to Tauri, `windows-sys`, Keyring, or SQLx require a successful manual Windows
+release run with bundling enabled, uploaded MSI and NSIS artifacts, a five-second
+application smoke, and the packaged-sidecar smoke before acceptance.
 
 The `grammers-*` crates are explicitly controlled crates.io dependencies because
 Extractum's Telegram behavior depends on upstream runtime details. Treat updates

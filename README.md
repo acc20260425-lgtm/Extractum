@@ -219,6 +219,36 @@ Fast path:
 For Browser Provider troubleshooting, especially Gemini DOM drift, see
 `docs/browser-providers-llm-troubleshooting.md`.
 
+## Rust toolchain and verification
+
+Rust commands run from the repository root use `rust-toolchain.toml`, pinned to
+Rust `1.95.0`. The application and all six extracted crates inherit MSRV `1.95`
+and Edition 2021 from the Cargo workspace.
+
+On Windows, prepare a fresh checkout and run the ordinary gates with:
+
+```powershell
+npm.cmd ci
+npm.cmd run bootstrap:testing
+npm.cmd run check:rust:fast
+npm.cmd run verify
+```
+
+`bootstrap:testing` owns SvelteKit synchronization and the ignored Gemini
+Browser sidecar binary. The fast command is the deterministic Rust gate;
+`verify` owns one locked workspace/all-target Cargo test and does not repeat a
+workspace check first. RustSec advisories are deliberately separate because
+their database moves independently:
+
+```powershell
+npm.cmd run check:rust:advisories
+```
+
+Advisory failures block releases, not unrelated deterministic PR gates. Direct
+dependency updates use `cargo update --manifest-path src-tauri/Cargo.toml -p <package> --precise <version>`. Toolchain bumps are isolated migration waves,
+and changes to Tauri, `windows-sys`, Keyring, or SQLx require the manual Windows
+bundle job and its MSI, NSIS, application, and sidecar smoke evidence.
+
 ## Gemini Browser Sidecar Packaging
 
 The Gemini Browser Provider uses a TypeScript/Playwright sidecar. Development
