@@ -1,775 +1,545 @@
-# Rust Wave 0 Final Hardening Design Addendum
+# Rust Wave 0 Final Hardening Design Amendment
 
-**Date:** 2026-08-14
+**Date:** 2026-08-15
 
-**Status:** Approved correction design; ready for implementation planning
+**Status:** Approved simplified correction design; ready for a replacement implementation plan
 
 **Amends:** `docs/superpowers/specs/2026-08-12-rust-infrastructure-upgrade-design.md`
 
-## Purpose and Readiness Boundary
+## Purpose and Authority
 
-This addendum closes the Important and Minor findings in
-`.superpowers/sdd/wave-0-final-review.md` without reopening the Rust
-infrastructure program. The original design remains authoritative where this
-addendum is silent. Where the documents conflict, this addendum controls the
-Wave 0 correction.
+This amendment closes the remaining Important and Minor Wave 0 findings with a
+smaller executable policy surface. It supersedes every earlier revision of this
+file and controls wherever it conflicts with the original Rust infrastructure
+design. The existing final-hardening implementation plan predates this
+amendment and must be replaced before implementation begins.
 
-The correction has three goals:
+The correction has four goals:
 
-1. make every claimed local and CI policy executable from a fresh checkout
-   without ambient tools or bypassable manifest/range checks;
-2. make duplicate and advisory handling fail for the right reason while
-   retaining the designed review-only paths; and
-3. close the bounded residual source, license, command, and documentation
-   findings before the branch is presented for remote execution.
+1. make pinned cargo-deny setup and execution one repository-owned operation;
+2. enforce manifest and direct-dependency facts without a TOML parser or a
+   second source of reviewed Tauri mappings;
+3. keep duplicate checking strict for the current graph while reducing
+   historical comparison to the one policy decision that matters: positive
+   per-package growth; and
+4. test GitHub Actions structurally while preserving least privilege and the
+   release advisory gate.
 
-The branch is not ready to merge at the start of this correction. It becomes
-**locally ready to push for remote evidence** only when the complete correction
-range has passed the focused and full local matrix in this document and a
-fresh whole-range review has no Important or Critical findings. It becomes
-**merge-ready** only after a later, user-authorized push produces green Rust
-Fast and Rust Full runs for the reviewed head. It is not release-ready while
-the advisory scan is red or until a successful gated bundle run supplies MSI,
-NSIS, application-smoke, sidecar-smoke, and hash evidence.
+The branch is locally ready for a separately authorized push only after the
+four code tasks, one combined code/spec review, the exact local acceptance
+sequence, the evidence commit, and a final whole-range review all complete.
+Merge readiness still requires green remote Rust Fast and Rust Full runs for
+the reviewed head. Release readiness additionally requires a successful
+advisory scan and gated bundle evidence.
 
 ## Non-Goals
 
 This correction does not:
 
-- upgrade Rust, Edition 2021, Cargo dependencies, npm dependencies, or the
-  cargo-deny pin;
-- resolve or suppress current RustSec findings;
-- change product behavior, IPC commands, persisted data, migrations, public
-  JSON, or frontend contracts;
-- rewrite the original design or restructure the completed Wave 0 plan;
-- add a second cargo-deny installer, a global install, or an ambient `PATH`
-  prerequisite;
-- automatically regenerate policy artifacts during a check;
-- push a branch, open a pull request, dispatch Actions, publish a release, or
-  claim remote evidence during implementation.
+- upgrade Rust 1.95.0, Edition 2021, Cargo dependencies, Cargo.lock, existing
+  npm dependencies, or cargo-deny 0.20.2;
+- add any npm dependency except the direct devDependency `yaml` and its exact
+  lockfile entry;
+- resolve, suppress, or add exceptions for current RustSec findings;
+- change product behavior, IPC, persisted data, migrations, public JSON,
+  frontend behavior, or product UI;
+- build a general TOML or YAML policy framework;
+- classify duplicate changes, manage exception expiry/lifecycle, or infer a
+  merge base;
+- push, create a PR, dispatch Actions, publish, or claim remote evidence.
 
-## Correction Architecture
+## Simplified Architecture
 
-The corrected system has four explicit boundaries:
+The correction has four implementation boundaries:
 
-1. a repository-owned PowerShell wrapper provides the pinned cargo-deny binary
-   to local npm commands and the existing composite action;
-2. repository rules inspect manifest syntax and compare a generated canonical
-   inventory of every direct Cargo edge;
-3. the duplicate CLI first proves that the active graph exactly equals the
-   current baseline, then optionally compares that baseline with an explicit
-   base commit; and
-4. the release workflow separates read-only advisory execution from the only
-   job allowed to write an issue.
+1. `scripts/cargo-deny.ps1` owns pinned tool installation, authentication,
+   cache publication, GitHub PATH publication, and policy execution.
+2. Repository rules use anchored manifest-line contracts plus Cargo metadata,
+   while `rust-dependency-policy.json` alone owns reviewed Tauri pairs and the
+   Cargo-only MCP record.
+3. The duplicate checker always proves current graph equality and optionally
+   compares one explicit base commit for positive cardinality growth.
+4. Workflow tests parse YAML into objects using the direct `yaml` devDependency
+   and assert security properties rather than mirroring whole workflow files.
 
-All checks are read-only. There are exactly two developer-only policy writers:
-`node scripts/rust-dependency-policy.mjs --write
-scripts/testing/rust-dependency-policy.json` and `node
-scripts/rust-duplicate-baseline.mjs --write
-scripts/testing/rust-duplicate-baseline.json`. Neither command is invoked by a
-verification alias, test setup, local acceptance sequence, or workflow.
+Checks are read-only. The two explicit developer writers remain:
 
-## Pinned Cargo-Deny for Local and CI Use
+```powershell
+node scripts/rust-dependency-policy.mjs --write scripts/testing/rust-dependency-policy.json
+node scripts/rust-duplicate-baseline.mjs --write scripts/testing/rust-duplicate-baseline.json
+```
 
-### Wrapper contract
+Neither writer is called by tests, verification aliases, or CI.
 
-Add `scripts/run-cargo-deny.ps1` as the sole operator-facing cargo-deny entry
-point. It supports exactly these modes:
+## Unified Pinned Cargo-Deny Runner
 
-- `-Mode Setup` installs/verifies the tool but runs no policy;
-- `-Mode Deterministic` runs `bans licenses sources`;
-- `-Mode Advisories` runs `advisories`.
+### One production script
 
-`.github/tools/cargo-deny.json` remains schema 1 and contains both the existing
-release-archive `sha256` and this exact extracted-executable digest:
+Replace/rename the existing `scripts/setup-cargo-deny.ps1` as
+`scripts/cargo-deny.ps1` and expand that one file into the only production
+PowerShell entry point. In Git this is the deletion of the old path and
+creation of the new path, not a second installer or wrapper. Do not create
+`scripts/run-cargo-deny.ps1`. The renamed script supports exactly:
+
+- `-Mode Setup`: authenticate or install the tool, run no policy;
+- `-Mode Deterministic`: run `bans licenses sources`;
+- `-Mode Advisories`: run `advisories`.
+
+`.github/tools/cargo-deny.json` remains schema 1 and retains the release archive
+URL/hash plus the reviewed extracted executable digest:
 
 ```json
 "binarySha256": "f7292fab58c706638c999e64c4ba82e5128ae628130ba55e3266a768ee431fbf"
 ```
 
-The wrapper reads version, target, archive hash, and binary hash from that
-manifest and uses the stable ignored directory
+The stable ignored cache is
 `src-tauri/target/.extractum-tools/cargo-deny/0.20.2-x86_64-pc-windows-msvc`.
-It does not
-read a user Cargo bin directory, inspect a global cargo-deny installation, or
-run `cargo install`. Before any cached executable is run, the wrapper hashes
-the file and requires exact equality with `binarySha256`. Only an
-already-authenticated executable receives the mandatory `--version` check for
-exact output `cargo-deny 0.20.2`; both digest and version must pass on every
-cache hit before policy execution.
+The script never inspects a user Cargo bin, global cargo-deny, or `cargo
+install`.
 
-Missing or digest/version-mismatched cache content causes the wrapper to call
-`scripts/setup-cargo-deny.ps1` for that exact directory. The setup script
-downloads and verifies the archive hash, extracts into its staging directory,
-hashes the extracted `cargo-deny.exe` against `binarySha256` **before** any
-version/self-check execution, then mandatorily runs the exact version check and
-publishes the digest-and-version-authenticated executable transactionally.
-Digest-rejected cached or freshly extracted candidates are never executed. A
-digest-authenticated candidate whose mandatory `--version` result is wrong is
-executed only for that version probe: it is never published, cached as valid,
-or run with Deterministic, Advisories, or any other policy arguments. A failed
-reinstall restores the previous authenticated executable, if one existed, but
-the current invocation still fails.
+On a cache hit it verifies the binary digest before any execution, then
+requires exact `--version` output `cargo-deny 0.20.2`. On a cold or rejected
+cache it downloads the configured archive into a staging directory, verifies
+the archive digest, extracts, verifies the executable digest before executing
+it, verifies the version, and publishes the executable transactionally. A
+digest-rejected file is never executed. A digest-valid but wrong-version file
+is used only for the version probe and is never published or used for policy.
 
-After setup or an authenticated cache hit, Deterministic and Advisories modes
-invoke that `cargo-deny.exe` by absolute path with explicit root `deny.toml` and
-`src-tauri/Cargo.toml`; they never call `cargo deny` and never fall back to an
-ambient executable. The wrapper propagates the policy exit code. `-Mode Setup`
-may accept `-AddToGitHubPath`; the other modes reject that switch. Any temporary
-environment or `GITHUB_PATH` change is rolled back on setup failure.
+`Setup -AddToGitHubPath` appends the normalized stable directory exactly once
+to `GITHUB_PATH` after authentication succeeds and does not mutate the current
+process PATH. Other modes reject `-AddToGitHubPath`. Failure restores the prior
+authenticated cache, if any, and fails the current invocation; a failed first
+install leaves no accepted executable.
 
-The npm aliases become thin wrapper calls. `check:rust:supply-chain` uses
-`Deterministic`, `check:rust:advisories` uses `Advisories`, and
-`check:rust:fast` continues to compose the deterministic alias. The composite
-action calls the wrapper in `Setup` mode with `-AddToGitHubPath`, so local and
-CI paths select the same cache layout and existing verified installer.
+Policy modes invoke the authenticated executable by absolute path with these
+root-level arguments before the selected checks:
 
-The documented fresh-checkout sequence remains:
-
-```powershell
-npm.cmd ci
-npm.cmd run bootstrap:testing
-npm.cmd run check:rust:fast
-npm.cmd run verify
+```text
+--config $RepositoryRoot/deny.toml --manifest-path $RepositoryRoot/src-tauri/Cargo.toml --locked check
 ```
 
-It now self-bootstraps cargo-deny. A contract test must prove that README,
-`docs/project.md`, and `AGENTS.md` point to the wrapper-backed alias and do not
-instruct a global cargo-deny install.
+They propagate cargo-deny's exit code. `check:rust:supply-chain` calls
+`Deterministic`, `check:rust:advisories` calls `Advisories`, and the composite
+Action calls `Setup -AddToGitHubPath`.
 
-### Failure and rollback
+The `.github/actions/setup-cargo-deny/` directory and composite Action name
+intentionally remain unchanged because that Action's single responsibility is
+still Setup. Only the production PowerShell script it invokes is renamed.
 
-A failed download, archive digest, extracted-binary digest, extraction, or
-version check leaves a previously authenticated cached binary in place through
-the setup transaction but still fails the current invocation. A failed first
-install leaves no executable accepted as valid. The wrapper never executes a
-candidate to establish its integrity and never deletes the shared Cargo target
-or user files. Retrying the same alias is the recovery path. Reverting the
-wrapper commit restores the prior command wiring without touching globally
-installed software because none is installed.
+### One behavioral test
 
-## Manifest-Syntax and Direct-Dependency Policy
+Create only `scripts/cargo-deny.test.ps1`. It launches the runner as a child
+`powershell.exe`, captures stdout, stderr, and exit code, and tests cold/warm
+cache, archive and binary digest rejection, wrong version, transactional
+rollback, absolute locked arguments, policy exit propagation, exactly-once
+GitHub PATH publication, and absence of ambient cargo-deny fallback.
 
-### Syntax-owned toolchain inheritance
+The test is behavioral. It does not assert source token order, character
+offsets, implementation text, or private helper names.
 
-Cargo metadata remains a secondary effective-value check, not evidence of
-inheritance. The repository index must load the root manifest and every member
-manifest named by the canonical seven-package policy. A section-aware TOML
-reader parses table headers, dotted keys, strings, booleans, and comments for
-the relevant tables; a whole-file regular expression is not an acceptable
-parser.
+## Manifest and Dependency Policy
 
-The rule requires all of the following simultaneously:
+### Anchored inheritance lines
 
-- root `[workspace.package]` owns exactly `rust-version = "1.95"` and
-  `edition = "2021"`;
-- every member's `[package]` table, including root `extractum`, contains
-  `rust-version.workspace = true` and `edition.workspace = true`;
-- no member substitutes literal `rust-version` or `edition` values, even when
-  they equal the workspace value;
-- all seven package names and manifest paths correspond to Cargo metadata and
-  the canonical workspace inventory;
-- effective metadata still reports Rust 1.95, Edition 2021, and unpublished
-  state for all seven packages; and
-- root `rust-toolchain.toml` remains the exact canonical artifact.
+Do not add a TOML parser. Normalize CRLF to LF and count these exact anchored
+lines in each of the seven manifests:
 
-Missing root ownership, duplicate relevant keys/tables, invalid values, a
-same-value hard-coded member, an extra/missing workspace package, or a manifest
-outside the repository is an infrastructure violation.
-
-### Canonical direct requirement inventory
-
-Bump `scripts/testing/rust-dependency-policy.json` to `schemaVersion: 2` and
-replace name-only policy maps with a generated, sorted `directRequirements`
-array covering every direct normal, build, and dev dependency edge in every
-workspace package. `scripts/rust-dependency-policy.mjs` generates the complete
-schema-2 candidate, prints it by default, and writes it only with explicit
-`--write scripts/testing/rust-dependency-policy.json`. Each direct entry has
-this exact shape:
-
-```json
-{
-  "package": "extractum",
-  "dependency": "tauri-build",
-  "rename": null,
-  "kind": "build",
-  "target": null,
-  "requirement": "^2"
-}
+```regex
+^edition\.workspace = true$
+^rust-version\.workspace = true$
 ```
 
-`kind` is exactly `normal`, `build`, or `dev`; `rename` and `target` are
-explicit strings or `null`. The identity key is
-`package/dependency/rename/kind/target`. Entries sort by those five fields.
-`requirement` is Cargo metadata's normalized requirement string. This exact
-inventory, rather than a first-number extractor, is the allowed language: a
-manifest change from `^2` to `^2 || ^3`, or from `^0.11` to `>=0.11`, changes
-the generated entry and fails until a dependency wave deliberately updates the
-policy.
+Each line must occur exactly once in:
 
-The schema-2 root contains exactly `schemaVersion`, `toolchain`,
-`directRequirements`, `npmRequirements`, `exactPins`,
-`approvedPrereleases`, and `tauriFamily`.
-The comparison is bidirectional. Every generated edge has exactly one policy
-entry, every policy entry has exactly one generated edge, and duplicate policy
-identities are invalid. Dev dependencies are never filtered out.
+- `src-tauri/Cargo.toml`;
+- `src-tauri/crates/extractum-analysis/Cargo.toml`;
+- `src-tauri/crates/extractum-core/Cargo.toml`;
+- `src-tauri/crates/extractum-gemini-browser/Cargo.toml`;
+- `src-tauri/crates/extractum-llm/Cargo.toml`;
+- `src-tauri/crates/extractum-prompt-packs/Cargo.toml`;
+- `src-tauri/crates/extractum-telegram/Cargo.toml`.
 
-`npmRequirements` is the separate canonical, sorted inventory of every direct
-root `package.json` edge whose name starts with `@tauri-apps/`. Each entry has
-exactly this shape:
+Only the six non-root member manifests prohibit literal lines matching
+`^edition\s*=` or `^rust-version\s*=`. The root manifest is intentionally
+different: its `[package]` inherits both values and its `[workspace.package]`
+owns the valid literals `edition = "2021"` and `rust-version = "1.95"`.
+Those two exact literal lines must each occur exactly once in the root.
+Therefore a whole-root-file literal prohibition would be incorrect.
 
-```json
-{
-  "owner": "extractum",
-  "name": "@tauri-apps/cli",
-  "kind": "devDependencies",
-  "requirement": "^2"
-}
-```
+Cargo metadata remains authoritative for effective values. It must report the
+exact seven sorted workspace package names, Rust version 1.95, Edition 2021,
+and unpublished state for every member. `rust-toolchain.toml` remains the exact
+canonical Rust 1.95.0/minimal/rustfmt/clippy/Windows-target artifact. Missing,
+duplicate, indented, commented-out, or altered inheritance lines fail even if
+metadata happens to resolve to the same effective value.
 
-`kind` is exactly `dependencies`, `devDependencies`, or
-`optionalDependencies`; the identity is `owner/name/kind`, sorted by those
-fields. Generation reads all three root maps and emits every matching edge.
-Comparison is bidirectional and rejects a missing, extra, duplicate, moved, or
-requirement-mismatched entry. Thus `^2 || ^3`, `>=2`, moving CLI from
-`devDependencies` to `dependencies`, deleting a pair, or adding an unowned
-`@tauri-apps/*` package all fail until the reviewed schema-2 policy is
-deliberately regenerated and committed.
+### Canonical direct inventories
 
-Exact-pin and prerelease ownership are also arrays, keyed to an exact direct
-edge rather than a dependency name alone:
+`scripts/testing/rust-dependency-policy.json` uses schema 2 and contains exact
+sorted arrays for:
 
-```json
-{
-  "package": "extractum-telegram",
-  "dependency": "grammers-client",
-  "rename": null,
-  "kind": "normal",
-  "target": null,
-  "requirement": "=0.10.0"
-}
-```
+- every direct Cargo normal/build/dev edge in every workspace member;
+- every root `@tauri-apps/*` npm edge in dependencies, devDependencies, or
+  optionalDependencies;
+- every exact Cargo pin; and
+- every direct Cargo requirement containing a prerelease comparator.
 
-```json
-{
-  "package": "extractum",
-  "dependency": "apalis",
-  "rename": null,
-  "kind": "normal",
-  "target": null,
-  "version": "1.0.0-rc.8"
-}
-```
+Its `toolchain` object remains the canonical Rust 1.95.0, MSRV 1.95, Edition
+2021, Windows target, and exact seven-package inventory; no generated code
+duplicates those values as a second reviewed policy.
 
-Every manifest requirement whose complete normalized range is one exact
-version must have one matching `exactPins` entry, and every `exactPins` entry
-must still identify an exact manifest edge. Every direct range containing a
-prerelease comparator must have one matching `approvedPrereleases` entry for
-that exact package edge and prerelease version, and every approval must remain
-in use. An exact prerelease therefore appears in both arrays. Stable exact pins
-and prereleases introduced in normal, build, or dev dependencies without these
-owning-package entries fail.
+Cargo identity is `package/dependency/rename/kind/target`; npm identity is
+`owner/name/kind`. Requirements are the normalized strings reported by Cargo
+metadata or stored in `package.json`. Comparison is bidirectional: missing,
+extra, duplicate, moved-kind, renamed, retargeted, or requirement-drifted
+entries fail.
 
-`tauriFamily` contains exactly `pairs` and `cargoOnlyRequirements` arrays.
-Every `tauriFamily.pairs` entry has exactly five fields: stable `id`, Cargo
-identity, reviewed `cargoRequirement`, npm identity, and reviewed
-`npmRequirement`. It has this exact object schema:
+The JSON artifact is the sole reviewed source for
+`tauriFamily.pairs` and `tauriFamily.cargoOnlyRequirements`. Production and
+test code must not contain a second exact map of pair IDs, identities, or
+requirements. The validator is generic:
 
-```json
-{
-  "id": "tauri-build-cli",
-  "cargo": {
-    "package": "extractum",
-    "dependency": "tauri-build",
-    "rename": null,
-    "kind": "build",
-    "target": null
-  },
-  "cargoRequirement": "^2",
-  "npm": {
-    "owner": "extractum",
-    "name": "@tauri-apps/cli",
-    "kind": "devDependencies"
-  },
-  "npmRequirement": "^2"
-}
-```
+- pair and Cargo-only objects have exact documented shapes;
+- IDs and referenced identities are unique and canonically ordered;
+- Cargo kinds are `normal`, `build`, or `dev`; npm kinds are `dependencies`,
+  `devDependencies`, or `optionalDependencies`;
+- every pair Cargo/npm reference resolves exactly once to generated inventory;
+- resolved requirements equal the reviewed requirement strings exactly;
+- every independently discovered governed Cargo/npm edge belongs to exactly
+  one pair; and
+- the separately discovered MCP bridge edge belongs to exactly one Cargo-only
+  record and no pair.
 
-Pair IDs and both identity references are unique. Each reference resolves
-exactly one canonical inventory entry, and the evaluator requires the resolved
-Cargo/npm `requirement` to equal the pair's reviewed requirement string
-exactly. There is no `cargoMajor`, `npmMajor`, range parsing, or first-number
-fallback.
+The writer regenerates the four factual inventories but preserves the
+committed reviewed `tauriFamily` values unchanged. It reports unresolved or
+candidate drift and leaves validation red until a reviewer edits the JSON.
+It never infers approval from manifests or `package.json`.
 
-The complete reviewed Wave 0 pair set is:
+Tests concentrate on meaningful policy drift: changed requirements, moved
+kinds, missing/extra inventory edges, duplicate/orphan/unpaired identities,
+missing or widened pair/Cargo-only records, and writer preservation. Small
+direct helper tests cover wrong containers, null nested identities, wrong
+scalar types, invalid kinds, duplicate IDs, duplicate identities, and ordering
+without reproducing the entire reviewed Tauri table in test code.
 
-| Pair ID | Cargo identity (`package/dependency/rename/kind/target`) | Cargo requirement | npm identity (`owner/name/kind`) | npm requirement |
-| --- | --- | --- | --- | --- |
-| `tauri-api` | `extractum/tauri/null/normal/null` | `^2` | `extractum/@tauri-apps/api/dependencies` | `^2` |
-| `tauri-build-cli` | `extractum/tauri-build/null/build/null` | `^2` | `extractum/@tauri-apps/cli/devDependencies` | `^2` |
-| `tauri-dialog` | `extractum/tauri-plugin-dialog/null/normal/null` | `^2` | `extractum/@tauri-apps/plugin-dialog/dependencies` | `^2` |
-| `tauri-opener` | `extractum/tauri-plugin-opener/null/normal/null` | `^2` | `extractum/@tauri-apps/plugin-opener/dependencies` | `^2` |
-| `tauri-sql` | `extractum/tauri-plugin-sql/null/normal/null` | `^2` | `extractum/@tauri-apps/plugin-sql/dependencies` | `^2.4.0` |
-
-The governed Cargo set is independently discoverable: root `extractum` direct
-edges named `tauri`, `tauri-build`, or starting `tauri-plugin-`, excluding the
-separately reviewed Cargo-only `tauri-plugin-mcp-bridge` edge. Every governed
-Cargo edge and every `npmRequirements` edge appears in exactly one pair. Every
-pair points to one member of each governed set. A deleted, duplicated, orphaned,
-missing, moved, Cargo-widened, or npm-widened pair/edge is a violation. The MCP
-bridge Cargo-only record separately stores its exact Cargo identity and
-reviewed `^0.11` requirement:
-
-```json
-{
-  "id": "tauri-plugin-mcp-bridge",
-  "cargo": {
-    "package": "extractum",
-    "dependency": "tauri-plugin-mcp-bridge",
-    "rename": null,
-    "kind": "normal",
-    "target": null
-  },
-  "cargoRequirement": "^0.11"
-}
-```
-
-`cargoOnlyRequirements` currently contains exactly this one record and no
-other. Each entry is an exact three-field object `{id, cargo,
-cargoRequirement}`; extra fields are invalid. Its stable `id` and exact
-five-field Cargo identity are each unique within the array. The Cargo-only
-governed set is independently discoverable and currently contains exactly the
-root `extractum` direct dependency whose name is
-`tauri-plugin-mcp-bridge`. Every member of that set appears in exactly one
-`cargoOnlyRequirements` entry, and every entry resolves to exactly one member
-of that set. The resolved canonical direct requirement must equal the reviewed
-`cargoRequirement` string exactly. An empty array, missing record, duplicate
-ID or Cargo identity, orphaned record, extra record or field, multiply
-referenced edge, or widened requirement is a violation.
-
-Policy generation is an explicit developer operation for dependency waves and
-is never part of ordinary verification.
-`--write` regenerates direct Cargo/npm inventories and exact/prerelease
-candidates, but copies the committed pair and Cargo-only IDs, identities, and
-reviewed requirement strings without changing them. It reports unresolved and
-candidate pair or Cargo-only differences and leaves the regenerated artifact
-failing until a reviewer deliberately edits the affected reviewed
-values/identity. It never infers approval from a new manifest or package
-requirement and never silently adds, removes, widens, or rewrites the reviewed
-Cargo-only record. The resulting diff receives the same dependency-owner
-review as the manifest/package change, and the ordinary checker never invokes
-the writer.
-
-## Diff-Aware Windows Duplicate Policy
+## Minimal Windows Duplicate Gate
 
 ### Current-state invariant
 
-Extend the existing duplicate CLI with read-only `--check` and optional
-local `--base` followed by one full or abbreviated commit ID. One shared
-semantic validator is applied without weakening to both current and historical
-baseline artifacts. It requires the exact top-level field set and all of these
-invariants:
+`scripts/rust-duplicate-baseline.mjs --check` runs the locked Windows graph:
 
-- `schemaVersion` is exactly `1`;
-- `target` is exactly `x86_64-pc-windows-msvc`;
-- `duplicateCardinality` is an alphabetically sorted object whose values are
-  integers greater than one;
-- `duplicateNameCount` equals the number of mapping keys;
-- `duplicateVersionInstanceCount` equals the arithmetic sum of mapping values;
-  and
-- no additional top-level field or unsorted/noncanonical mapping is accepted.
-
-After that identical semantic validation, the current baseline receives one
-additional live-state assertion: every counter and mapping entry equals the
-freshly generated active graph. That equality rejects stale ceiling slack after
-a reduction; the historical baseline is compared to the current baseline, not
-to the current live graph.
-
-A shared structural/attachment validator is applied identically to current and
-historical `scripts/testing/rust-supply-chain-exceptions.json`. It requires the
-exact schema-1 top-level fields `schemaVersion`, `licenseExceptions`,
-`advisoryExceptions`, and `duplicateGrowthExceptions`; the three exception
-values must be arrays. Every duplicate-growth entry has the exact six-field
-shape below, packages are unique and canonically sorted, counts are integers
-with `approvedCount > previousCount >= 1`, owner/reason are nonempty, and
-`reviewAfter` is syntactically valid RFC 3339 UTC. The validator receives the
-corresponding validated baseline and requires that baseline's cardinality for
-every present entry equal its `approvedCount`.
-
-Expiry is a separate time/transition rule. Present current entries must have a
-future `reviewAfter`; current-only mode therefore rejects any expired current
-entry. Historical entries may already be expired when read from a base commit:
-they still must pass the identical structure, sorting, uniqueness, date syntax,
-and historical-baseline attachment checks, while their expiry controls which
-transition is legal below. Neither mode invents a requirement for elevated
-packages that have no exception in its artifact.
-
-The ordinary local `check:rust:fast` alias runs `--check` without a base and
-therefore validates the active graph, current baseline, and every present
-current exception. It does not infer branch history.
-
-### Explicit base comparison
-
-Dependency waves run:
-
-```powershell
-$BaseSha = git rev-parse origin/main
-npm.cmd run check:rust:duplicates -- --base $BaseSha
+```text
+cargo tree --manifest-path src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --workspace --prefix none --format {p}
 ```
 
-Local execution accepts historical comparison only through `--base`; it does
-not read a local environment variable, guess `HEAD~1`, or calculate a merge
-base. It is rejected when `GITHUB_ACTIONS=true` and is mutually exclusive with
-either duplicate-base environment variable. The checker verifies that the
-argument resolves to a commit and reads both
-`scripts/testing/rust-duplicate-baseline.json` and
-`scripts/testing/rust-supply-chain-exceptions.json` from that commit with
-`git show`. An absent commit/artifact or any historical semantic-validation
-failure fails closed.
+It validates the baseline's exact schema-1 fields, target, sorted cardinality
+map, integer cardinalities greater than one, and counter arithmetic. The
+generated current graph must equal the committed baseline exactly. There is no
+ceiling or warning-only current-state path.
 
-Every GitHub job that can invoke duplicate checking sets
-`RUST_DUPLICATE_BASE_MODE` explicitly:
+The supply-chain exception artifact retains exact schema-1 top-level arrays.
+Each duplicate growth entry has exactly `package`, `previousCount`,
+`approvedCount`, `owner`, `reason`, and `reviewAfter`; packages are unique and
+sorted, counts are integers with `approvedCount > previousCount >= 1`, and the
+three text fields are nonempty strings. `reviewAfter` is retained as reviewed
+metadata but has no clock or expiry behavior in this correction.
 
-- Rust Fast sets `required`, uses `fetch-depth: 0`, and supplies
-  `RUST_DUPLICATE_BASE_SHA` as `github.event.pull_request.base.sha` for a pull
-  request or `github.event.before` for a push to `main`;
-- Rust Full and the release bundle set `off` and do not define
-  `RUST_DUPLICATE_BASE_SHA`.
+Current-only checking validates current graph equality and exception schema.
+It does not reject carried, unused, expired, renewed, reduced, or removed
+entries and does not classify the result.
 
-Under `GITHUB_ACTIONS=true`, missing/unknown mode fails. `required` rejects a
-missing, all-zero, or unresolvable SHA; `off` rejects a present SHA. Both modes
-reject CLI `--base`. Locally, either environment variable is rejected and the
-operator must use `--base`. These precedence rules prevent Fast from silently
-degrading to current-only and prevent Full/bundle from accidentally comparing
-an unrelated base.
+Unused `duplicateGrowthExceptions` entries are reviewed and removed manually
+when closing a dependency wave. This correction has no automated unused-entry
+check, expiry check, lifecycle transition, renewal, or cleanup writer.
 
-### Change classification and exceptions
+### Optional explicit base
 
-After current-state equality and both base validations succeed, the checker
-computes a deterministic per-package delta map before classifying the change.
-Absent mapping entries have cardinality one for growth arithmetic.
+The read-only CLI contract is:
 
-- Identical baseline state passes silently; carried identical active exception
-  entries remain valid when current cardinality equals `approvedCount`.
-- A pure reduction has at least one negative delta, no added duplicated name,
-  and no positive per-name delta. It passes and reports the lowered entries.
-- A true review-only replacement requires both aggregate counters to be
-  unchanged, a changed package set, unchanged cardinality for every common
-  package name, and equality between the sorted multiset of removed
-  cardinalities and the sorted multiset of added cardinalities. It emits a
-  deterministic nonblocking review notice and needs no growth exception.
-- Every other new duplicated name or positive per-name delta requires exactly
-  one valid current growth exception. A surviving-name increase or unmatched
-  added cardinality therefore cannot hide behind a flat or declining aggregate.
-
-For example, base `{ alpha: 3, gamma: 2 }` to current
-`{ beta: 2, gamma: 3 }` is not review-only because common `gamma` increased;
-`gamma` needs an exception and the unmatched added `beta` also needs one.
-An aggregate decrease with any surviving-name increase follows the same growth
-path rather than the pure-reduction path.
-
-Each `duplicateGrowthExceptions` entry has exactly this shape and no additional
-fields:
-
-```json
-{
-  "package": "windows-sys",
-  "previousCount": 5,
-  "approvedCount": 6,
-  "owner": "desktop-platform",
-  "reason": "Upstream Tauri graph requires both incompatible lines.",
-  "reviewAfter": "2026-09-14T00:00:00Z"
-}
+```text
+--check [--base SHA]
 ```
 
-For a new positive-growth entry, `previousCount` is the base cardinality, using
-`1` when the package was not duplicated, and `approvedCount` is the current
-cardinality. Package/previous/approved values must exactly match the applicable
-transition. `owner` and `reason` must be nonempty after trimming.
-`reviewAfter` is an RFC 3339 UTC instant ending in `Z`; an entry is expired
-when the current UTC instant is greater than or equal to it. Tests inject the
-clock; local and CI execution use the real UTC clock.
+With `--base`, resolve the supplied revision using `git rev-parse --verify
+SHA^{commit}` and read both historical artifacts using `git show`:
 
-Exception lifecycle comparison is an explicit state machine. For a base entry
-`{ previousCount: P, approvedCount: A }`, historical attachment proves the base
-cardinality is `A`; let current cardinality be `C`:
+- `scripts/testing/rust-duplicate-baseline.json`;
+- `scripts/testing/rust-supply-chain-exceptions.json`.
 
-- If `C == A`, current must carry the identical unexpired entry or perform a
-  metadata-only renewal with unchanged package/P/A, nonempty ownership/reason,
-  and `reviewAfter` strictly later than the base value and in the future.
-  Renewal is allowed whether the base entry is active or expired. An expired
-  base entry cannot be carried unchanged, so renewal is mandatory at `C == A`.
-- If `P < C < A`, this is a partial negative-delta reduction. Current must
-  replace the entry with `{ previousCount: P, approvedCount: C }`, retain
-  nonempty ownership/reason, and use a future `reviewAfter`; metadata may be
-  updated. This is not evaluated as positive growth.
-- If `C <= P`, this is a full reduction to or below the pre-exception level.
-  Current must remove the entry. Keeping it or replacing it is stale.
-- If `C > A`, this is positive growth from the previously approved level.
-  Only an unexpired base entry may transition to
-  `{ previousCount: A, approvedCount: C }`; an expired base entry must first be
-  renewed in a separate reviewed transition and cannot authorize more growth.
+An invalid or unresolvable revision is an infrastructure failure. If the commit
+exists but either historical artifact is absent, print an explicit
+`historical duplicate policy unavailable; skipping base comparison` notice and
+complete the strict current-only check. Do not partially compare one artifact.
+If both exist, validate both schemas; malformed present history fails.
 
-When no base entry exists, a new current entry is legal only for an actual
-positive per-name delta outside the true replacement predicate, with
-`previousCount` equal to base cardinality and `approvedCount` equal to current
-cardinality. A valid-looking entry added on an unchanged baseline is invented
-and fails. A balanced true review-only replacement must have no new exception;
-attaching one to any added replacement package fails. A missing exception fails
-only an actual positive delta that requires one.
+For each package whose current cardinality is greater than its base
+cardinality, require exactly one current `duplicateGrowthExceptions` entry
+whose `package`, `previousCount`, and `approvedCount` equal that transition.
+An absent name has base cardinality 1. The matching entry must also have
+nonempty `owner`, `reason`, and `reviewAfter`. Missing, duplicate, or
+count-mismatched approval fails. Decreases, unchanged names, replacement
+patterns, historical exception lifecycle, extra structurally valid current
+entries, and time are outside this minimal comparison.
 
-Present duplicate, expired-current, malformed, attachment-mismatched,
-invalidly renewed/reduced, invented, or impermissibly removed entries fail.
-Exceptions never permit active-graph/current-baseline drift. These rules allow
-persisted approvals to survive ordinary PRs, pushes, Full runs, and bundle runs
-while forcing partial reductions to lower their approval and expiry explicitly.
+There are no CLEAN/REVIEW/REDUCTION/VIOLATION classifications, no duplicate
+base modes, no environment resolver, and no Full/Release historical-base mode
+wiring. Output is pass/fail plus the explicit historical-skip notice.
 
-The CLI returns exit code `0` for clean, reduction, and review-only results and
-nonzero for infrastructure or policy violations. Its human output separates
-`VIOLATION`, `REVIEW`, and `REDUCTION`; tests assert the structured result so a
-review annotation cannot make the real-snapshot unit test fail.
+### GitHub base behavior
 
-## Advisory Execution and Least Privilege
-
-Rename the read-only job conceptually to `advisory-scan`. It has only
-`contents: read`. Checkout, toolchain inspection, pinned cargo-deny setup, and
-the advisory command execute in this job without issue-write authority.
-
-The advisory command step has `id: scan` and `continue-on-error: true`. The job
-exports `scan_outcome: ${{ steps.scan.outcome }}`. A later explicit shell step
-runs only when `steps.scan.outcome == 'failure'` and exits nonzero, restoring a
-red job result. Therefore the bundle continues to use
-`needs.advisory-scan.result == 'success'` and remains blocked by an actual
-advisory failure.
-
-A separate `advisory-issue-writer` job:
-
-- has `needs: advisory-scan`;
-- has `permissions: { issues: write }` and no checkout, cache, installer, shell,
-  artifact, or repository-content step;
-- owns `concurrency.group: rust-advisory-follow-up` with
-  `cancel-in-progress: false`, preserving serialization around the non-atomic
-  list-then-create/update issue operation;
-- contains only the pinned `actions/github-script` step; and
-- uses exactly the logical condition
-  `always() && needs.advisory-scan.outputs.scan_outcome == 'failure'` plus the
-  existing schedule-or-workflow-dispatch event restriction.
-
-If checkout, toolchain setup, cargo-deny setup, or any pre-scan step fails, the
-scan step has no `failure` outcome, the scan job is red, the bundle is blocked,
-and the writer is skipped. Such failures must never open or update an issue
-claiming that Rust advisories failed. A writer API failure makes the writer job
-red but does not grant it access to build secrets or change the scan result.
-
-## Immutable GitHub Actions
-
-Every remote Action reference in all Rust workflows is pinned to the following
-reviewed full commit SHA, with its mutable release line retained only as a
-comment:
+Rust Fast retains `push` on `main` and `pull_request` triggers without duplicate
+runs for branch pushes. A pull request performs this targeted fetch before the
+duplicate check:
 
 ```yaml
-actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+- name: Fetch duplicate-policy base
+  if: github.event_name == 'pull_request'
+  shell: pwsh
+  run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+- name: Check duplicate growth from PR base
+  if: github.event_name == 'pull_request'
+  run: npm.cmd run check:rust:duplicates -- --base ${{ github.event.pull_request.base.sha }}
+- name: Check current duplicate policy on main
+  if: github.event_name == 'push'
+  run: npm.cmd run check:rust:duplicates
+- name: Run the existing fast Rust gate
+  run: npm.cmd run check:rust:fast
 ```
 
-The contract inventory includes checkout, setup-node, upload-artifact,
-github-script, and Swatinem/rust-cache and rejects tags, branches, shortened
-SHAs, expressions, or unrecognized remote actions. Repository-local actions
-remain relative references. An Action update is manual: review the upstream
-release notes, resolve both the tag ref and its `^{}` annotated-tag peel, and
-require the selected workflow SHA to be the peeled
-object when the two differ. Verify with Git that the peeled object type is
-`commit`, inspect the upstream commit page and `action.yml` at that commit, and
-record the exact tag-object-to-commit evidence. Then update every occurrence
-and the central reviewed commit map in one isolated commit and rerun workflow
-mutation tests and the full local gate. The offline contract compares exact
-owner/action names with that reviewed map; accepting an arbitrary 40-hex value
-is forbidden. Automation may report a candidate but may not rewrite or merge
-these refs.
+`check:rust:fast` remains exactly its existing four-part composition: rustfmt,
+Clippy, the two production feature-off checks, and deterministic cargo-deny.
+It does not call `check:rust:duplicates`.
 
-For the accepted rust-cache v2 review, the evidence is exact: tag object
-`49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c` peels to commit
-`6323deb102c322ba6fcbdcafc7e3dddab59af2b6`, and the latter is the only allowed
-workflow/inventory value.
+On a PR the base-aware command already performs the strict current check, so
+the workflow does not run a second current-only duplicate command. On a direct
+push to `main`, it runs the current-only duplicate command exactly once. The PR
+checkout does not use full history. That event SHA is the target branch tip
+supplied by GitHub and is deliberately not a calculated merge base. The
+absent-historical-artifact skip remains the one defined in the preceding
+owning section.
 
-## Bounded Minor Corrections
+Rust Full invokes `npm.cmd run check:rust:duplicates` exactly once as an
+unconditional, separate current-only command without `--base`, duplicate mode,
+or a base-SHA environment variable. This covers Rust Full manual dispatch. On
+pull requests it intentionally repeats the current-equality proof already
+included in Rust Fast's base-aware check: the command is cheap, and an event
+condition would add branching to save only seconds.
 
-The final correction slice makes exactly these additional changes:
+In Release, exactly the `windows-bundle` job invokes that same current-only
+command exactly once. This covers tags and manual dispatch. Neither
+`advisory-scan` nor `advisory-issue-writer` invokes the duplicate command. A
+scheduled cron run that has no bundle runs advisories only and performs no
+duplicate check; this is intentional because it neither gates nor builds an
+artifact.
 
-1. Add `--locked` to `test:rust` and `test:rust:prompt-pack-runs`, and assert
-   both exact aliases and both unlocked negative mutations in
-   `scripts/verify.test.ts`; production verifier behavior is unchanged.
-2. Remove the currently unused `Apache-2.0 WITH LLVM-exception` allowance and
-   set both `unused-allowed-license = "deny"` and
-   `unused-license-exception = "deny"`. The deterministic cargo-deny gate and
-   separate unused-allowance/stale-exception mutations prove that neither form
-   of bootstrap slack survives.
-3. Correct only the stale Wave 0 prose: Task 2 RED stopped at the first failing
-   assertion while final GREEN covered both; the prompt-pack exact test is
-   `public_api_tests::cancellation_smoke_services_remain_test_only`; and the
-   verification record distinguishes the original reviewed range through
-   `9bcc047b9ec210c1ea34024f6dc782a1e7caec49` from the later hardening range.
-   The original design is not edited.
-4. Replace the sidecar self-round-trip assertion with a complete golden value.
-   Serialization must equal a literal object containing `type`, every run
-   result field, and all six artifact fields (including nulls). Deserialization
-   starts independently from that literal and equals the expected boxed Rust
-   value; it must not deserialize the serializer's output variable.
-5. Remove the unnecessary clone of the configured LLM API key. A private
-   result enum distinguishes a complete configured pair from partial
-   overrides; `configured_provider_access` consumes
-   `Option<SecretString>` and `Option<String>`, moves a complete key into
-   `LlmProviderAccess`, and returns partial values by ownership for existing
-   profile resolution. The key is never exposed, logged, serialized, converted
-   back to `String`, or persisted, and key-only/base-only fallback behavior is
-   unchanged. This is an explicit characterization-tested exception to the
-   usual strict RED ownership-shape rule: runtime assertions cannot prove that
-   a `SecretString` clone is absent. The existing complete/partial behavioral
-   cases are recorded green before and after the refactor; clone removal is
-   proved by the bounded diff review plus compiler, focused check, owner test,
-   and Clippy evidence. No artificial failing runtime test is claimed.
-6. Update `docs/value-registry.md` for every stable tooling-only value family
-   introduced by this hardening slice: cargo-deny wrapper modes `Setup`,
-   `Deterministic`, and `Advisories`; duplicate base modes `required` and
-   `off`; Cargo direct-requirement kinds `normal`, `build`, and `dev`; npm
-   direct-requirement kinds `dependencies`, `devDependencies`, and
-   `optionalDependencies`; and duplicate result classifications `VIOLATION`,
-   `REVIEW`, and `REDUCTION`. Each family records its script, workflow, or
-   policy-artifact owner; checked-in repository/CI persistence; absence of
-   product database, persistence API, and product UI impact (Actions log and
-   notice rendering are operational output, not product UI); and its owning
-   fixture and validator inventory. Existing registry families are extended
-   rather than duplicated.
+Step order relative to `npm.cmd run check:rust:fast` is unregulated. Rust Full
+and Release `windows-bundle` presence is a reviewed design fact checked during
+the combined review; it is not a fifth property of
+`github-rust-workflows.test.ts` and has no separate automated contract.
 
-## Data Flow
+## Structural Workflow Contracts and Advisory Isolation
 
-### Deterministic local gate
+### Direct YAML dependency
 
-1. `npm.cmd run check:rust:fast` runs formatting, Clippy, production-surface
-   checks, current duplicate validation, and deterministic supply-chain policy.
-2. Duplicate validation runs locked `cargo tree`, validates artifact structure,
-   and requires exact current graph equality.
-3. The cargo-deny wrapper validates/reuses the repository cache or calls the
-   checksum-owning setup script, then executes the pinned binary.
-4. No step writes a baseline, exception, lockfile, or global tool location.
+Add exactly one direct npm dependency edge: `yaml` in `devDependencies`, using
+major version 2. `package-lock.json` may change only to record the root direct
+edge and the resolved `yaml` package. Existing dependency versions and lockfile
+entries must not move. No runtime dependency is added.
 
-### Dependency-wave review
+Workflow tests use the documented ESM API:
 
-1. The wave deliberately changes manifests/lockfile and regenerates canonical
-   dependency and duplicate artifacts.
-2. The operator supplies the reviewed pre-wave commit using `--base`.
-3. The checker validates current equality, loads and semantically validates the
-   base baseline and exception artifact, classifies per-name deltas, and
-   validates current exception lifecycle against both base artifacts, current
-   graph, and UTC clock.
-4. Review-only replacement output is retained in the wave evidence; violations
-   block acceptance.
+```ts
+import { parse } from "yaml";
+const workflow = parse(source);
+```
 
-### Advisory and bundle flow
+They assert the resulting object graph. Do not keep or add a handwritten YAML
+indentation parser, exact workflow-text mirror, central approved Action SHA
+map, or complete YAML fixture duplicate.
 
-1. The read-only scan job checks out the reviewed revision and runs pinned
-   advisories.
-2. The scan step outcome becomes a job output; an explicit final step converts
-   only scan failure into job failure.
-3. A scan failure blocks the bundle and, for scheduled/manual runs, enables the
-   isolated issue writer through `always()`.
-4. A setup/infrastructure failure blocks the bundle but cannot satisfy the
-   writer condition.
+The workflow test contract owns exactly four security properties:
 
-## Failure Classification and Rollback
+- every external `uses` value is pinned to some full 40-hex commit SHA, while
+  repository-local `./` actions are exempt;
+- the advisory scanner has exactly `contents: read` permission;
+- the follow-up writer has exactly `issues: write` permission and runs only
+  when the classify step's output, derived only from the explicit deny step,
+  is the string `true`; and
+- the bundle needs a successful scanner result and has no `always()` or
+  `!cancelled()` bypass.
 
-Policy and infrastructure failures fail closed and never repair committed
-state automatically. A malformed manifest/policy artifact, current duplicate
-mismatch, unavailable base commit, expired current exception, expired
-historical exception carried unchanged, or unresolvable Action contract is a
-violation, not a review notice. An expired historical exception is not
-intrinsically malformed: it may transition only through future-dated metadata
-renewal or the partial/full reduction and removal cases in the state table; it
-cannot authorize `C > A` growth. The operator first determines
-whether the source graph or the committed policy is intended; only a deliberate
-dependency wave may regenerate and commit an artifact.
+The test file contains one scope comment listing only these owned properties,
+so later maintainers do not turn it back into a workflow mirror.
 
-Review-only duplicate output is non-mutating and needs no rollback. If its
-replacement is not acceptable, revert the dependency-wave manifest/lockfile
-and regenerated baseline together. A growth exception is rolled back with the
-growth it authorizes; a newly invented or stale exception is a failure, while
-an unchanged active base/current approval is intentionally carried.
+The test does not own exact Action SHA values, version comments, PR fetch
+content or ordering, unrelated step ordering, full-history behavior, or a
+textual copy of the workflows.
 
-The advisory scanner and writer do not update dependency or exception files.
-Retry infrastructure failures after restoring checkout/tool access. Resolve a
-real advisory or commit a separately reviewed time-bounded advisory exception;
-never make the issue writer green by weakening the scan. An Action-pin update
-rolls back by reverting its isolated reviewed commit to the previously listed
-full SHA.
+### Exact advisory flow
 
-The two Rust source corrections have no persistence or migration effect. Their
-rollback unit is the bounded minor-fix commit, followed by the two exact tests
-and owner checkpoints. No rollback path deletes caches, Cargo targets, secure
-storage, user databases, or release artifacts.
+`advisory-scan` runs on Windows with only `contents: read`. Checkout,
+toolchain inspection, local cargo-deny Setup, and the advisory command all run
+without issue-write authority. The deny step is exact:
+
+```yaml
+- id: deny
+  continue-on-error: true
+  run: npm.cmd run check:rust:advisories
+```
+
+The next step always runs after the deny attempt and classifies only that
+step's outcome:
+
+```yaml
+- id: classify
+  if: always()
+  shell: pwsh
+  run: |
+    "advisories_failed=${{ steps.deny.outcome == 'failure' }}" >> $env:GITHUB_OUTPUT
+```
+
+The job exports the classify-step value exactly:
+
+```yaml
+outputs:
+  advisories_failed: ${{ steps.classify.outputs.advisories_failed }}
+```
+
+The test rejects log parsing, job-level `failure()`, or a setup-step outcome as
+a substitute. The final step is exact:
+
+```yaml
+- name: Fail when advisory scan failed
+  if: ${{ steps.deny.outcome == 'failure' }}
+  shell: pwsh
+  run: exit 1
+```
+
+It turns a real advisory failure back into a failed scanner job.
+
+`advisory-issue-writer` needs `advisory-scan`, has exactly `issues: write`,
+runs on Ubuntu, keeps serialized `rust-advisory-follow-up` concurrency, and
+contains only a full-SHA-pinned `actions/github-script` step. Its condition is
+the conjunction of:
+
+- `always()`;
+- `needs.advisory-scan.outputs.advisories_failed == 'true'`; and
+- schedule or explicit workflow-dispatch event.
+
+The resulting job condition is exact:
+
+```yaml
+if: ${{ always() && needs.advisory-scan.outputs.advisories_failed == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+```
+
+It lists open issues, updates the existing advisory follow-up issue when
+present, or creates one otherwise. It receives no checkout, cache, installer,
+artifact, shell, repository content, or build secret.
+
+If checkout, toolchain inspection, or cargo-deny Setup fails, the deny step is
+skipped. The `always()` classify step writes `advisories_failed=false` when it
+can run; if classification itself cannot run, the job output is absent. In
+both cases the writer's exact string comparison is false and no advisory issue
+is opened. If the deny step fails, classify writes `true`, the explicit output
+enables the writer only on the allowed events, the final step makes the scanner
+red, and the bundle is blocked.
+
+The bundle job has `needs: advisory-scan` and preserves its existing tag/manual
+event restriction while adding the positive predicate
+`needs.advisory-scan.result == 'success'`. It does not use `always()` or
+`!cancelled()` to bypass the scanner result.
+
+## Bounded Residual Corrections
+
+The final slice retains these already approved corrections:
+
+1. Add `--locked` to `test:rust` and `test:rust:prompt-pack-runs`, with positive
+   and unlocked-negative alias tests.
+2. Remove the unused `Apache-2.0 WITH LLVM-exception` allowance and set both
+   `unused-allowed-license` and `unused-license-exception` to `deny`, with
+   focused mutations owned by `repository-rules.test.ts`.
+3. Replace the Gemini sidecar self-round-trip with an independent literal
+   golden object in both serialization and deserialization directions,
+   including every run-result and artifact field.
+4. Move configured LLM secret ownership through a private result enum without
+   cloning, exposing, logging, serializing, converting, or persisting the key;
+   complete, key-only, base-only, empty-key, and empty-base behavior stays the
+   same.
+5. Correct only stale Wave 0 plan/verification facts and record the final local
+   evidence without unsupported remote claims.
+6. Update `docs/value-registry.md` only for values still introduced here:
+   cargo-deny modes `Setup`, `Deterministic`, `Advisories`; Cargo kinds
+   `normal`, `build`, `dev`; and npm kinds `dependencies`, `devDependencies`,
+   `optionalDependencies`. Do not add duplicate modes or duplicate result
+   classifications because this design introduces neither.
 
 ## Authorized Implementation Scope
 
-The implementation plan may modify only these categories:
+Implementation may modify only:
 
-- local tool orchestration: `scripts/run-cargo-deny.ps1`,
-  `scripts/run-cargo-deny.test.ps1`,
-  `scripts/setup-cargo-deny.ps1`, `.github/tools/cargo-deny.json`,
-  `.github/actions/setup-cargo-deny/action.yml`, `package.json`, and
-  `scripts/verify.test.ts` (the last file owns only the two locked-alias
-  positive and negative contracts);
-- executable policy: duplicate generator/checker and tests,
-  `scripts/rust-dependency-policy.mjs` and its tests,
-  `scripts/testing/rust-dependency-policy.json`,
-  `scripts/testing/rust-duplicate-baseline.json`,
-  `scripts/testing/rust-supply-chain-exceptions.json`, repository
-  index/rules/tests and their registered-rule inventory;
-- CI contracts: the three Rust workflow files and
+- rename `scripts/setup-cargo-deny.ps1` to `scripts/cargo-deny.ps1` (delete the
+  old path and create the new path), and create `scripts/cargo-deny.test.ps1`;
+  this is one production-script replacement, not two scripts;
+- do not create or modify any `run-cargo-deny.ps1` file;
+- `.github/tools/cargo-deny.json`,
+  `.github/actions/setup-cargo-deny/action.yml` (the composite directory/name
+  intentionally remains Setup-owned), `package.json`, `package-lock.json`, and
+  `scripts/verify.test.ts`;
+- `scripts/rust-dependency-policy.mjs`, its test, and
+  `scripts/testing/rust-dependency-policy.json`;
+- `scripts/rust-duplicate-baseline.mjs`, its test,
+  `scripts/testing/rust-duplicate-baseline.json`, and
+  `scripts/testing/rust-supply-chain-exceptions.json`;
+- `scripts/testing/repository-rules.mjs`,
+  `scripts/testing/repository-rules.test.ts`, and
+  `scripts/testing/test-conventions.test.ts`;
+- `.github/workflows/rust-fast.yml`, `.github/workflows/rust-full.yml`,
+  `.github/workflows/rust-release.yml`, and
   `scripts/testing/github-rust-workflows.test.ts`;
-- license policy: `deny.toml`;
-- bounded Rust corrections:
-  `src-tauri/crates/extractum-gemini-browser/src/types.rs` and
-  `src-tauri/src/llm/mod.rs` only;
-- canonical operator and value-contract docs: `README.md`, `AGENTS.md`,
-  `docs/project.md`, and `docs/value-registry.md`;
-- stale factual corrections in
+- `deny.toml`;
+- `src-tauri/crates/extractum-gemini-browser/src/types.rs` and
+  `src-tauri/src/llm/mod.rs`;
+- `README.md`, `AGENTS.md`, `docs/project.md`, and
+  `docs/value-registry.md`;
+- replace the superseded implementation plan
+  `docs/superpowers/plans/2026-08-14-rust-wave-0-final-hardening.md`;
+- factual corrections in
   `docs/superpowers/plans/2026-08-12-rust-infrastructure-wave-0.md` and
-  `docs/superpowers/verification/2026-08-12-rust-infrastructure-wave-0.md`,
-  plus the new factual record
-  `docs/superpowers/verification/2026-08-14-rust-wave-0-final-hardening.md`.
+  `docs/superpowers/verification/2026-08-12-rust-infrastructure-wave-0.md`;
+- create
+  `docs/superpowers/verification/2026-08-15-rust-wave-0-final-hardening.md`.
 
 No other Rust source, Cargo manifest, Cargo lockfile, frontend source,
-migration, configuration schema, original design, or unrelated documentation
-is authorized. If an implementation test demonstrates that another file is
-necessary, implementation stops for a reviewed design amendment rather than
-expanding scope implicitly.
+migration, product configuration, dependency, or unrelated documentation is
+authorized. `package.json` and `package-lock.json` changes are limited to the
+single direct `yaml` devDependency and required script aliases; no existing
+npm package version may change. An implementation need outside this list stops
+for a reviewed design amendment.
 
 ## Verification Matrix
 
-| Contract | Required mutations or negative evidence | Focused GREEN evidence | Slice/full evidence |
-| --- | --- | --- | --- |
-| Local cargo-deny wrapper | missing cache; fake executable with expected version text but wrong binary digest; correctly hashed wrong-version fixture; omitted cache-hit/staged version check; archive/binary checksum failure; ambient cargo-deny absent; transaction/environment restoration | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-cargo-deny.test.ps1`; two absolute-path invocations against the digest-and-version-authenticated stable cache; `npm.cmd run check:rust:supply-chain` | fresh-checkout documented sequence and `npm.cmd run check:rust:fast` |
-| Manifest inheritance | replace one `rust-version.workspace = true` with literal `rust-version = "1.95"`; replace Edition inheritance with literal 2021; remove root workspace value; add duplicate relevant key | `npm.cmd run test:unit -- scripts/testing/repository-rules.test.ts scripts/testing/test-conventions.test.ts` | `npm.cmd run test:unit`; `npm.cmd run check` |
-| Direct requirements | Cargo `^2 || ^3`, `>=0.11`, new dev edge, unowned stable exact pin/prerelease, missing/stale/duplicate edge; npm `^2 || ^3`, `>=2`, moved kind, missing/extra edge; deleted pair, duplicate pair ID/identity, orphan pair, unpaired governed edge, Cargo widened against pair, npm widened against pair, and writer-generated candidate without reviewed pair update; empty/missing Cargo-only array, duplicate Cargo-only ID/identity, orphaned/extra-field/extra-record Cargo-only entry, widened MCP bridge requirement, and writer auto-approval instead of preserving the reviewed record | `npm.cmd run test:unit -- scripts/rust-dependency-policy.test.ts scripts/testing/repository-rules.test.ts scripts/testing/test-conventions.test.ts` over Cargo normal/build/dev and npm dependencies/devDependencies/optionalDependencies; writer fixture proves Cargo-only ID/identity/requirement preservation | `npm.cmd run test:unit`; real repository-rule snapshot |
-| Duplicate structure/current state | malformed current and historical baseline/exception artifacts: extra fields, wrong schema/target, unsorted keys, invalid integers/arithmetic, duplicate or attachment-mismatched present exception, and expired current exception; stale reduction; graph/baseline drift | `npm.cmd run test:unit -- scripts/rust-duplicate-baseline.test.ts scripts/testing/repository-rules.test.ts`; `npm.cmd run check:rust:duplicates` | `npm.cmd run check:rust:fast`; `npm.cmd run verify` |
-| Duplicate base comparison | missing commit/artifact; pure reduction; balanced true replacement with no exception; balanced replacement with invented exception; unchanged baseline with no base entry plus valid-looking invented current entry; mixed/retained growth; valid/missing growth exception; active carry; expired historical entry carried unchanged; active or expired-base future-dated metadata renewal; expired-base partial/full reduction or removal; expired-base `C>A` rejection; base `{P:5,A:7}` to `C:6` requiring `{P:5,A:6}`; `C<=5` requiring removal; illegal removal at `C:6`; positive `C>A` from active base; UTC equality expiry | fixture CLI tests with explicit local `--base`; `npm.cmd run check:rust:duplicates -- --base 9bcc047b9ec210c1ea34024f6dc782a1e7caec49` returns a nonempty structured result | Fast contract proves `required` plus SHA/full history; Full/release prove `off` and absent SHA |
-| Duplicate mode | Fast missing mode/SHA; Fast all-zero SHA; `off` with SHA; local env use; CI `--base`; CLI/environment conflict | duplicate CLI and workflow mutation tests | focused workflow tests; real explicit-base command above |
-| Advisory isolation | scanner given write scope; scan lacks `continue-on-error`; missing output/final fail; writer uses `failure()`; setup failure enables writer; missing/cancelling writer concurrency; bundle ignores scan result | `npm.cmd run test:unit -- scripts/testing/github-rust-workflows.test.ts` | `npm.cmd run test:unit`; workflow syntax inspection; remote behavior remains post-push evidence |
-| Immutable Actions | each mutable tag, short SHA, tag-object SHA, expression ref, missing version comment, unknown remote action, or SHA differing from reviewed commit map | `npm.cmd run test:unit -- scripts/testing/github-rust-workflows.test.ts` | `npm.cmd run test:unit`; recorded peeled-tag/commit-object/action.yml evidence; `git diff --check` |
-| Locked aliases/license | remove `--locked` from either alias; add unused allowed license; add stale license exception; restore either unused lint to warn | `npm.cmd run test:unit -- scripts/verify.test.ts`; `npm.cmd run check:rust:supply-chain` | `npm.cmd run check:rust:fast`; `npm.cmd run verify` |
-| Sidecar golden wire shape | change a tag, field, null/default, or deserialize from serializer output | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact` | Gemini Browser package all-target checkpoint; `npm.cmd run verify` |
-| Owned secret move | complete pair, key-only, base-only, empty-key, empty-base characterization passes before/after; no fabricated runtime RED; bounded diff proves removal of clone | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact` before and after | diff review; compiler and Clippy; `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --locked`; owner test; `npm.cmd run verify` |
-| Value registry | omit or misspell any wrapper mode, duplicate-base mode, Cargo/npm requirement kind, or result classification; omit owner, checked-in persistence, product API/database/UI impact, or fixture/validator inventory | documentation contract test plus targeted `rg` assertions over `docs/value-registry.md` and the owning scripts, policy artifact, workflows, and fixtures | `npm.cmd run test:unit`; authorized-scope scan confirms the registry change is included and no product schema/UI file changed |
-| Docs/evidence | unfinished markers, stale zero-test filter, global cargo-deny instructions, or unsupported CI claim | targeted `rg` scans and documentation contract tests | `git diff --check`; whole-range review |
+| Contract | Required negative evidence | Focused GREEN evidence |
+| --- | --- | --- |
+| Unified cargo-deny runner | cold/warm cache, wrong archive/binary hash, digest-valid wrong version, failed first install, rollback, ambient tool absent, wrong policy exit, duplicate GitHub PATH | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/cargo-deny.test.ps1`; `npm.cmd run check:rust:supply-chain` |
+| Manifest inheritance | missing/duplicate/indented/commented inheritance line; literal in each non-root member; missing root workspace literal; wrong effective metadata/inventory | repository-rule and convention tests; real repository snapshot |
+| Direct dependency policy | Cargo/npm requirement or kind drift, missing/extra/duplicate edge, orphan/unpaired pair, widened MCP record, malformed helper shapes, writer changes reviewed Tauri values | dependency-policy and repository-rule tests; explicit writer preservation fixture |
+| Current duplicate gate | malformed baseline/exception schema, arithmetic/sort failure, stale baseline, live graph drift | duplicate and repository-rule tests; `npm.cmd run check:rust:duplicates` |
+| Historical duplicate growth | invalid revision, malformed present history, one/both artifact absent skip, absent-name growth from 1, surviving-name growth, exact/missing/duplicate/mismatched approval | fixture-repository CLI tests; explicit known-base command |
+| Structural workflow policy | (1) mutable/short external Action ref; (2) scanner extra/missing permission; (3) writer permission or mandatory deny/classify/fail/job-output/`advisories_failed == 'true'` wiring drift, including setup failure treated as deny failure; (4) bundle scanner-success bypass | YAML-object workflow tests using `parse`; static workflow inspection |
+| npm scope | missing direct `yaml`, runtime placement, any existing package or lock version changes | package/lock mutation test and bounded diff review |
+| Locked aliases and licenses | remove either `--locked`; restore either unused-license warning; add stale allowance/exception | verify and repository-rule tests; deterministic cargo-deny |
+| Sidecar golden | changed tag/field/null or deserialization from serializer output | exact Gemini Browser owner test and package checkpoint |
+| Secret ownership | complete/partial/empty characterization before and after; clone reintroduced | exact application owner test, bounded diff, check, Clippy, package checkpoint |
+| Docs, registry, evidence | obsolete duplicate modes/classifications, global cargo-deny instruction, stale facts, unfinished or remote claims | documentation contracts, targeted stale scan, whole-range review |
 
-The full local acceptance sequence is exact and ordered:
+## Exact Local Acceptance
+
+Run in this order from the repository root:
 
 ```powershell
+npm.cmd ci
 npm.cmd run test:unit -- scripts/verify.test.ts scripts/rust-dependency-policy.test.ts scripts/rust-duplicate-baseline.test.ts scripts/testing/repository-rules.test.ts scripts/testing/test-conventions.test.ts scripts/testing/github-rust-workflows.test.ts
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-cargo-deny.test.ps1
-npm.cmd run check:rust:duplicates -- --base 9bcc047b9ec210c1ea34024f6dc782a1e7caec49
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/cargo-deny.test.ps1
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --locked
@@ -779,67 +549,83 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets --loc
 npm.cmd run test:unit
 npm.cmd run check
 npm.cmd run bootstrap:testing
+npm.cmd run check:rust:duplicates
+npm.cmd run check:rust:duplicates -- --base 9bcc047b9ec210c1ea34024f6dc782a1e7caec49
 npm.cmd run check:rust:fast
 npm.cmd run verify
 npm.cmd run check:rust:advisories
 git diff --check
 ```
 
-The advisory command is recorded truthfully and may remain red for the moving
-RustSec database; it is not converted into a deterministic-gate success. Any
-new advisory is reported rather than silently added to an exception.
+Commands through `verify` are deterministic PASS requirements. The final
+advisory command is recorded truthfully and may remain nonzero for the moving
+RustSec database; it remains a release blocker and never auto-creates an
+exception. Evidence must also prove that the package/lock diff adds only the
+direct `yaml` devDependency and its resolved lock entry.
 
-## Correction Commit and Review Order
+## Four Code Tasks, Review, and Evidence Order
 
-Implementation uses this order, with no squashing:
+Implementation uses four code tasks and does not perform per-task reviews:
 
-1. `build: bootstrap pinned cargo-deny locally` — archive/binary manifest
-   hashes, transactional setup, absolute-path wrapper, composite action,
-   aliases, wrapper contracts, and fresh-checkout docs;
-2. `test: harden Rust manifest and dependency policy` — syntax ownership,
-   complete Cargo/npm inventories, reviewed Tauri pair requirements,
-   exact/prerelease ownership, and mutations;
-3. `test: make Rust duplicate policy diff-aware` — structure/current equality,
-   explicit base comparison, exact exception schema, CI base wiring, and tests;
-4. `ci: isolate advisory writes and pin actions` — scanner/writer split,
-   bundle dependency, full SHAs, comments, and workflow mutations;
-5. `fix: close Rust Wave 0 minor findings` — locked residual aliases, strict
-   unused-license policy, stale factual prose, golden sidecar fixture, and
-   owned secret move;
-6. `docs: verify Rust Wave 0 final hardening` — factual local commands,
-   results, reviewed range, and explicitly pending remote evidence.
+1. `build: consolidate pinned cargo-deny runner` — rename the existing setup
+   script into the unified runner, then update its manifest, composite action,
+   aliases, behavioral PowerShell test, and operator docs.
+2. `test: harden Rust dependency and duplicate policy` — anchored inheritance
+   checks, generated inventories, JSON-owned Tauri mapping, generic dependency
+   validation, strict current duplicate equality, optional base artifacts,
+   historical skip, positive-growth approval, exact PR-base fetch, and focused
+   tests.
+3. `ci: isolate advisory writes with structural workflow contracts` — direct
+   `yaml` devDependency and lock entry, parsed workflow security contracts,
+   exact deny/classify/fail/output wiring, isolated follow-up writer, and
+   successful-scanner bundle gate, plus one unconditional current-only
+   duplicate invocation in Rust Full and one current-only invocation in
+   Release `windows-bundle`; advisory-only scheduled runs do not invoke it.
+4. `fix: close bounded Rust Wave 0 findings` — strict licenses, locked aliases,
+   golden sidecar, clone-free secret ownership, reduced value registry, stale
+   factual docs, and focused Rust/documentation evidence.
 
-Each commit receives an immediate scope/spec/code review. A correction from
-that review is a separate adjacent commit and is re-reviewed before the next
-numbered slice. After the six slices and any adjacent corrections, run the full
-matrix, review the entire original-Wave-0-plus-hardening range, and record the
-exact reviewed head. Implementation stops there: pushing, PR creation, remote
-Fast/Full evidence, advisory issue behavior, bundle dispatch, and release
-evidence require separate user authorization.
+After Task 4, run one combined authorized-scope, spec-compliance, and code-
+quality review over all four commits. Review corrections are adjacent commits
+and are rechecked as one combined range; there are no per-task review gates.
+Then run the exact acceptance sequence and commit only the factual record as:
+
+5. `docs: verify Rust Wave 0 final hardening`.
+
+Finally review the whole implementation-and-evidence range, including the
+evidence commit, from `77c739a321f08fc49d7a46d846d2a93a0dafc116`
+through the exact committed head. Record the reviewed head and findings in the
+ignored final-review report and handoff. Implementation stops before push,
+PR, workflow dispatch, bundle, or release action.
 
 ## Success Criteria
 
 The correction is complete locally when:
 
-- a fresh checkout obtains the pinned cargo-deny through the repository cache
-  and existing checksummed setup script without an ambient/global install;
-- manifest syntax, all Cargo direct dependency kinds, all root Tauri npm edges,
-  reviewed one-to-one Tauri pairs, exact pins, and prereleases are enforced
-  bidirectionally without range extraction or writer auto-approval;
-- the active duplicate graph exactly equals its valid current baseline, base
-  comparisons validate both historical artifacts, only balanced true
-  replacements remain review-only, and all other positive per-name growth has
-  a complete unexpired attributable exception with a valid lifecycle;
-- advisory scanning is read-only, issue writing is isolated and outcome-based,
-  setup failures cannot create advisory issues, and the bundle still blocks;
-- every remote Action uses the listed immutable full SHA with a version comment;
-- both residual Cargo aliases are locked, unused licenses fail, stale prose is
-  factual, the sidecar wire test is golden in both directions, and the API key
-  moves by ownership without exposure or changed fallback behavior;
-- every introduced tooling-only mode, kind, and classification is inventoried
-  in `docs/value-registry.md` with owner, persistence/API/UI impact, and owning
-  fixtures/validators;
-- all focused and full local evidence is recorded without placeholders or
-  remote claims; and
-- the final worktree diff contains only authorized files and passes fresh
-  whole-range review.
+- one repository PowerShell script authenticates and runs pinned cargo-deny
+  locally and in CI, with one behavioral test and no ambient fallback;
+- all seven manifests satisfy exact inheritance lines while only six non-root
+  members prohibit literals, and metadata proves exact effective policy;
+- the generated Cargo/npm inventories are bidirectional and the JSON artifact
+  is the only reviewed Tauri pair/Cargo-only source;
+- the active Windows duplicate graph exactly equals its baseline, explicit base
+  growth needs exact attributable approval, and absent historical artifacts
+  follow only the documented skip path;
+- PRs fetch exactly the event base SHA while direct main pushes remain
+  current-only, without full history or merge-base inference;
+- Rust Full runs exactly one unconditional separate current-only duplicate
+  check, and Release `windows-bundle` runs exactly one current-only duplicate
+  check, both without base arguments or duplicate mode environment; advisory
+  scan/writer jobs and advisory-only scheduled runs do not run it;
+- workflow contracts are parsed with `yaml`, all external Actions use full
+  commit SHAs, the deny/classify/fail/job-output chain owns exactly
+  `advisories_failed`, the writer requires its string value `true`, setup
+  failure cannot open an issue, and bundle requires scanner success;
+- package and lock changes add only direct devDependency `yaml` and do not
+  upgrade an existing npm package;
+- locked aliases, strict license policy, sidecar golden shape, clone-free
+  secret ownership, factual docs, and the reduced value registry all pass;
+- exact local evidence contains no placeholders or unsupported remote claims;
+  and
+- the final diff stays inside authorized scope and the final whole-range review
+  has no Important or Critical finding.
