@@ -21,6 +21,9 @@ jobs:
     permissions:
       contents: read
       issues: write
+    concurrency:
+      group: rust-advisory-follow-up
+      cancel-in-progress: false
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -38,7 +41,7 @@ jobs:
               "",
               `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               "Review cargo-deny output and either update dependencies or add an approved, time-bounded exception.",
-            ].join("\\n");
+            ].join("\n");
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               ...context.repo,
               state: "open",
