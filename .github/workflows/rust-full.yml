@@ -1,0 +1,45 @@
+name: Rust Full
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rust-full:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          cache: npm
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - uses: ./.github/actions/setup-cargo-deny
+      - run: npm.cmd ci
+      - run: npm.cmd run bootstrap:testing
+      - run: node_modules\.bin\playwright.cmd install chromium
+      - run: npm.cmd run check:rust:fast
+      - run: npm.cmd run verify
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+      - name: Upload Playwright results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: artifacts/playwright-results.json
+          if-no-files-found: ignore

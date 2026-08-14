@@ -1,0 +1,18 @@
+name: Rust Fast
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust-fast:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - uses: ./.github/actions/setup-cargo-deny
+      - run: npm.cmd run check:rust:fast

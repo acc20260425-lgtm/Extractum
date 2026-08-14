@@ -1,0 +1,110 @@
+name: Rust Release
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      bundle:
+        description: Build and smoke the Windows bundle
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup show active-toolchain
+      - uses: ./.github/actions/setup-cargo-deny
+      - run: npm.cmd run check:rust:advisories
+      - name: Create or update advisory follow-up
+        if: ${{ failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const title = "Security: Rust advisory follow-up";
+            const body = [
+              "`npm.cmd run check:rust:advisories` failed.",
+              "",
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              "Review cargo-deny output and either update dependencies or add an approved, time-bounded exception.",
+            ].join("\\n");
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                ...context.repo,
+                title,
+                body,
+              });
+            }
+
+  windows-bundle:
+    needs: advisories
+    if: ${{ needs.advisories.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.bundle)) }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          cache: npm
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - uses: ./.github/actions/setup-cargo-deny
+      - run: npm.cmd ci
+      - run: npm.cmd run bootstrap:testing
+      - run: node_modules\.bin\playwright.cmd install chromium
+      - run: npm.cmd run check:rust:fast
+      - run: npm.cmd run verify
+      - run: npm.cmd run tauri -- build --target x86_64-pc-windows-msvc
+      - run: npm.cmd run smoke:gemini-browser-sidecar:binary
+      - name: Smoke the packaged application for five seconds
+        shell: pwsh
+        run: |
+          $process = $null
+          try {
+            $process = Start-Process -FilePath 'src-tauri/target/x86_64-pc-windows-msvc/release/extractum.exe' -PassThru -WindowStyle Hidden
+            Start-Sleep -Seconds 5
+            if ($process.HasExited) {
+              throw "Extractum exited early with code $($process.ExitCode)."
+            }
+          } finally {
+            if ($null -ne $process) {
+              if (-not $process.HasExited) {
+                Stop-Process -Id $process.Id -Force
+              }
+              $process.WaitForExit()
+            }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extractum-msi
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extractum-nsis
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
