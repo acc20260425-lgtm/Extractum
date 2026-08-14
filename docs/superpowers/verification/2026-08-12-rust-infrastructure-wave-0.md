@@ -264,8 +264,8 @@ src-tauri/src/youtube/process_runtime.rs
 src-tauri/src/youtube/source_metadata.rs
 ```
 
-The following fully qualified exact focused tests passed; every command selected
-one non-empty test (1 passed, 0 failed). The six
+The following fully qualified exact focused-test commands selected one
+non-empty test and passed (1 passed, 0 failed). The six
 `prompt_packs::source_adapter` commands prove the canonical-fixture seam:
 
 | Command | Result |
@@ -273,7 +273,7 @@ one non-empty test (1 passed, 0 failed). The six
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact` | PASS: 1 passed, 0 failed. |
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact` | PASS: 1 passed, 0 failed. |
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact` | PASS: 1 passed, 0 failed. |
-| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib tests::cancellation_smoke_services_remain_test_only --locked -- --exact` | PASS: 1 passed, 0 failed. |
+| `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib public_api_tests::cancellation_smoke_services_remain_test_only --locked -- --exact` | PASS: fresh run 2026-08-14 14:49:15.597 UTC–14:50:46.480 UTC selected 1 test: 1 passed, 0 failed, 252 filtered (test duration 90.12s). |
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib apalis_jobs::tests::apalis_jobs_list_filters_by_status_job_type_and_search --locked -- --exact` | PASS: 1 passed, 0 failed. |
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact` | PASS: 1 passed, 0 failed; 688 filtered. |
 | `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::external_source_job_cancellation_reaps_its_managed_operation --locked -- --exact` | PASS: 1 passed, 0 failed. |
