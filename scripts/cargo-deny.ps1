@@ -96,13 +96,17 @@ function Add-GitHubPathOnce {
 function Get-AuthenticatedCargoDeny {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Manifest,
-        [Parameter(Mandatory = $true)][string]$StableBinary
+        [Parameter(Mandatory = $true)][string]$StableBinary,
+        [scriptblock]$PostAuthentication
     )
 
     $stableDirectory = Split-Path -Parent $StableBinary
     $cacheDirectory = Split-Path -Parent $stableDirectory
     $forceReinstall = Test-CargoDenyTestSeam -Name 'EXTRACTUM_CARGO_DENY_TEST_FORCE_REINSTALL'
     if (-not $forceReinstall -and (Test-AuthenticatedBinary -Path $StableBinary -Manifest $Manifest)) {
+        if ($null -ne $PostAuthentication) {
+            & $PostAuthentication
+        }
         return [System.IO.Path]::GetFullPath($StableBinary)
     }
 
@@ -152,6 +156,10 @@ function Get-AuthenticatedCargoDeny {
 
         if (Test-CargoDenyTestSeam -Name 'EXTRACTUM_CARGO_DENY_TEST_FAIL_POST_PUBLISH') {
             throw 'Test post-publish failure.'
+        }
+
+        if ($null -ne $PostAuthentication) {
+            & $PostAuthentication
         }
 
         if ($backupCreated) {
@@ -204,12 +212,13 @@ if ($AddToGitHubPath -and $Mode -cne 'Setup') {
 
 $stableDirectory = Join-Path $repositoryRoot "src-tauri/target/.extractum-tools/cargo-deny/$($manifest.version)-$($manifest.target)"
 $stableBinary = Join-Path $stableDirectory 'cargo-deny.exe'
-$authenticatedBinary = Get-AuthenticatedCargoDeny -Manifest $manifest -StableBinary $stableBinary
+$postAuthentication = $null
+if ($Mode -ceq 'Setup' -and $AddToGitHubPath) {
+    $postAuthentication = { Add-GitHubPathOnce -Path $stableDirectory }
+}
+$authenticatedBinary = Get-AuthenticatedCargoDeny -Manifest $manifest -StableBinary $stableBinary -PostAuthentication $postAuthentication
 
 if ($Mode -ceq 'Setup') {
-    if ($AddToGitHubPath) {
-        Add-GitHubPathOnce -Path $stableDirectory
-    }
     exit 0
 }
 

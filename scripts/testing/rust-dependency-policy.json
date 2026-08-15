@@ -949,6 +949,56 @@
       "requirement": "^2.9.0"
     }
   ],
+  "exactPins": [
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-client",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-mtsender",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-session",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-tl-types",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum",
+      "dependency": "apalis-sqlite",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=1.0.0-rc.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "apalis",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=1.0.0-rc.8"
+    }
+  ],
   "approvedPrereleases": [
     {
       "package": "extractum",

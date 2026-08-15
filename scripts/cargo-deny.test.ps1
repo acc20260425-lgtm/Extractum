@@ -268,6 +268,31 @@ function Test-RollsBackPublishedCandidate {
     } finally { Remove-Fixture $fixture }
 }
 
+function Test-RollsBackWhenGitHubPathPublicationFails {
+    $fixture = New-Fixture
+    try {
+        $environment = Get-TestEnvironment $fixture
+        $failingSink = Join-Path $fixture.Root 'github-path-directory'
+        New-Item -ItemType Directory -Path $failingSink | Out-Null
+        $environment.GITHUB_PATH = $failingSink
+        $cold = Invoke-Setup $fixture $environment
+        Assert-True ($cold.ExitCode -ne 0) 'A real GITHUB_PATH sink failure must fail cold Setup.'
+        Assert-True (-not (Test-Path -LiteralPath $fixture.Stable)) 'A failed cold PATH publication must remove the first accepted cache.'
+        Assert-True (Test-Path -LiteralPath $failingSink -PathType Container) 'A failed PATH publication must leave the failing sink unchanged.'
+
+        $environment.GITHUB_PATH = $fixture.GitHubPath
+        Assert-Equal 0 (Invoke-Setup $fixture $environment).ExitCode 'Setup must establish the prior authenticated cache.'
+        $previousDigest = (Get-FileHash -LiteralPath $fixture.Stable -Algorithm SHA256).Hash
+        $previousSink = Get-Content -LiteralPath $fixture.GitHubPath -Raw
+        $environment.EXTRACTUM_CARGO_DENY_TEST_FORCE_REINSTALL = '1'
+        $environment.GITHUB_PATH = $failingSink
+        $failedReplacement = Invoke-Setup $fixture $environment
+        Assert-True ($failedReplacement.ExitCode -ne 0) 'A real PATH publication failure must fail replacement Setup.'
+        Assert-Equal $previousDigest (Get-FileHash -LiteralPath $fixture.Stable -Algorithm SHA256).Hash 'A failed replacement PATH publication must restore the prior cache.'
+        Assert-Equal $previousSink (Get-Content -LiteralPath $fixture.GitHubPath -Raw) 'A failed replacement PATH publication must leave the prior sink unchanged.'
+    } finally { Remove-Fixture $fixture }
+}
+
 function Test-ExcludesAmbientExecutable {
     $fixture = New-Fixture
     try {
@@ -315,6 +340,7 @@ $tests = @(
     ${function:Test-RejectsVersionMismatch},
     ${function:Test-FirstInstallRollback},
     ${function:Test-RollsBackPublishedCandidate},
+    ${function:Test-RollsBackWhenGitHubPathPublicationFails},
     ${function:Test-ExcludesAmbientExecutable},
     ${function:Test-DispatchAndExitPropagation}
 )

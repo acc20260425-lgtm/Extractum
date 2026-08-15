@@ -315,6 +315,16 @@ profile = "minimal"
   }
   requireCount(index, "src-tauri/Cargo.toml", /^edition = "2021"$/, 1, violations);
   requireCount(index, "src-tauri/Cargo.toml", /^rust-version = "1\.95"$/, 1, violations);
+  const workspaceMemberIds = Array.isArray(metadata?.workspace_members) ? metadata.workspace_members : [];
+  const workspaceIds = new Set(workspaceMemberIds);
+  const actualWorkspaceNames = (metadata?.packages ?? [])
+    .filter(({ id }) => workspaceIds.has(id))
+    .map(({ name }) => name)
+    .sort((left, right) => left.localeCompare(right));
+  if (workspaceIds.size !== workspaceMemberIds.length || actualWorkspaceNames.length !== workspaceIds.size
+    || JSON.stringify(actualWorkspaceNames) !== JSON.stringify(policy.toolchain.workspacePackages)) {
+    violations.push("workspace package set drifted");
+  }
   for (const name of policy.toolchain.workspacePackages) {
     const pkg = workspacePackage(metadata, name);
     if (!pkg) {

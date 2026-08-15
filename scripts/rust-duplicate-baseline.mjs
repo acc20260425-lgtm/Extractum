@@ -27,7 +27,9 @@ export function generateRustDuplicateBaseline(treeText) {
 }
 
 export function validateDuplicateBaseline(value) {
-  if (!isObject(value) || value.schemaVersion !== 1 || value.target !== TARGET || !isObject(value.duplicateCardinality)) throw new Error("duplicate baseline schema is invalid");
+  const expectedKeys = ["duplicateCardinality", "duplicateNameCount", "duplicateVersionInstanceCount", "schemaVersion", "target"];
+  if (!isObject(value) || json(Object.keys(value).sort()) !== json(expectedKeys)
+    || value.schemaVersion !== 1 || value.target !== TARGET || !isObject(value.duplicateCardinality)) throw new Error("duplicate baseline schema is invalid");
   const entries = Object.entries(value.duplicateCardinality);
   if (entries.some(([name, count]) => !name || !Number.isInteger(count) || count < 2)) throw new Error("duplicate baseline cardinality is invalid");
   if (json(entries.map(([name]) => name)) !== json(entries.map(([name]) => name).sort((a, b) => a.localeCompare(b)))) throw new Error("duplicate baseline names must be sorted");
@@ -37,11 +39,20 @@ export function validateDuplicateBaseline(value) {
 }
 
 function exceptionErrors(exceptions) {
-  if (!isObject(exceptions) || exceptions.schemaVersion !== 1 || !Array.isArray(exceptions.duplicateGrowthExceptions)) return ["duplicate exception schema is invalid"];
+  const topKeys = ["advisoryExceptions", "duplicateGrowthExceptions", "licenseExceptions", "schemaVersion"];
+  if (!isObject(exceptions) || json(Object.keys(exceptions).sort()) !== json(topKeys)
+    || exceptions.schemaVersion !== 1 || !Array.isArray(exceptions.licenseExceptions)
+    || !Array.isArray(exceptions.advisoryExceptions) || !Array.isArray(exceptions.duplicateGrowthExceptions)) return ["duplicate exception schema is invalid"];
   const errors = [];
+  const expectedEntryKeys = ["approvedCount", "owner", "package", "previousCount", "reason", "reviewAfter"];
   for (const [index, entry] of exceptions.duplicateGrowthExceptions.entries()) {
-    if (!isObject(entry) || !["package", "owner", "reason", "reviewAfter"].every((key) => typeof entry[key] === "string" && entry[key].length > 0) || !Number.isInteger(entry.previousCount) || entry.previousCount < 1 || !Number.isInteger(entry.approvedCount) || entry.approvedCount <= entry.previousCount) errors.push(`duplicate exception ${index} is invalid`);
+    if (!isObject(entry) || json(Object.keys(entry).sort()) !== json(expectedEntryKeys)
+      || !["package", "owner", "reason", "reviewAfter"].every((key) => typeof entry[key] === "string" && entry[key].length > 0)
+      || !Number.isInteger(entry.previousCount) || entry.previousCount < 1
+      || !Number.isInteger(entry.approvedCount) || entry.approvedCount <= entry.previousCount) errors.push(`duplicate exception ${index} is invalid`);
   }
+  const packages = exceptions.duplicateGrowthExceptions.map((entry) => entry.package);
+  if (json(packages) !== json([...packages].sort((a, b) => String(a).localeCompare(String(b)))) || new Set(packages).size !== packages.length) errors.push("duplicate exception packages must be sorted and unique");
   return errors;
 }
 
@@ -61,8 +72,8 @@ export function compareDuplicateGrowth({ current, base, exceptions }) {
   for (const name of Object.keys(current?.duplicateCardinality ?? {}).sort((a, b) => a.localeCompare(b))) {
     const count = current.duplicateCardinality[name]; const previousCount = base?.duplicateCardinality?.[name] ?? 1;
     if (count <= previousCount) continue;
-    const approved = exceptions.duplicateGrowthExceptions.some((entry) => entry.package === name && entry.previousCount === previousCount && entry.approvedCount === count);
-    if (!approved) violations.push(`${name}: duplicate growth ${previousCount} -> ${count} requires exact approval`);
+    const approvals = exceptions.duplicateGrowthExceptions.filter((entry) => entry.package === name && entry.previousCount === previousCount && entry.approvedCount === count);
+    if (approvals.length !== 1) violations.push(`${name}: duplicate growth ${previousCount} -> ${count} requires exact approval`);
   }
   return violations;
 }
@@ -84,10 +95,12 @@ export function checkRustDuplicatePolicy({ base, cwd = root, treeText, stderr = 
   if (state.violations.length) throw new Error(state.violations.join("\n"));
   if (!base) return { historicalSkipped: false };
   let revision;
-  try { revision = execFileSync("git", ["rev-parse", `${base}^{commit}`], { cwd, encoding: "utf8", windowsHide: true }).trim(); } catch { throw new Error(`revision ${base} does not resolve`); }
-  if (!gitHas(cwd, revision, BASELINE_PATH) || !gitHas(cwd, revision, EXCEPTIONS_PATH)) { stderr.write("Rust duplicate historical comparison skipped: base artifacts absent\n"); return { historicalSkipped: true }; }
+  try { revision = execFileSync("git", ["rev-parse", "--verify", `${base}^{commit}`], { cwd, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { throw new Error(`revision ${base} does not resolve`); }
+  if (!gitHas(cwd, revision, BASELINE_PATH) || !gitHas(cwd, revision, EXCEPTIONS_PATH)) { stderr.write("historical duplicate policy unavailable; skipping base comparison\n"); return { historicalSkipped: true }; }
   const historicalBaseline = JSON.parse(gitShow(cwd, revision, BASELINE_PATH));
-  JSON.parse(gitShow(cwd, revision, EXCEPTIONS_PATH));
+  const historicalExceptions = JSON.parse(gitShow(cwd, revision, EXCEPTIONS_PATH));
+  const historicalExceptionErrors = exceptionErrors(historicalExceptions);
+  if (historicalExceptionErrors.length) throw new Error(historicalExceptionErrors.join("\n"));
   const violations = compareDuplicateGrowth({ current: state.current, base: validateDuplicateBaseline(historicalBaseline), exceptions });
   if (violations.length) throw new Error(violations.join("\n"));
   return { historicalSkipped: false };

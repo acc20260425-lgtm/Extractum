@@ -5,6 +5,9 @@ import { parse } from "yaml";
 
 type Mapping = Record<string, unknown>;
 
+// Owns only: full-SHA remote pins, read-only workflow/scanner permissions,
+// writer permission/outcome isolation, and successful-scanner bundle gating.
+
 function workflow(name: string) {
   return readFileSync(path.resolve(".github", "workflows", name), "utf8");
 }
@@ -62,9 +65,20 @@ function jobFrom(allJobs: Mapping, name: string) {
   return asMapping(allJobs[name], `job ${name}`);
 }
 
-function assertScannerPermissions(release: Mapping) {
+function assertScannerPermissions(workflows: Mapping) {
+  for (const name of ["rust-fast.yml", "rust-full.yml", "rust-release.yml"]) {
+    requireInvariant(equalMapping(asMapping(workflows[name], name).permissions, { contents: "read" }), "scanner permissions");
+  }
+  const release = asMapping(asMapping(workflows["rust-release.yml"], "rust-release.yml").jobs, "release jobs");
   const permissions = jobFrom(release, "advisory-scan").permissions;
   requireInvariant(equalMapping(permissions, { contents: "read" }), "scanner permissions");
+  for (const [workflowName, candidate] of Object.entries(workflows)) {
+    for (const [jobName, job] of Object.entries(asMapping(asMapping(candidate, workflowName).jobs, `${workflowName} jobs`))) {
+      if (workflowName === "rust-release.yml" && jobName === "advisory-issue-writer") continue;
+      const jobPermissions = asMapping(job, jobName).permissions;
+      requireInvariant(jobPermissions === undefined || asMapping(jobPermissions, `${jobName} permissions`).issues !== "write", "scanner permissions");
+    }
+  }
 }
 
 function stepById(steps: readonly Mapping[], id: string) {
@@ -133,11 +147,15 @@ describe("Rust GitHub workflow contracts", () => {
   });
 
   it("enforces scanner permissions", () => {
-    const release = jobs("rust-release.yml");
-    assertScannerPermissions(release);
-    const mutant = structuredClone(release);
-    asMapping(mutant["advisory-scan"], "advisory-scan").permissions = { contents: "read", issues: "write" };
-    expect(() => assertScannerPermissions(mutant)).toThrow("scanner permissions");
+    const workflows = Object.fromEntries(["rust-fast.yml", "rust-full.yml", "rust-release.yml"].map((name) => [name, parsedWorkflow(name)]));
+    assertScannerPermissions(workflows);
+    const scannerMutant = structuredClone(workflows);
+    const releaseJobs = asMapping(asMapping(scannerMutant["rust-release.yml"], "release").jobs, "release jobs");
+    asMapping(releaseJobs["advisory-scan"], "advisory-scan").permissions = { contents: "read", issues: "write" };
+    expect(() => assertScannerPermissions(scannerMutant)).toThrow("scanner permissions");
+    const topLevelMutant = structuredClone(workflows);
+    asMapping(topLevelMutant["rust-fast.yml"], "rust-fast").permissions = { issues: "write" };
+    expect(() => assertScannerPermissions(topLevelMutant)).toThrow("scanner permissions");
   });
 
   it("enforces writer outcome wiring", () => {

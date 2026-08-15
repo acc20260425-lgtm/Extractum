@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NORMAL_KINDS = new Set(["normal", "build", "dev"]);
+const NPM_KINDS = new Set(["dependencies", "devDependencies", "optionalDependencies"]);
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const canonical = (value) => JSON.stringify(value);
 const sorted = (values, key) => [...values].sort((left, right) => key(left).localeCompare(key(right)));
@@ -14,34 +15,53 @@ export function cargoRequirementIdentity(entry) { return canonical([entry.packag
 export function npmRequirementIdentity(entry) { return canonical([entry.owner, entry.name, entry.kind]); }
 
 function validCargo(entry, label, errors) {
-  if (!isObject(entry) || !nonEmptyString(entry.package) || !nonEmptyString(entry.dependency) || !NORMAL_KINDS.has(entry.kind)
+  if (!isObject(entry) || !sameKeys(entry, ["dependency", "kind", "package", "rename", "target"])
+    || !nonEmptyString(entry.package) || !nonEmptyString(entry.dependency) || !NORMAL_KINDS.has(entry.kind)
     || !(entry.rename === null || typeof entry.rename === "string") || !(entry.target === null || typeof entry.target === "string")) { errors.push(`${label} has invalid Cargo identity`); return false; }
   return true;
 }
 function validNpm(entry, label, errors) {
-  if (!isObject(entry) || !nonEmptyString(entry.owner) || !nonEmptyString(entry.name) || !["dependencies", "devDependencies"].includes(entry.kind)) { errors.push(`${label} has invalid npm identity`); return false; }
+  if (!isObject(entry) || !sameKeys(entry, ["kind", "name", "owner"])
+    || !nonEmptyString(entry.owner) || !nonEmptyString(entry.name) || !NPM_KINDS.has(entry.kind)) { errors.push(`${label} has invalid npm identity`); return false; }
   return true;
+}
+function sameKeys(value, expected) {
+  return isObject(value) && canonical(Object.keys(value).sort()) === canonical(expected);
 }
 function validateReviewedAuthority(value) {
   const errors = [];
   if (!isObject(value) || value.schemaVersion !== 2) errors.push("schemaVersion must be exactly 2");
   const toolchain = value?.toolchain;
-  if (!isObject(toolchain) || !["channel", "rustVersion", "edition", "target"].every((key) => nonEmptyString(toolchain?.[key])) || !Array.isArray(toolchain?.workspacePackages) || toolchain.workspacePackages.some((name) => !nonEmptyString(name)) || canonical(sorted(toolchain?.workspacePackages ?? [], String)) !== canonical(toolchain?.workspacePackages ?? []) || new Set(toolchain?.workspacePackages ?? []).size !== (toolchain?.workspacePackages ?? []).length) errors.push("toolchain is malformed or unsorted");
+  if (!isObject(toolchain) || !sameKeys(toolchain, ["channel", "edition", "rustVersion", "target", "workspacePackages"])
+    || !["channel", "rustVersion", "edition", "target"].every((key) => nonEmptyString(toolchain?.[key])) || !Array.isArray(toolchain?.workspacePackages) || toolchain.workspacePackages.some((name) => !nonEmptyString(name)) || canonical(sorted(toolchain?.workspacePackages ?? [], String)) !== canonical(toolchain?.workspacePackages ?? []) || new Set(toolchain?.workspacePackages ?? []).size !== (toolchain?.workspacePackages ?? []).length) errors.push("toolchain is malformed or unsorted");
   const family = value?.tauriFamily;
-  if (!isObject(family) || !Array.isArray(family.pairs) || !Array.isArray(family.cargoOnlyRequirements)) return [...errors, "tauriFamily must contain pairs and cargoOnlyRequirements arrays"];
+  if (!isObject(family) || !sameKeys(family, ["cargoOnlyRequirements", "pairs"])
+    || !Array.isArray(family.pairs) || !Array.isArray(family.cargoOnlyRequirements)) return [...errors, "tauriFamily must contain pairs and cargoOnlyRequirements arrays"];
   const ids = new Set(); const cargos = new Set(); const npms = new Set();
+  const pairIds = [];
   for (const [index, pair] of family.pairs.entries()) {
     const label = `tauriFamily.pairs[${index}]`;
-    if (!isObject(pair) || !nonEmptyString(pair.id) || !nonEmptyString(pair.cargoRequirement) || !nonEmptyString(pair.npmRequirement)) { errors.push(`${label} is malformed`); continue; }
+    if (!isObject(pair) || !sameKeys(pair, ["cargo", "cargoRequirement", "id", "npm", "npmRequirement"])
+      || !nonEmptyString(pair.id) || !nonEmptyString(pair.cargoRequirement) || !nonEmptyString(pair.npmRequirement)) { errors.push(`${label} is malformed`); continue; }
+    pairIds.push(pair.id);
     if (ids.has(pair.id)) errors.push("tauriFamily pair IDs must be unique"); ids.add(pair.id);
     if (validCargo(pair.cargo, `${label}.cargo`, errors)) { const key = cargoRequirementIdentity(pair.cargo); if (cargos.has(key)) errors.push("tauriFamily Cargo identities must be unique"); cargos.add(key); }
     if (validNpm(pair.npm, `${label}.npm`, errors)) { const key = npmRequirementIdentity(pair.npm); if (npms.has(key)) errors.push("tauriFamily npm identities must be unique"); npms.add(key); }
   }
+  if (canonical(sorted(pairIds, String)) !== canonical(pairIds)) errors.push("tauriFamily pair IDs must be sorted");
   const onlyIds = [];
   for (const [index, row] of family.cargoOnlyRequirements.entries()) {
     const label = `tauriFamily.cargoOnlyRequirements[${index}]`;
-    if (!isObject(row) || !nonEmptyString(row.id) || !nonEmptyString(row.cargoRequirement)) { errors.push(`${label} is malformed`); continue; }
-    onlyIds.push(row.id); validCargo(row.cargo, `${label}.cargo`, errors);
+    if (!isObject(row) || !sameKeys(row, ["cargo", "cargoRequirement", "id"])
+      || !nonEmptyString(row.id) || !nonEmptyString(row.cargoRequirement)) { errors.push(`${label} is malformed`); continue; }
+    onlyIds.push(row.id);
+    if (ids.has(row.id)) errors.push("tauriFamily IDs must be unique across pairs and cargo-only records");
+    ids.add(row.id);
+    if (validCargo(row.cargo, `${label}.cargo`, errors)) {
+      const key = cargoRequirementIdentity(row.cargo);
+      if (cargos.has(key)) errors.push("tauriFamily Cargo identities must be unique across pairs and cargo-only records");
+      cargos.add(key);
+    }
   }
   if (new Set(onlyIds).size !== onlyIds.length) errors.push("tauriFamily cargo-only IDs must be unique");
   if (canonical(sorted(onlyIds, String)) !== canonical(onlyIds)) errors.push("tauriFamily cargo-only IDs must be sorted");
@@ -57,8 +77,11 @@ function cargoDirectRequirements(metadata) {
 }
 function npmDirectRequirements(packageJson) {
   const inventory = [];
-  for (const kind of ["dependencies", "devDependencies"]) for (const [name, requirement] of Object.entries(packageJson?.[kind] ?? {})) inventory.push({ owner: packageJson?.name ?? "extractum", name, kind, requirement });
+  for (const kind of NPM_KINDS) for (const [name, requirement] of Object.entries(packageJson?.[kind] ?? {})) inventory.push({ owner: packageJson?.name ?? "extractum", name, kind, requirement });
   return sorted(inventory, npmRequirementIdentity);
+}
+function exactPinFacts(requirements) {
+  return requirements.filter(({ requirement }) => /^=/.test(requirement));
 }
 function prereleaseFacts(requirements) {
   const facts = [];
@@ -72,14 +95,14 @@ function prereleaseFacts(requirements) {
 export function generateRustDependencyPolicy({ metadata, packageJson, reviewed }) {
   const errors = validateReviewedAuthority(reviewed); if (errors.length) throw new Error(errors.join("\n"));
   const directRequirements = cargoDirectRequirements(metadata);
-  return { schemaVersion: 2, toolchain: reviewed.toolchain, directRequirements, npmRequirements: npmDirectRequirements(packageJson), approvedPrereleases: prereleaseFacts(directRequirements), tauriFamily: reviewed.tauriFamily };
+  return { schemaVersion: 2, toolchain: reviewed.toolchain, directRequirements, npmRequirements: npmDirectRequirements(packageJson), exactPins: exactPinFacts(directRequirements), approvedPrereleases: prereleaseFacts(directRequirements), tauriFamily: reviewed.tauriFamily };
 }
 const same = (left, right) => canonical(left) === canonical(right);
 export function validateRustDependencyPolicy({ generated, committed }) {
   const errors = validateReviewedAuthority(committed);
   if (!isObject(generated) || generated.schemaVersion !== 2) errors.push("generated policy schemaVersion must be exactly 2");
   if (errors.length) return errors;
-  for (const key of ["toolchain", "directRequirements", "npmRequirements", "approvedPrereleases", "tauriFamily"]) if (!same(generated[key], committed[key])) errors.push(`${key} drifted`);
+  for (const key of ["toolchain", "directRequirements", "npmRequirements", "exactPins", "approvedPrereleases", "tauriFamily"]) if (!same(generated[key], committed[key])) errors.push(`${key} drifted`);
   const cargoTauri = (generated.directRequirements ?? []).filter((entry) => entry.package === "extractum" && entry.dependency.startsWith("tauri") && entry.dependency !== "tauri-plugin-mcp-bridge");
   const reviewedCargo = committed.tauriFamily.pairs.map(({ cargo }) => cargo);
   if (!same(sorted(cargoTauri.map(({ requirement, ...entry }) => entry), cargoRequirementIdentity), sorted(reviewedCargo, cargoRequirementIdentity))) errors.push("paired Cargo bijection drifted");
@@ -95,6 +118,12 @@ export function validateRustDependencyPolicy({ generated, committed }) {
   for (const row of committed.tauriFamily.cargoOnlyRequirements) {
     const cargo = generated.directRequirements?.find((entry) => cargoRequirementIdentity(entry) === cargoRequirementIdentity(row.cargo));
     if (!cargo || cargo.requirement !== row.cargoRequirement) errors.push(`${row.id}: Cargo requirement drifted`);
+  }
+  const liveMcp = (generated.directRequirements ?? []).filter((entry) => entry.dependency === "tauri-plugin-mcp-bridge");
+  const reviewedMcp = committed.tauriFamily.cargoOnlyRequirements.filter((entry) => entry.cargo?.dependency === "tauri-plugin-mcp-bridge");
+  if (liveMcp.length !== 1 || reviewedMcp.length !== 1 || committed.tauriFamily.cargoOnlyRequirements.length !== 1
+    || cargoRequirementIdentity(liveMcp[0] ?? {}) !== cargoRequirementIdentity(reviewedMcp[0]?.cargo ?? {})) {
+    errors.push("MCP Cargo-only bijection drifted");
   }
   return [...new Set(errors)];
 }

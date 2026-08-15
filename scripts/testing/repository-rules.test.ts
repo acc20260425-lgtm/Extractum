@@ -522,6 +522,26 @@ const rustPolicyStructuredFixtures = {
         metadata.packages.find(({ name }: any) => name === "extractum")!.publish = ["crates-io"];
         return rustPolicyIndex(metadata);
       },
+      "adds an extra empty workspace package": () => {
+        const metadata = rustPolicyCargoMetadata();
+        const extra = { id: "extra-id", name: "extra", rust_version: "1.95", edition: "2021", publish: [], dependencies: [] };
+        metadata.packages.push(extra);
+        metadata.workspace_members.push(extra.id);
+        return rustPolicyIndex(metadata);
+      },
+      "removes a workspace package": () => {
+        const metadata = rustPolicyCargoMetadata();
+        metadata.workspace_members = metadata.workspace_members.filter((id: string) => !id.includes("extractum-analysis"));
+        return rustPolicyIndex(metadata);
+      },
+      "duplicates a workspace package name": () => {
+        const metadata = rustPolicyCargoMetadata();
+        const original = metadata.packages.find(({ name }: any) => name === "extractum-analysis")!;
+        const duplicate = { ...structuredClone(original), id: `${original.id}-duplicate` };
+        metadata.packages.push(duplicate);
+        metadata.workspace_members.push(duplicate.id);
+        return rustPolicyIndex(metadata);
+      },
     },
   },
   "rule:rust-dependency-policy": {
@@ -551,6 +571,33 @@ const rustPolicyStructuredFixtures = {
           name: "unapproved-release", kind: null, req: "=1.2.3-beta.1",
         });
         return rustPolicyIndex(metadata);
+      },
+      "adds an unpaired optional Tauri npm edge": () => {
+        const packageJson = {
+          private: true,
+          dependencies: {
+            "@tauri-apps/api": "^2",
+            "@tauri-apps/plugin-dialog": "^2",
+            "@tauri-apps/plugin-opener": "^2",
+            "@tauri-apps/plugin-sql": "^2.4.0",
+          },
+          devDependencies: { "@tauri-apps/cli": "^2" },
+          optionalDependencies: { "@tauri-apps/plugin-policy-gap": "^2" },
+        };
+        return rustPolicyIndex(rustPolicyCargoMetadata(), canonicalToolchain, packageJson);
+      },
+      "moves a paired npm edge to optional dependencies": () => {
+        const packageJson: any = {
+          private: true,
+          dependencies: {
+            "@tauri-apps/plugin-dialog": "^2",
+            "@tauri-apps/plugin-opener": "^2",
+            "@tauri-apps/plugin-sql": "^2.4.0",
+          },
+          devDependencies: { "@tauri-apps/cli": "^2" },
+          optionalDependencies: { "@tauri-apps/api": "^2" },
+        };
+        return rustPolicyIndex(rustPolicyCargoMetadata(), canonicalToolchain, packageJson);
       },
     },
   },
