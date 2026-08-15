@@ -941,6 +941,12 @@
       "name": "vitest",
       "kind": "devDependencies",
       "requirement": "^4.1.5"
+    },
+    {
+      "owner": "extractum",
+      "name": "yaml",
+      "kind": "devDependencies",
+      "requirement": "^2.9.0"
     }
   ],
   "approvedPrereleases": [
