@@ -1,5 +1,6 @@
 import { generateFeatureBaseline } from "../telegram-grammers-feature-baseline.mjs";
-import { generateRustDuplicateBaseline } from "../rust-duplicate-baseline.mjs";
+import { validateCurrentDuplicateState } from "../rust-duplicate-baseline.mjs";
+import { generateRustDependencyPolicy, validateRustDependencyPolicy } from "../rust-dependency-policy.mjs";
 
 const DATA_GRID_PATH = "src/lib/components/extractum-ui/DataGrid.svelte";
 const TREE_DATA_GRID_PATH = "src/lib/components/extractum-ui/TreeDataGrid.svelte";
@@ -7,6 +8,7 @@ const GRID_RUNTIME_PATH = "src/lib/components/extractum-ui/data-grid-date-format
 const APPROVED_SVAR_GRID_PATHS = new Set([DATA_GRID_PATH, TREE_DATA_GRID_PATH, GRID_RUNTIME_PATH]);
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
+const RUST_SUPPLY_CHAIN_EXCEPTIONS_PATH = "scripts/testing/rust-supply-chain-exceptions.json";
 const RUST_DEPENDENCY_POLICY_PATH = "scripts/testing/rust-dependency-policy.json";
 const EXPECTED_PRODUCER_DEPENDENCIES = [
   ["base64", null, [], true, null, null],
@@ -277,38 +279,18 @@ function normalizeText(source) {
   return source.replaceAll("\r\n", "\n").trimEnd() + "\n";
 }
 
-function dependencyByName(metadata, packageName, dependencyName) {
-  const selected = workspacePackage(metadata, packageName);
-  return selected?.dependencies?.find(
-    ({ name, kind }) => name === dependencyName && (kind === null || kind === "build"),
-  );
-}
-
-function requirementMajor(requirement) {
-  const match = /(?:^|[^0-9])(\d+)(?:\.|$)/.exec(String(requirement));
-  return match ? Number(match[1]) : undefined;
-}
-
-function requirementMajorMinor(requirement) {
-  const match = /(?:^|[^0-9])(\d+)\.(\d+)(?:\.|$)/.exec(String(requirement));
-  return match ? [Number(match[1]), Number(match[2])] : undefined;
-}
-
-function prereleaseVersion(requirement) {
-  const match = /(\d+\.\d+\.\d+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)/.exec(String(requirement));
-  return match?.[1];
-}
-
-function workspaceDependencies(metadata) {
-  const members = new Set(metadata?.workspace_members ?? []);
-  return (metadata?.packages ?? [])
-    .filter(({ id }) => members.has(id))
-    .flatMap(({ dependencies = [] }) => dependencies)
-    .filter(({ kind }) => kind === null || kind === "build");
-}
-
-function npmRequirement(packageJson, name) {
-  return packageJson?.dependencies?.[name] ?? packageJson?.devDependencies?.[name];
+const SIX_MEMBER_MANIFESTS = [
+  "src-tauri/crates/extractum-analysis/Cargo.toml",
+  "src-tauri/crates/extractum-core/Cargo.toml",
+  "src-tauri/crates/extractum-gemini-browser/Cargo.toml",
+  "src-tauri/crates/extractum-llm/Cargo.toml",
+  "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  "src-tauri/crates/extractum-telegram/Cargo.toml",
+];
+const SEVEN_MANIFESTS = ["src-tauri/Cargo.toml", ...SIX_MEMBER_MANIFESTS];
+function exactCount(source, expression) { return normalizeText(source).split("\n").filter((line) => expression.test(line)).length; }
+function requireCount(index, manifest, expression, count, violations) {
+  if (exactCount(index.getText(manifest), expression) !== count) violations.push(`${manifest}: required manifest inheritance drifted`);
 }
 
 function evaluateRustToolchainPolicy(index) {
@@ -324,6 +306,15 @@ profile = "minimal"
   if (normalizeText(index.getText("rust-toolchain.toml")) !== expectedToolchain) {
     violations.push("rust-toolchain.toml: canonical content drifted");
   }
+  for (const manifest of SEVEN_MANIFESTS) {
+    requireCount(index, manifest, /^edition\.workspace = true$/, 1, violations);
+    requireCount(index, manifest, /^rust-version\.workspace = true$/, 1, violations);
+  }
+  for (const manifest of SIX_MEMBER_MANIFESTS) {
+    if (exactCount(index.getText(manifest), /^edition\s*=/) || exactCount(index.getText(manifest), /^rust-version\s*=/)) violations.push(`${manifest}: member must inherit workspace toolchain values`);
+  }
+  requireCount(index, "src-tauri/Cargo.toml", /^edition = "2021"$/, 1, violations);
+  requireCount(index, "src-tauri/Cargo.toml", /^rust-version = "1\.95"$/, 1, violations);
   for (const name of policy.toolchain.workspacePackages) {
     const pkg = workspacePackage(metadata, name);
     if (!pkg) {
@@ -339,72 +330,12 @@ profile = "minimal"
 
 function evaluateRustDependencyPolicy(index) {
   const policy = index.getJson(RUST_DEPENDENCY_POLICY_PATH);
-  const metadata = index.getCargoMetadata();
-  const packageJson = index.getJson("package.json");
-  const dependencies = workspaceDependencies(metadata);
-  const violations = [];
-
-  for (const [name, requirement] of Object.entries(policy.exactPins)) {
-    const direct = dependencies.filter((dependency) => dependency.name === name);
-    if (!direct.length) {
-      violations.push(`${name}: missing direct dependency`);
-      continue;
-    }
-    for (const dependency of direct) {
-      if (dependency.req !== requirement) {
-        violations.push(`${name}: direct manifest requirement must be ${requirement}`);
-      }
-    }
-  }
-
-  for (const dependency of dependencies) {
-    const version = prereleaseVersion(dependency.req);
-    if (version && policy.approvedPrereleases[dependency.name] !== version) {
-      violations.push(`${dependency.name}: unapproved prerelease ${version}`);
-    }
-  }
-
-  for (const [cargoName, npmName] of policy.tauriFamily.pairs) {
-    const cargoDependency = dependencyByName(metadata, "extractum", cargoName);
-    const npmVersion = npmRequirement(packageJson, npmName);
-    if (!cargoDependency) violations.push(`${cargoName}: missing direct dependency`);
-    else if (requirementMajor(cargoDependency.req) !== policy.tauriFamily.cargoMajor) {
-      violations.push(`${cargoName}: Cargo requirement must use major ${policy.tauriFamily.cargoMajor}`);
-    }
-    if (!npmVersion) violations.push(`${npmName}: missing npm dependency`);
-    else if (requirementMajor(npmVersion) !== policy.tauriFamily.npmMajor) {
-      violations.push(`${npmName}: npm requirement must use major ${policy.tauriFamily.npmMajor}`);
-    }
-  }
-
-  const mcpBridge = dependencyByName(metadata, "extractum", "tauri-plugin-mcp-bridge");
-  const expectedMcpBridge = [0, policy.tauriFamily.mcpBridgeMinor];
-  if (!mcpBridge) violations.push("tauri-plugin-mcp-bridge: missing direct dependency");
-  else if (JSON.stringify(requirementMajorMinor(mcpBridge.req)) !== JSON.stringify(expectedMcpBridge)) {
-    violations.push(`tauri-plugin-mcp-bridge: requirement must stay within 0.${policy.tauriFamily.mcpBridgeMinor}`);
-  }
-  return violations;
+  const generated = generateRustDependencyPolicy({ metadata: index.getCargoMetadata(), packageJson: index.getJson("package.json"), reviewed: policy });
+  return validateRustDependencyPolicy({ generated, committed: policy });
 }
 
 function evaluateRustDuplicateBaseline(index) {
-  const baseline = index.getJson(RUST_DUPLICATE_BASELINE_PATH);
-  const actual = generateRustDuplicateBaseline(index.getCargoTree());
-  const violations = [];
-  if (actual.duplicateNameCount > baseline.duplicateNameCount) violations.push("Rust duplicate-name count grew");
-  if (actual.duplicateVersionInstanceCount > baseline.duplicateVersionInstanceCount) violations.push("Rust duplicate version-instance count grew");
-  for (const [name, count] of Object.entries(actual.duplicateCardinality)) {
-    if (Object.hasOwn(baseline.duplicateCardinality, name)
-      && count > baseline.duplicateCardinality[name]) {
-      violations.push(`${name}: duplicate version cardinality grew to ${count}`);
-    }
-  }
-  const baselineNames = Object.keys(baseline.duplicateCardinality);
-  const actualNames = Object.keys(actual.duplicateCardinality);
-  const addedDuplicateNames = actualNames.filter((name) => !baselineNames.includes(name)).sort();
-  const removedDuplicateNames = baselineNames.filter((name) => !actualNames.includes(name)).sort();
-  return addedDuplicateNames.length || removedDuplicateNames.length
-    ? { violations, review: { addedDuplicateNames, removedDuplicateNames } }
-    : { violations };
+  return validateCurrentDuplicateState({ treeText: index.getCargoTree(), baseline: index.getJson(RUST_DUPLICATE_BASELINE_PATH), exceptions: index.getJson(RUST_SUPPLY_CHAIN_EXCEPTIONS_PATH) }).violations;
 }
 
 const evaluators = new Map([

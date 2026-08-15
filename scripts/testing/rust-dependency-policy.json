@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "toolchain": {
     "channel": "1.95.0",
     "rustVersion": "1.95",
@@ -15,28 +15,1052 @@
       "extractum-telegram"
     ]
   },
-  "exactPins": {
-    "apalis": "=1.0.0-rc.8",
-    "apalis-sqlite": "=1.0.0-rc.8",
-    "grammers-client": "=0.10.0",
-    "grammers-mtsender": "=0.10.0",
-    "grammers-session": "=0.10.0",
-    "grammers-tl-types": "=0.10.0"
-  },
-  "approvedPrereleases": {
-    "apalis": "1.0.0-rc.8",
-    "apalis-sqlite": "1.0.0-rc.8"
-  },
+  "directRequirements": [
+    {
+      "package": "extractum-analysis",
+      "dependency": "extractum-core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "extractum-llm",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "sqlx",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "tokio-util",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.7"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-analysis",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-core",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-core",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-core",
+      "dependency": "time",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.3"
+    },
+    {
+      "package": "extractum-core",
+      "dependency": "zstd",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.13"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "parking_lot",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.12"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "tempfile",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^3"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "time",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.3"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "tokio-util",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.7"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-gemini-browser",
+      "dependency": "url",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "extractum-core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "reqwest",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.12"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "secrecy",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "tokio-util",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.7"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-llm",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "extractum-core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "extractum-gemini-browser",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "extractum-llm",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "jsonschema",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.46.5"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "sha2",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.10"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "sqlx",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "tempfile",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^3"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "time",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^0.3"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "tokio-util",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.7"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-prompt-packs",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "base64",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.22"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "chacha20poly1305",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.10"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "extractum-core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-client",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-mtsender",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-session",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "grammers-tl-types",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=0.10.0"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "rand_core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.6"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "secrecy",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum-telegram",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum",
+      "dependency": "anyhow",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1.0"
+    },
+    {
+      "package": "extractum",
+      "dependency": "apalis-sqlite",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=1.0.0-rc.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "apalis",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "=1.0.0-rc.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "base64",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.22"
+    },
+    {
+      "package": "extractum",
+      "dependency": "dirs",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^6"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-analysis",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-core",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-gemini-browser",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-llm",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-prompt-packs",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-prompt-packs",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-telegram",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "extractum-telegram",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "*"
+    },
+    {
+      "package": "extractum",
+      "dependency": "keyring",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^3"
+    },
+    {
+      "package": "extractum",
+      "dependency": "parking_lot",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.12"
+    },
+    {
+      "package": "extractum",
+      "dependency": "reqwest",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.12"
+    },
+    {
+      "package": "extractum",
+      "dependency": "secrecy",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "serde_json",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum",
+      "dependency": "serde",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum",
+      "dependency": "sha2",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.10"
+    },
+    {
+      "package": "extractum",
+      "dependency": "sqlx",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri-build",
+      "rename": null,
+      "kind": "build",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri-plugin-dialog",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri-plugin-mcp-bridge",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.11"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri-plugin-opener",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri-plugin-sql",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tauri",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tempfile",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^3"
+    },
+    {
+      "package": "extractum",
+      "dependency": "time",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.3"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tokio-util",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.7"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "dev",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tokio",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^1"
+    },
+    {
+      "package": "extractum",
+      "dependency": "tower",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^0.5"
+    },
+    {
+      "package": "extractum",
+      "dependency": "url",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "requirement": "^2"
+    },
+    {
+      "package": "extractum",
+      "dependency": "windows-sys",
+      "rename": null,
+      "kind": "normal",
+      "target": "cfg(windows)",
+      "requirement": "^0.59"
+    }
+  ],
+  "npmRequirements": [
+    {
+      "owner": "extractum",
+      "name": "@internationalized/date",
+      "kind": "devDependencies",
+      "requirement": "^3.12.2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@lucide/svelte",
+      "kind": "dependencies",
+      "requirement": "^1.17.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@playwright/test",
+      "kind": "devDependencies",
+      "requirement": "^1.61.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@svar-ui/core-locales",
+      "kind": "dependencies",
+      "requirement": "^2.6.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@svar-ui/grid-locales",
+      "kind": "dependencies",
+      "requirement": "^2.7.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@svar-ui/svelte-core",
+      "kind": "dependencies",
+      "requirement": "^2.6.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@svar-ui/svelte-grid",
+      "kind": "dependencies",
+      "requirement": "^2.7.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@sveltejs/adapter-static",
+      "kind": "devDependencies",
+      "requirement": "^3.0.6"
+    },
+    {
+      "owner": "extractum",
+      "name": "@sveltejs/kit",
+      "kind": "devDependencies",
+      "requirement": "^2.9.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@sveltejs/vite-plugin-svelte",
+      "kind": "devDependencies",
+      "requirement": "^5.0.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tailwindcss/vite",
+      "kind": "devDependencies",
+      "requirement": "^4.3.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tauri-apps/api",
+      "kind": "dependencies",
+      "requirement": "^2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tauri-apps/cli",
+      "kind": "devDependencies",
+      "requirement": "^2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tauri-apps/plugin-dialog",
+      "kind": "dependencies",
+      "requirement": "^2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tauri-apps/plugin-opener",
+      "kind": "dependencies",
+      "requirement": "^2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@tauri-apps/plugin-sql",
+      "kind": "dependencies",
+      "requirement": "^2.4.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "@testing-library/svelte",
+      "kind": "devDependencies",
+      "requirement": "^5.4.2"
+    },
+    {
+      "owner": "extractum",
+      "name": "@types/node",
+      "kind": "devDependencies",
+      "requirement": "^26.0.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "bits-ui",
+      "kind": "dependencies",
+      "requirement": "^2.18.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "clsx",
+      "kind": "dependencies",
+      "requirement": "^2.1.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "esbuild",
+      "kind": "devDependencies",
+      "requirement": "^0.28.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "jsdom",
+      "kind": "devDependencies",
+      "requirement": "^29.1.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "mode-watcher",
+      "kind": "devDependencies",
+      "requirement": "^1.1.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "pkg",
+      "kind": "devDependencies",
+      "requirement": "^5.8.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "svelte-check",
+      "kind": "devDependencies",
+      "requirement": "^4.0.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "svelte-sonner",
+      "kind": "devDependencies",
+      "requirement": "^1.1.1"
+    },
+    {
+      "owner": "extractum",
+      "name": "svelte",
+      "kind": "devDependencies",
+      "requirement": "^5.0.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "tailwind-merge",
+      "kind": "dependencies",
+      "requirement": "^3.6.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "tailwind-variants",
+      "kind": "dependencies",
+      "requirement": "^3.2.2"
+    },
+    {
+      "owner": "extractum",
+      "name": "tailwindcss",
+      "kind": "devDependencies",
+      "requirement": "^4.3.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "tw-animate-css",
+      "kind": "devDependencies",
+      "requirement": "^1.4.0"
+    },
+    {
+      "owner": "extractum",
+      "name": "typescript",
+      "kind": "devDependencies",
+      "requirement": "~5.6.2"
+    },
+    {
+      "owner": "extractum",
+      "name": "vite",
+      "kind": "devDependencies",
+      "requirement": "^6.0.3"
+    },
+    {
+      "owner": "extractum",
+      "name": "vitest",
+      "kind": "devDependencies",
+      "requirement": "^4.1.5"
+    }
+  ],
+  "approvedPrereleases": [
+    {
+      "package": "extractum",
+      "dependency": "apalis-sqlite",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "approvedPrerelease": "rc.8"
+    },
+    {
+      "package": "extractum",
+      "dependency": "apalis",
+      "rename": null,
+      "kind": "normal",
+      "target": null,
+      "approvedPrerelease": "rc.8"
+    }
+  ],
   "tauriFamily": {
-    "cargoMajor": 2,
-    "npmMajor": 2,
-    "mcpBridgeMinor": 11,
     "pairs": [
-      ["tauri", "@tauri-apps/api"],
-      ["tauri-build", "@tauri-apps/cli"],
-      ["tauri-plugin-dialog", "@tauri-apps/plugin-dialog"],
-      ["tauri-plugin-opener", "@tauri-apps/plugin-opener"],
-      ["tauri-plugin-sql", "@tauri-apps/plugin-sql"]
+      {
+        "id": "tauri-api",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri",
+          "rename": null,
+          "kind": "normal",
+          "target": null
+        },
+        "cargoRequirement": "^2",
+        "npm": {
+          "owner": "extractum",
+          "name": "@tauri-apps/api",
+          "kind": "dependencies"
+        },
+        "npmRequirement": "^2"
+      },
+      {
+        "id": "tauri-build-cli",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri-build",
+          "rename": null,
+          "kind": "build",
+          "target": null
+        },
+        "cargoRequirement": "^2",
+        "npm": {
+          "owner": "extractum",
+          "name": "@tauri-apps/cli",
+          "kind": "devDependencies"
+        },
+        "npmRequirement": "^2"
+      },
+      {
+        "id": "tauri-dialog",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri-plugin-dialog",
+          "rename": null,
+          "kind": "normal",
+          "target": null
+        },
+        "cargoRequirement": "^2",
+        "npm": {
+          "owner": "extractum",
+          "name": "@tauri-apps/plugin-dialog",
+          "kind": "dependencies"
+        },
+        "npmRequirement": "^2"
+      },
+      {
+        "id": "tauri-opener",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri-plugin-opener",
+          "rename": null,
+          "kind": "normal",
+          "target": null
+        },
+        "cargoRequirement": "^2",
+        "npm": {
+          "owner": "extractum",
+          "name": "@tauri-apps/plugin-opener",
+          "kind": "dependencies"
+        },
+        "npmRequirement": "^2"
+      },
+      {
+        "id": "tauri-sql",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri-plugin-sql",
+          "rename": null,
+          "kind": "normal",
+          "target": null
+        },
+        "cargoRequirement": "^2",
+        "npm": {
+          "owner": "extractum",
+          "name": "@tauri-apps/plugin-sql",
+          "kind": "dependencies"
+        },
+        "npmRequirement": "^2.4.0"
+      }
+    ],
+    "cargoOnlyRequirements": [
+      {
+        "id": "tauri-plugin-mcp-bridge",
+        "cargo": {
+          "package": "extractum",
+          "dependency": "tauri-plugin-mcp-bridge",
+          "rename": null,
+          "kind": "normal",
+          "target": null
+        },
+        "cargoRequirement": "^0.11"
+      }
     ]
   }
 }

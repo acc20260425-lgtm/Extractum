@@ -5,12 +5,15 @@ import { describe, expect, it } from "vitest";
 
 import { createRepositoryIndex } from "./repository-index.mjs";
 import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
+import { generateRustDependencyPolicy } from "../rust-dependency-policy.mjs";
 import rustDependencyPolicy from "./rust-dependency-policy.json";
 
 const root = path.resolve("repository-rule-fixture");
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 const RUST_DUPLICATE_BASELINE_PATH = "scripts/testing/rust-duplicate-baseline.json";
 const RUST_DEPENDENCY_POLICY_PATH = "scripts/testing/rust-dependency-policy.json";
+const RUST_SUPPLY_CHAIN_EXCEPTIONS_PATH = "scripts/testing/rust-supply-chain-exceptions.json";
+const rustSupplyChainExceptions = { schemaVersion: 1, licenseExceptions: [], advisoryExceptions: [], duplicateGrowthExceptions: [] };
 const canonicalToolchain = [
   "[toolchain]",
   'channel = "1.95.0"',
@@ -244,9 +247,12 @@ function cargoIndex(
       const relativePath = path.relative(root, absolutePath).replaceAll("\\", "/");
       if (relativePath === GRAMMERS_BASELINE_PATH) return JSON.stringify(grammersBaseline);
       if (relativePath === RUST_DUPLICATE_BASELINE_PATH) return JSON.stringify(duplicateBaseline);
+      if (relativePath === RUST_SUPPLY_CHAIN_EXCEPTIONS_PATH) return JSON.stringify(rustSupplyChainExceptions);
       if (relativePath === RUST_DEPENDENCY_POLICY_PATH) return JSON.stringify(policy);
       if (relativePath === "rust-toolchain.toml") return toolchain;
       if (relativePath === "package.json") return JSON.stringify(packageJson);
+      if (relativePath === "src-tauri/Cargo.toml") return ["edition = \"2021\"", "rust-version = \"1.95\"", "edition.workspace = true", "rust-version.workspace = true"].join("\n");
+      if (relativePath.startsWith("src-tauri/crates/") && relativePath.endsWith("/Cargo.toml")) return ["edition.workspace = true", "rust-version.workspace = true"].join("\n");
       throw new Error(`missing fixture: ${relativePath}`);
     },
     ts,
@@ -285,11 +291,11 @@ function rustPolicyCargoMetadata() {
   app.dependencies.push(
     { name: "apalis", kind: null, req: "=1.0.0-rc.8" },
     { name: "apalis-sqlite", kind: null, req: "=1.0.0-rc.8" },
-    { name: "tauri", kind: null, req: "2" },
-    { name: "tauri-build", kind: "build", req: "2" },
-    { name: "tauri-plugin-dialog", kind: null, req: "2" },
-    { name: "tauri-plugin-opener", kind: null, req: "2" },
-    { name: "tauri-plugin-sql", kind: null, req: "2" },
+    { name: "tauri", kind: null, req: "^2" },
+    { name: "tauri-build", kind: "build", req: "^2" },
+    { name: "tauri-plugin-dialog", kind: null, req: "^2" },
+    { name: "tauri-plugin-opener", kind: null, req: "^2" },
+    { name: "tauri-plugin-sql", kind: null, req: "^2" },
     { name: "tauri-plugin-mcp-bridge", kind: null, req: "^0.11" },
   );
   return metadata;
@@ -305,7 +311,7 @@ function rustPolicyIndex(metadata = rustPolicyCargoMetadata(), toolchain = canon
   },
   devDependencies: { "@tauri-apps/cli": "^2" },
 }) {
-  return cargoIndex(metadata, rustDuplicateTree, rustDuplicateBaseline, rustDependencyPolicy, toolchain, packageJson);
+  return cargoIndex(metadata, rustDuplicateTree, rustDuplicateBaseline, generateRustDependencyPolicy({ metadata: rustPolicyCargoMetadata(), packageJson, reviewed: rustDependencyPolicy }), toolchain, packageJson);
 }
 
 function realAuthorityIndex() {
@@ -468,7 +474,7 @@ const rustDuplicateStructuredFixtures = {
       target: "x86_64-pc-windows-msvc",
       duplicateNameCount: 2,
       duplicateVersionInstanceCount: 4,
-      duplicateCardinality: { zeta: 2, alpha: 2 },
+      duplicateCardinality: { alpha: 2, zeta: 2 },
     }),
   },
 } as const;
@@ -620,7 +626,7 @@ describe("repository rule registry", () => {
     }
   });
 
-  it("rule:rust-duplicate-baseline permits version replacement at unchanged cardinality", () => {
+  it("rule:rust-duplicate-baseline accepts version replacement at unchanged cardinality", () => {
     const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
 
     expect(evaluateRule({
@@ -632,7 +638,7 @@ describe("repository rule registry", () => {
     });
   });
 
-  it("rule:rust-duplicate-baseline reports a same-aggregate duplicate package-set replacement for review", () => {
+  it("rule:rust-duplicate-baseline rejects same-aggregate duplicate package-set replacement", () => {
     const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
 
     expect(evaluateRule({
@@ -640,47 +646,30 @@ describe("repository rule registry", () => {
       index: fixture.packageSetReplacement(),
     })).toEqual({
       id: "rule:rust-duplicate-baseline",
-      violations: [],
-      review: {
-        addedDuplicateNames: ["beta"],
-        removedDuplicateNames: ["alpha"],
-      },
+      violations: ["current duplicate graph differs from committed baseline"],
     });
 
     expect(evaluateRule({
       id: "rule:rust-duplicate-baseline",
       index: fixture.multiplePackageSetReplacement(),
-    }).review).toEqual({
-      addedDuplicateNames: ["beta", "gamma"],
-      removedDuplicateNames: ["alpha", "zeta"],
-    });
+    }).violations).toEqual(["current duplicate graph differs from committed baseline"]);
   });
 
-  it("rule:rust-duplicate-baseline keeps aggregate and existing-name cardinality growth blocking", () => {
+  it("rule:rust-duplicate-baseline strictly blocks aggregate and existing-name cardinality changes", () => {
     const fixture = rustDuplicateStructuredFixtures["rule:rust-duplicate-baseline"];
 
     const newDuplicate = evaluateRule({
       id: "rule:rust-duplicate-baseline",
       index: fixture.mutations["adds a new duplicate package name"](),
     });
-    expect(newDuplicate.violations).toEqual([
-      "Rust duplicate-name count grew",
-      "Rust duplicate version-instance count grew",
-    ]);
-    expect(newDuplicate.review).toEqual({
-      addedDuplicateNames: ["beta"],
-      removedDuplicateNames: [],
-    });
+    expect(newDuplicate.violations).toEqual(["current duplicate graph differs from committed baseline"]);
 
     expect(evaluateRule({
       id: "rule:rust-duplicate-baseline",
       index: fixture.mutations["adds a third version of an existing duplicate"](),
     })).toEqual({
       id: "rule:rust-duplicate-baseline",
-      violations: [
-        "Rust duplicate version-instance count grew",
-        "alpha: duplicate version cardinality grew to 3",
-      ],
+      violations: ["current duplicate graph differs from committed baseline"],
     });
   });
 
