@@ -17,62 +17,60 @@ permissions:
   contents: read
 
 jobs:
-  advisories:
+  advisory-scan:
     permissions:
       contents: read
+    runs-on: windows-latest
+    outputs:
+      advisories_failed: ${{ steps.classify.outputs.advisories_failed }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - run: rustup show active-toolchain
+      - uses: ./.github/actions/setup-cargo-deny
+      - id: deny
+        continue-on-error: true
+        run: npm.cmd run check:rust:advisories
+      - id: classify
+        if: always()
+        shell: pwsh
+        run: |
+          "advisories_failed=${{ steps.deny.outcome == 'failure' }}" >> $env:GITHUB_OUTPUT
+      - name: Fail when advisory scan failed
+        if: ${{ steps.deny.outcome == 'failure' }}
+        shell: pwsh
+        run: exit 1
+
+  advisory-issue-writer:
+    needs: advisory-scan
+    if: ${{ always() && needs.advisory-scan.outputs.advisories_failed == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    permissions:
       issues: write
+    runs-on: ubuntu-latest
     concurrency:
       group: rust-advisory-follow-up
       cancel-in-progress: false
-    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
-      - run: rustup show active-toolchain
-      - uses: ./.github/actions/setup-cargo-deny
-      - run: npm.cmd run check:rust:advisories
-      - name: Create or update advisory follow-up
-        if: ${{ failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
-        uses: actions/github-script@v8
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const title = "Security: Rust advisory follow-up";
-            const body = [
-              "`npm.cmd run check:rust:advisories` failed.",
-              "",
-              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              "Review cargo-deny output and either update dependencies or add an approved, time-bounded exception.",
-            ].join("\n");
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              ...context.repo,
-              state: "open",
-              per_page: 100,
-            });
+            const body = `npm.cmd run check:rust:advisories failed.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: "open", per_page: 100 });
             const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
-            if (existing) {
-              await github.rest.issues.createComment({
-                ...context.repo,
-                issue_number: existing.number,
-                body,
-              });
-            } else {
-              await github.rest.issues.create({
-                ...context.repo,
-                title,
-                body,
-              });
-            }
+            if (existing) await github.rest.issues.createComment({ ...context.repo, issue_number: existing.number, body });
+            else await github.rest.issues.create({ ...context.repo, title, body });
 
   windows-bundle:
-    needs: advisories
-    if: ${{ needs.advisories.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.bundle)) }}
+    needs: advisory-scan
+    if: ${{ needs.advisory-scan.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.bundle)) }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           cache: npm
       - run: rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: "./src-tauri -> target"
       - uses: ./.github/actions/setup-cargo-deny
@@ -80,6 +78,7 @@ jobs:
       - run: npm.cmd run bootstrap:testing
       - run: node_modules\.bin\playwright.cmd install chromium
       - run: npm.cmd run check:rust:fast
+      - run: npm.cmd run check:rust:duplicates
       - run: npm.cmd run verify
       - run: npm.cmd run tauri -- build --target x86_64-pc-windows-msvc
       - run: npm.cmd run smoke:gemini-browser-sidecar:binary
@@ -101,12 +100,12 @@ jobs:
               $process.WaitForExit()
             }
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: extractum-msi
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: extractum-nsis
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe

@@ -12,10 +12,20 @@ jobs:
   rust-fast:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - run: rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: "./src-tauri -> target"
       - uses: ./.github/actions/setup-cargo-deny
       - run: npm.cmd run check:rust:fast
+      - name: Fetch duplicate-policy base
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+      - name: Check duplicate growth from PR base
+        if: github.event_name == 'pull_request'
+        run: npm.cmd run check:rust:duplicates -- --base ${{ github.event.pull_request.base.sha }}
+      - name: Check current duplicate policy on main
+        if: github.event_name == 'push'
+        run: npm.cmd run check:rust:duplicates
