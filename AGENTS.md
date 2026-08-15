@@ -45,6 +45,10 @@
   `npm.cmd run check:rust:advisories`. They run on schedule and before release,
   not in the deterministic PR gate. A red advisory result blocks release unless
   resolved or covered by a reviewed, time-bounded exception.
+- `scripts/cargo-deny.ps1` owns the pinned cargo-deny cache and exposes
+  `Setup`, `Deterministic`, and `Advisories` modes. It uses the stable repository
+  cache under `src-tauri/target/.extractum-tools/cargo-deny`; do not globally
+  install cargo-deny.
 - Every implementation plan that changes Rust must include a `## Rust Verification Loops` section naming affected packages, narrow RED/GREEN tests, focused checks, package checkpoints, and end-of-slice workspace gates.
 - After a small Rust change, use the owning package explicitly:
   - exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> --locked -- --exact`;

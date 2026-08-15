@@ -249,6 +249,11 @@ dependency updates use `cargo update --manifest-path src-tauri/Cargo.toml -p <pa
 and changes to Tauri, `windows-sys`, Keyring, or SQLx require the manual Windows
 bundle job and its MSI, NSIS, application, and sidecar smoke evidence.
 
+`scripts/cargo-deny.ps1` is the sole pinned cargo-deny runner. Its `Setup`,
+`Deterministic`, and `Advisories` modes authenticate the repository cache at
+`src-tauri/target/.extractum-tools/cargo-deny`; no global cargo-deny install is
+required or used.
+
 ## Gemini Browser Sidecar Packaging
 
 The Gemini Browser Provider uses a TypeScript/Playwright sidecar. Development

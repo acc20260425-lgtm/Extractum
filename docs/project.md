@@ -266,6 +266,11 @@ to Tauri, `windows-sys`, Keyring, or SQLx require a successful manual Windows
 release run with bundling enabled, uploaded MSI and NSIS artifacts, a five-second
 application smoke, and the packaged-sidecar smoke before acceptance.
 
+`scripts/cargo-deny.ps1` provides the pinned tool's `Setup`, `Deterministic`,
+and `Advisories` modes. It authenticates a stable repository cache at
+`src-tauri/target/.extractum-tools/cargo-deny`, so local development and CI do
+not use a global cargo-deny installation.
+
 The `grammers-*` crates are explicitly controlled crates.io dependencies because
 Extractum's Telegram behavior depends on upstream runtime details. Treat updates
 to the direct Grammers line or its resolved graph as explicit dependency work,
