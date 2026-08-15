@@ -253,18 +253,28 @@ pub async fn delete_llm_profile(
     load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
+enum ConfiguredProviderAccess {
+    Complete(LlmProviderAccess),
+    Partial {
+        api_key: Option<SecretString>,
+        base_url: Option<String>,
+    },
+}
+
 fn configured_provider_access(
     provider: ProviderKind,
-    api_key: &Option<SecretString>,
-    base_url: &Option<String>,
-) -> AppResult<Option<LlmProviderAccess>> {
+    api_key: Option<SecretString>,
+    base_url: Option<String>,
+) -> AppResult<ConfiguredProviderAccess> {
     match (api_key, base_url) {
-        (Some(api_key), Some(base_url)) => Ok(Some(LlmProviderAccess::new(
-            provider,
-            api_key.clone(),
-            normalize_base_url(provider, Some(base_url))?,
-        ))),
-        _ => Ok(None),
+        (Some(api_key), Some(base_url)) => {
+            Ok(ConfiguredProviderAccess::Complete(LlmProviderAccess::new(
+                provider,
+                api_key,
+                normalize_base_url(provider, Some(&base_url))?,
+            )))
+        }
+        (api_key, base_url) => Ok(ConfiguredProviderAccess::Partial { api_key, base_url }),
     }
 }
 
@@ -296,22 +306,22 @@ pub async fn list_llm_provider_models(
     let (configured_key, configured_base_url) =
         normalize_configured_provider_overrides(api_key.as_deref(), base_url.as_deref());
 
-    let access = if let Some(access) =
-        configured_provider_access(provider_kind, &configured_key, &configured_base_url)?
-    {
-        access
-    } else {
-        let pool = get_pool(&handle).await?;
-        resolve_provider_access_from_pool(
-            &pool,
-            &secret_store,
-            provider_kind,
-            profile_id.as_deref(),
-            configured_key,
-            configured_base_url,
-        )
-        .await?
-    };
+    let access =
+        match configured_provider_access(provider_kind, configured_key, configured_base_url)? {
+            ConfiguredProviderAccess::Complete(access) => access,
+            ConfiguredProviderAccess::Partial { api_key, base_url } => {
+                let pool = get_pool(&handle).await?;
+                resolve_provider_access_from_pool(
+                    &pool,
+                    &secret_store,
+                    provider_kind,
+                    profile_id.as_deref(),
+                    api_key,
+                    base_url,
+                )
+                .await?
+            }
+        };
 
     list_provider_models(&access).await
 }
@@ -488,7 +498,7 @@ mod tests {
     use super::{
         cancelled_stream_event, configured_provider_access, failed_stream_event,
         load_provider_diagnostics_from_pool, normalize_configured_provider_overrides,
-        save_profile_to_pool, LlmUsage, ProviderKind, StreamEvent,
+        save_profile_to_pool, ConfiguredProviderAccess, LlmUsage, ProviderKind, StreamEvent,
     };
     use crate::error::AppError;
     use secrecy::SecretString;
@@ -602,49 +612,64 @@ mod tests {
     fn configured_provider_access_requires_key_and_base_url_together() {
         let provider = ProviderKind::OpenAiCompatible;
 
-        assert!(configured_provider_access(
+        let complete = configured_provider_access(
             provider,
-            &Some(SecretString::new("configured-key".to_string())),
-            &Some("https://api.example.test/v1".to_string()),
+            Some(SecretString::new("configured-key".into())),
+            Some("https://api.example.test/v1".into()),
         )
-        .expect("normalize complete configured access")
-        .is_some());
-        assert!(configured_provider_access(
-            provider,
-            &Some(SecretString::new("configured-key".to_string())),
-            &None,
-        )
-        .expect("preserve key-only profile resolution")
-        .is_none());
-        assert!(configured_provider_access(
-            provider,
-            &None,
-            &Some("https://api.example.test/v1".to_string()),
-        )
-        .expect("preserve base-url-only profile resolution")
-        .is_none());
+        .expect("complete");
+        assert!(matches!(complete, ConfiguredProviderAccess::Complete(_)));
 
-        let (empty_key, configured_base_url) = normalize_configured_provider_overrides(
+        let key_only = configured_provider_access(
+            provider,
+            Some(SecretString::new("configured-key".into())),
+            None,
+        )
+        .expect("key only");
+        assert!(matches!(
+            key_only,
+            ConfiguredProviderAccess::Partial {
+                api_key: Some(_),
+                base_url: None
+            }
+        ));
+
+        let base_only =
+            configured_provider_access(provider, None, Some("https://api.example.test/v1".into()))
+                .expect("base only");
+        assert!(matches!(
+            base_only,
+            ConfiguredProviderAccess::Partial {
+                api_key: None,
+                base_url: Some(_)
+            }
+        ));
+
+        let (empty_key, configured_base) = normalize_configured_provider_overrides(
             Some("   "),
-            Some(" https://api.example.test/v1 "),
+            Some("https://api.example.test/v1"),
         );
-        assert!(empty_key.is_none());
-        assert!(configured_base_url.is_some());
-        assert!(
-            configured_provider_access(provider, &empty_key, &configured_base_url)
-                .expect("preserve profile resolution for an empty configured key")
-                .is_none()
-        );
+        let empty_key_access =
+            configured_provider_access(provider, empty_key, configured_base).expect("empty key");
+        assert!(matches!(
+            empty_key_access,
+            ConfiguredProviderAccess::Partial {
+                api_key: None,
+                base_url: Some(_)
+            }
+        ));
 
-        let (configured_key, empty_base_url) =
-            normalize_configured_provider_overrides(Some(" configured-key "), Some(""));
-        assert!(configured_key.is_some());
-        assert!(empty_base_url.is_none());
-        assert!(
-            configured_provider_access(provider, &configured_key, &empty_base_url)
-                .expect("preserve profile resolution for an empty configured base URL")
-                .is_none()
-        );
+        let (configured_key, empty_base) =
+            normalize_configured_provider_overrides(Some("configured-key"), Some("   "));
+        let empty_base_access =
+            configured_provider_access(provider, configured_key, empty_base).expect("empty base");
+        assert!(matches!(
+            empty_base_access,
+            ConfiguredProviderAccess::Partial {
+                api_key: Some(_),
+                base_url: None
+            }
+        ));
     }
 
     #[test]

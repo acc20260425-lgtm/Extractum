@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import * as svelte from "svelte/compiler";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -22,6 +23,30 @@ const canonicalToolchain = [
   'profile = "minimal"',
   "",
 ].join("\n");
+
+function assertStrictLicensePolicy(source: string) {
+  const section = /\[licenses\]\s*([\s\S]*?)(?=\n\[(?!licenses\.private\])|$)/.exec(source)?.[1];
+  expect(section).toBeDefined();
+  expect(section).toMatch(/^unused-allowed-license = "deny"$/m);
+  expect(section).toMatch(/^unused-license-exception = "deny"$/m);
+  expect(section).not.toContain('"Apache-2.0 WITH LLVM-exception"');
+  expect(source).not.toMatch(/^\[\[licenses\.exceptions\]\]$/m);
+}
+
+describe("strict cargo-deny license policy", () => {
+  it("accepts the current policy", () => {
+    assertStrictLicensePolicy(readFileSync("deny.toml", "utf8"));
+  });
+
+  it.each([
+    ["stale allowance", (source: string) => source.replace('"Apache-2.0",', '"Apache-2.0",\n  "Apache-2.0 WITH LLVM-exception",')],
+    ["stale exception", (source: string) => `${source}\n[[licenses.exceptions]]\nname = "fake"\nallow = ["MIT"]\n`],
+    ["allowance warn", (source: string) => source.replace('unused-allowed-license = "deny"', 'unused-allowed-license = "warn"')],
+    ["exception warn", (source: string) => source.replace('unused-license-exception = "deny"', 'unused-license-exception = "warn"')],
+  ])("rejects %s", (_name, mutate) => {
+    expect(() => assertStrictLicensePolicy(mutate(readFileSync("deny.toml", "utf8")))).toThrow();
+  });
+});
 const rustDuplicateBaseline = {
   schemaVersion: 1,
   target: "x86_64-pc-windows-msvc",

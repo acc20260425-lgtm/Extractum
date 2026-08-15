@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createVerifySteps, runVerification } from "./verify.mjs";
 
+function assertLockedRustAliases(scripts: Record<string, string>) {
+  expect(scripts["test:rust"]).toBe(
+    "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked",
+  );
+  expect(scripts["test:rust:prompt-pack-runs"]).toBe(
+    "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run --locked",
+  );
+}
+
 describe("verify", () => {
   it("runs distinct adapter and app e2e gates between the preserved verification gates", () => {
     const steps = createVerifySteps({ npmExecPath: "npm-cli.js", platform: "win32" });
@@ -32,6 +41,12 @@ describe("verify", () => {
     expect(packageJson.scripts["bootstrap:testing"]).toBe(
       "svelte-kit sync && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
     );
+    assertLockedRustAliases(packageJson.scripts);
+    for (const name of ["test:rust", "test:rust:prompt-pack-runs"]) {
+      const mutated = structuredClone(packageJson);
+      mutated.scripts[name] = mutated.scripts[name].replace(" --locked", "");
+      expect(() => assertLockedRustAliases(mutated.scripts)).toThrow();
+    }
     const npmScripts = steps.filter((step) => step.npmScript).map((step) => step.npmScript);
     expect(npmScripts).not.toContain("test");
     expect(npmScripts).not.toContain("bootstrap:testing");

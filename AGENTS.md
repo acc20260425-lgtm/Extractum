@@ -47,8 +47,10 @@
   resolved or covered by a reviewed, time-bounded exception.
 - `scripts/cargo-deny.ps1` owns the pinned cargo-deny cache and exposes
   `Setup`, `Deterministic`, and `Advisories` modes. It uses the stable repository
-  cache under `src-tauri/target/.extractum-tools/cargo-deny`; do not globally
-  install cargo-deny.
+  cache under `src-tauri/target/.extractum-tools/cargo-deny`; invoke it through
+  the repository npm aliases.
+- Review and remove unused `duplicateGrowthExceptions` manually when closing a
+  dependency wave. There is no automated cleanup or expiry check.
 - Every implementation plan that changes Rust must include a `## Rust Verification Loops` section naming affected packages, narrow RED/GREEN tests, focused checks, package checkpoints, and end-of-slice workspace gates.
 - After a small Rust change, use the owning package explicitly:
   - exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> --locked -- --exact`;

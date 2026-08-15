@@ -36,8 +36,8 @@
 - `scripts/rust-duplicate-baseline.test.ts` — parser/generator unit tests.
 - `scripts/testing/rust-supply-chain-exceptions.json` — owner/reason/review-date records for cargo-deny exceptions and approved duplicate growth.
 - `.github/tools/cargo-deny.json` — pinned cargo-deny Windows release URL and SHA-256.
-- `scripts/setup-cargo-deny.ps1` — single repository-owned download, checksum, extraction, and PATH bootstrap.
-- `.github/actions/setup-cargo-deny/action.yml` — shared download/checksum/PATH bootstrap.
+- `scripts/cargo-deny.ps1` — sole repository-owned setup and policy runner.
+- `.github/actions/setup-cargo-deny/action.yml` — thin caller of the runner's `Setup` mode.
 - `.github/workflows/rust-fast.yml` — main-branch push and PR fast Rust gate without duplicate branch runs.
 - `.github/workflows/rust-full.yml` — PR/manual full repository gate.
 - `.github/workflows/rust-release.yml` — scheduled advisories and manual/tag Windows bundle gate.
@@ -71,7 +71,7 @@ Task 5 owns the `scripts/testing/test-conventions.test.ts` entry for `rule:rust-
 - `generateRustDuplicateBaseline(treeText: string): RustDuplicateBaseline` produces the canonical JSON shape consumed by repository rules.
 - `RepositoryIndex#getCargoTree(): string` supplies cached compact Windows Cargo-tree output; fixtures inject it without running Cargo.
 - `rule:rust-toolchain-policy`, `rule:rust-dependency-policy`, and `rule:rust-duplicate-baseline` join `registeredRuleIds`.
-- `scripts/setup-cargo-deny.ps1` reads `.github/tools/cargo-deny.json`; the composite action and local operator procedure are thin callers of it.
+- `scripts/cargo-deny.ps1` reads `.github/tools/cargo-deny.json`; npm policy aliases call its policy modes and the composite action calls `Setup`.
 - `npm.cmd run check:rust:fast` is the shared fast gate; `npm.cmd run verify` owns the single locked workspace test command.
 
 ---
@@ -225,10 +225,9 @@ expect(packageJson.scripts["bootstrap:testing"]).toBe(
 npm.cmd run test:unit -- scripts/verify.test.ts
 ```
 
-Expected: FAIL because two unlocked Cargo steps still exist and the current
-`bootstrap:testing` script lacks `svelte-kit sync`; the explicit
-`readFileSync` import ensures the package assertion, rather than a compile
-error, establishes that RED condition.
+Expected: FAIL first on the two unlocked Cargo steps. That assertion aborts the
+test before the package assertion is reached; the later GREEN run covers the
+`bootstrap:testing` requirement and its `svelte-kit sync` prefix.
 
 - [ ] **Step 3: Implement the minimal verifier change**
 
@@ -248,8 +247,8 @@ Add these `package.json` scripts (the deny script becomes executable after Task 
 "bootstrap:testing": "svelte-kit sync && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
 "check:rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings",
 "check:rust:production": "cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --locked && cargo check --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib --no-default-features --locked",
-"check:rust:supply-chain": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources",
-"check:rust:advisories": "cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories",
+"check:rust:supply-chain": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/cargo-deny.ps1 -Mode Deterministic",
+"check:rust:advisories": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/cargo-deny.ps1 -Mode Advisories",
 "check:rust:fast": "npm run check:rustfmt && npm run check:rust:clippy && npm run check:rust:production && npm run check:rust:supply-chain"
 ```
 
@@ -584,7 +583,7 @@ Apply the remaining mechanical changes at the recorded locations: initialize
 the corpus vector directly; remove the redundant explicit test dereference;
 remove the needless `return`, lifetime, borrow, closure, and `?Sized` bound;
 and remove only `assert!(cfg!(test));` from
-`tests::cancellation_smoke_services_remain_test_only`. The latter test retains
+`public_api_tests::cancellation_smoke_services_remain_test_only`. The latter test retains
 the feature-off/public-surface probe, so the tautological runtime assertion is
 not replaced with another tautology.
 
@@ -733,7 +732,8 @@ git commit -m "refactor: establish Rust Clippy baseline"
 **Files:**
 - Create: `deny.toml`
 - Create: `.github/tools/cargo-deny.json`
-- Create: `scripts/setup-cargo-deny.ps1`
+- Create: `scripts/cargo-deny.ps1`
+- Create: `scripts/cargo-deny.test.ps1`
 - Create: `.github/actions/setup-cargo-deny/action.yml`
 - Create: `scripts/testing/rust-supply-chain-exceptions.json`
 - Modify: `package.json`
@@ -752,17 +752,18 @@ Create `.github/tools/cargo-deny.json`:
   "version": "0.20.2",
   "target": "x86_64-pc-windows-msvc",
   "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-pc-windows-msvc.tar.gz",
-  "sha256": "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc"
+  "sha256": "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc",
+  "binarySha256": "f7292fab58c706638c999e64c4ba82e5128ae628130ba55e3266a768ee431fbf"
 }
 ```
 
-- [ ] **Step 2: Add one shared setup script and a thin composite action**
+- [ ] **Step 2: Add one shared setup/policy runner and a thin composite action**
 
-Create `scripts/setup-cargo-deny.ps1` with parameters
-`-InstallDirectory`, `-AddToGitHubPath`, and `-PrependToProcessPath`. It alone
-reads `.github/tools/cargo-deny.json`, creates the explicit install directory,
-downloads the archive, verifies SHA-256, extracts `cargo-deny.exe`, applies the
-requested PATH mode, and runs the pinned binary with `--version`.
+Create `scripts/cargo-deny.ps1` with exact modes `Setup`, `Deterministic`, and
+`Advisories`, plus `-AddToGitHubPath` for Setup. It alone reads
+`.github/tools/cargo-deny.json`, authenticates the versioned repository cache,
+installs transactionally on a cache miss, and invokes the pinned binary for the
+selected policy mode.
 
 Create `.github/actions/setup-cargo-deny/action.yml`:
 
@@ -772,11 +773,9 @@ description: Download and verify the repository-pinned Windows cargo-deny binary
 runs:
   using: composite
   steps:
-    - name: Download and verify cargo-deny
+    - name: Authenticate pinned cargo-deny
       shell: pwsh
-      run: |
-        $toolDir = Join-Path $env:RUNNER_TEMP 'extractum-cargo-deny'
-        & './scripts/setup-cargo-deny.ps1' -InstallDirectory $toolDir -AddToGitHubPath
+      run: ./scripts/cargo-deny.ps1 -Mode Setup -AddToGitHubPath
 ```
 
 - [ ] **Step 3: Add a curated initial `deny.toml`**
@@ -798,10 +797,10 @@ wildcards = "deny"
 allow-wildcard-paths = true
 
 [licenses]
-unused-allowed-license = "warn"
+unused-allowed-license = "deny"
+unused-license-exception = "deny"
 allow = [
   "Apache-2.0",
-  "Apache-2.0 WITH LLVM-exception",
   "BSD-3-Clause",
   "CDLA-Permissive-2.0",
   "ISC",
@@ -840,29 +839,25 @@ Create `scripts/testing/rust-supply-chain-exceptions.json`:
 }
 ```
 
-Each later entry must contain `package`, `owner`, `reason`, `reviewAfter`, and the relevant advisory/license/duplicate identity.
+Each later entry must contain `package`, `owner`, `reason`, `reviewAfter`, and
+the relevant advisory/license/duplicate identity. Unused
+`duplicateGrowthExceptions` are reviewed and removed manually when a dependency
+wave closes; there is no automated cleanup or expiry check.
 
 - [ ] **Step 5: Exercise the pinned binary locally using the same manifest**
 
-Call the same repository script into a temporary directory (do not install
-globally) and prepend its verified binary directory to the current process
-`PATH`:
+Exercise the same repository runner and its behavioral harness:
 
 ```powershell
-$toolDir = Join-Path ([System.IO.Path]::GetTempPath()) ("extractum-cargo-deny-" + [guid]::NewGuid().ToString('N'))
-try {
-  & .\scripts\setup-cargo-deny.ps1 -InstallDirectory $toolDir -PrependToProcessPath
-  cargo deny --version
-  cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check bans licenses sources
-  cargo deny --config deny.toml --manifest-path src-tauri/Cargo.toml check advisories
-} finally {
-  Remove-Item -LiteralPath $toolDir -Recurse -Force -ErrorAction SilentlyContinue
-}
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/cargo-deny.test.ps1
+npm.cmd run check:rust:supply-chain
+npm.cmd run check:rust:advisories
 ```
 
-Expected: both commands execute cargo-deny 0.20.2, and the deterministic
-`bans licenses sources` command is green. Resolve license failures by narrowing
-exact exceptions/clarifications, never by setting a blanket allow.
+Expected: the harness passes, both policy aliases execute cargo-deny 0.20.2,
+and the deterministic `bans licenses sources` command is green. Resolve license
+failures by narrowing exact exceptions/clarifications, never by setting a
+blanket allow.
 
 The advisory command is moving-database evidence, not a Task 4 green gate. At
 the Task 4 bootstrap snapshot it intentionally records `RUSTSEC-2026-0190` for
@@ -884,7 +879,7 @@ Expected: fmt, Clippy, both feature-off checks, and deterministic cargo-deny pas
 - [ ] **Step 7: Commit supply-chain bootstrap**
 
 ```powershell
-git add deny.toml .github/tools/cargo-deny.json scripts/setup-cargo-deny.ps1 .github/actions/setup-cargo-deny/action.yml scripts/testing/rust-supply-chain-exceptions.json package.json
+git add deny.toml .github/tools/cargo-deny.json scripts/cargo-deny.ps1 scripts/cargo-deny.test.ps1 .github/actions/setup-cargo-deny/action.yml scripts/testing/rust-supply-chain-exceptions.json package.json
 git commit -m "build: add Rust supply-chain policy"
 ```
 
@@ -1426,15 +1421,17 @@ advisory command is expected to reproduce the Task 4 moving-database findings
 `RUSTSEC-2026-0190` (`anyhow 1.0.102`), `RUSTSEC-2026-0221`
 (`event-listener 5.4.1`), and `RUSTSEC-2026-0097` (`rand 0.7.3`) until a later
 security/dependency slice resolves them or commits reviewed, time-bounded
-exceptions. Record the exact output and the scheduled-job URL; a red advisory
-job proves the executor and opens or updates security follow-up, but it does not
-invalidate the ordinary deterministic PR gate. Do not silently suppress an
+exceptions. Record the exact local output. Record a scheduled-job URL only if a
+remote run is actually performed; the Wave 0 local evidence boundary had no
+such run and therefore makes no executor claim. Do not silently suppress an
 existing or newly published advisory. Release acceptance remains blocked while
 the advisory command is red.
 
-- [ ] **Step 4: Dispatch and verify CI executors**
+- [ ] **Step 4: Record the remote acceptance boundary**
 
-Push the branch/PR, then require:
+The Wave 0 evidence cutoff was local: no push, pull request, manual release,
+bundle, or remote workflow run was performed. A separately authorized later
+remote acceptance would require:
 
 - green `Rust Fast` run;
 - green `Rust Full` run;
@@ -1454,7 +1451,7 @@ Populate the verification document with no placeholders:
 - license allowlist and any exact clarifications/exceptions;
 - actual duplicate baseline totals and cardinality changes;
 - fast/full/advisory command outputs;
-- GitHub Actions run URLs;
+- GitHub Actions run URLs, only for runs actually performed;
 - release executable/MSI/NSIS paths and hashes;
 - sidecar/application smoke results;
 - confirmation that Edition remains 2021 and dependency versions were not intentionally upgraded.
@@ -1498,7 +1495,7 @@ git commit -m "docs: verify Rust infrastructure baseline"
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib types::tests::sidecar_run_result_response_keeps_wire_shape --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --lib execution::tests::cancel_gemini_browser_job_cancels_queued_run_and_waiter --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib dto::tests::prompt_pack_runtime_provider_default_remains_api_and_serializes_as_api --locked -- --exact
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib tests::cancellation_smoke_services_remain_test_only --locked -- --exact
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib public_api_tests::cancellation_smoke_services_remain_test_only --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib apalis_jobs::tests::apalis_jobs_list_filters_by_status_job_type_and_search --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib llm::tests::configured_provider_access_requires_key_and_base_url_together --locked -- --exact
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib youtube::process_runtime::tests::external_source_job_cancellation_reaps_its_managed_operation --locked -- --exact

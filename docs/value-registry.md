@@ -77,6 +77,14 @@ Use this checklist when adding or changing values:
 | `presentation` | Visual-only value. |
 | `taxonomy` | Domain classification rather than lifecycle. |
 
+## Rust infrastructure policy values
+
+| Family | Values | Source of truth | Notes |
+| --- | --- | --- | --- |
+| cargo-deny mode | `Setup`, `Deterministic`, `Advisories` | `scripts/cargo-deny.ps1` | CLI-only; not persisted or exposed to UI |
+| Cargo dependency kind | `normal`, `build`, `dev` | `scripts/rust-dependency-policy.mjs` | Generated policy identity |
+| npm dependency kind | `dependencies`, `devDependencies`, `optionalDependencies` | `scripts/rust-dependency-policy.mjs` | Generated policy identity |
+
 ## Analysis run statuses
 
 Representative sources:

@@ -251,8 +251,12 @@ bundle job and its MSI, NSIS, application, and sidecar smoke evidence.
 
 `scripts/cargo-deny.ps1` is the sole pinned cargo-deny runner. Its `Setup`,
 `Deterministic`, and `Advisories` modes authenticate the repository cache at
-`src-tauri/target/.extractum-tools/cargo-deny`; no global cargo-deny install is
-required or used.
+`src-tauri/target/.extractum-tools/cargo-deny`; the npm policy aliases invoke
+this repository-owned runner directly.
+
+Unused `duplicateGrowthExceptions` entries are reviewed and removed manually
+when closing a dependency wave. The policy has no automated cleanup or expiry
+check.
 
 ## Gemini Browser Sidecar Packaging
 

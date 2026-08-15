@@ -15,8 +15,8 @@
 ## Scope and commit history
 
 Wave 0 began after `77c739a3` (`docs: avoid duplicate Rust fast CI runs`). The
-reviewed Task 1–7 implementation range is `77c739a3..83452554`; this record and
-the canonical documentation changes are the following documentation commit.
+reviewed original Wave 0 range is `77c739a3..9bcc047b`, including the Task 1–7
+implementation and the three following factual documentation commits.
 
 | Task | Commits | Evidence summary |
 | --- | --- | --- |
@@ -25,12 +25,12 @@ the canonical documentation changes are the following documentation commit.
 | 2: verifier contract | `3287e851` | RED proved two Cargo steps remained; GREEN was 2/2 focused verifier tests plus rustfmt. `verify` now owns one locked workspace/all-target test and bootstrap owns Svelte sync. |
 | 3: Clippy baseline | scope corrections `97a66c42`, `e3dc434b`, `fae6526a`; implementation `432dd4a6`; canonical-helper fix `512db24c` | Three discovery stages were classified and resolved in the authorized 55-file final source scope. Package checks/tests, two feature-off checks, fail-fast workspace Clippy, and authoritative full verification passed. |
 | 4: supply chain | acceptance correction `ceb9676c`; implementation `8f0a0e71`; bootstrap hardening `ebcb6af1` | Pinned/checksummed cargo-deny bootstrap passed transactional failure harnesses. Deterministic `bans licenses sources` and the full fast gate passed; three advisories remained explicit release blockers without exceptions. |
-| 5: duplicate baseline | `27db4d57`, `859d4f4e`; scope clarification `575e7271` | Active Windows graph measured 32 duplicate names / 80 duplicate-version instances. Parser/rule tests, 828/828 full unit tests, and Svelte check passed; same-aggregate package replacement is a non-blocking review signal. |
+| 5: duplicate baseline | `27db4d57`, `859d4f4e`; scope clarification `575e7271` | Active Windows graph measured 32 duplicate names / 80 duplicate-version instances. Parser/rule tests, 828/828 full unit tests, and Svelte check passed. Final hardening later replaced the review signal with strict current equality and optional positive-growth comparison to an explicit base. |
 | 6: executable policy | `0877ebbe` | Focused policy/convention tests passed 21/21, full unit passed 828/828, and Svelte check passed. `Cargo.lock` was unchanged. |
 | 7: CI executors | `aa664ff3`, `83452554` | Workflow contracts passed 7/7, full unit passed 835/835, and Svelte check passed. Fast/full permissions are read-only; advisory follow-up is serialized; release depends on advisory success. |
 
 The final metadata check on 2026-08-14 reported all seven packages at Edition
-2021 and `rust-version = 1.95`. `git diff 77c739a3..83452554 --
+2021 and `rust-version = 1.95`. `git diff 77c739a3..9bcc047b --
 src-tauri/Cargo.lock` is empty. Edition was not migrated and dependency versions
 were not intentionally upgraded in Wave 0.
 
@@ -294,7 +294,6 @@ The deterministic license allowlist is:
 
 ```text
 Apache-2.0
-Apache-2.0 WITH LLVM-exception
 BSD-3-Clause
 CDLA-Permissive-2.0
 ISC
@@ -308,8 +307,9 @@ Zlib
 All seven private workspace packages are ignored by `[licenses.private]`
 because they are explicitly unpublished and do not declare license expressions.
 No license clarification and no license/advisory/duplicate-growth exception was
-required or committed. `Apache-2.0 WITH LLVM-exception` is currently unused and
-therefore produces the configured non-failing warning.
+required or committed. Final hardening removed the unused
+`Apache-2.0 WITH LLVM-exception` allowance and set both unused-license checks to
+`deny`.
 
 The active Windows graph is unchanged from the generated baseline:
 
@@ -318,6 +318,10 @@ The active Windows graph is unchanged from the generated baseline:
 - 32 duplicated package names (policy field);
 - 80 package-version instances across duplicated names (policy field);
 - duplicate cardinality matches the committed mapping exactly.
+
+Unused `duplicateGrowthExceptions` are reviewed and removed manually when a
+dependency wave closes. The current and historical policy commands do not
+automate cleanup or expiry.
 
 Cardinality is `2` for `bitflags`, `block-buffer`, `cipher`, `cpufeatures`,
 `crypto-common`, `digest`, `foldhash`, `indexmap`, `inout`, `phf_codegen`,

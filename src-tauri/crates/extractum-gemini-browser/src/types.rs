@@ -278,11 +278,28 @@ mod tests {
                 debug_summary: None,
             }),
         };
-        let json = serde_json::to_value(&response).expect("serialize sidecar response");
-        assert_eq!(json["type"], "run_result");
-        assert_eq!(json["result"]["run_id"], "run-1");
-        let decoded: GeminiBrowserSidecarResponse =
-            serde_json::from_value(json).expect("deserialize sidecar response");
+        let expected = serde_json::json!({
+            "type": "run_result",
+            "result": {
+                "run_id": "run-1", "status": "ok", "text": "answer",
+                "message": null, "manual_action": null,
+                "artifacts": { "run_dir": null, "html": null, "screenshot": null,
+                    "telemetry": null, "answer_extraction": null, "artifact_write_error": null },
+                "elapsed_ms": 42, "debug_summary": null
+            }
+        });
+        assert_eq!(serde_json::to_value(&response).unwrap(), expected);
+        let decoded: GeminiBrowserSidecarResponse = serde_json::from_value(serde_json::json!({
+            "type": "run_result",
+            "result": {
+                "run_id": "run-1", "status": "ok", "text": "answer",
+                "message": null, "manual_action": null,
+                "artifacts": { "run_dir": null, "html": null, "screenshot": null,
+                    "telemetry": null, "answer_extraction": null, "artifact_write_error": null },
+                "elapsed_ms": 42, "debug_summary": null
+            }
+        }))
+        .unwrap();
         assert_eq!(decoded, response);
     }
 

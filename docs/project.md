@@ -268,8 +268,12 @@ application smoke, and the packaged-sidecar smoke before acceptance.
 
 `scripts/cargo-deny.ps1` provides the pinned tool's `Setup`, `Deterministic`,
 and `Advisories` modes. It authenticates a stable repository cache at
-`src-tauri/target/.extractum-tools/cargo-deny`, so local development and CI do
-not use a global cargo-deny installation.
+`src-tauri/target/.extractum-tools/cargo-deny`; local development and CI invoke
+the same repository-owned runner through the npm aliases.
+
+Unused `duplicateGrowthExceptions` entries are reviewed and removed manually
+when a dependency wave closes. Current-only and historical checks do not
+automate exception cleanup or expiry.
 
 The `grammers-*` crates are explicitly controlled crates.io dependencies because
 Extractum's Telegram behavior depends on upstream runtime details. Treat updates
